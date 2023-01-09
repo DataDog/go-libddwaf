@@ -1,4 +1,4 @@
-name: AppSec Tests
+name: Test
 on:
   workflow_dispatch: # manually
   schedule: # nightly
