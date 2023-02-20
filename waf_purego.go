@@ -3,9 +3,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Build when CGO is disabled
-//go:build !cgo
+//go:build !cgo && !windows && (amd64 || arm64) && (linux || darwin)
 
 package waf
 
-var disabledReason = "cgo was disabled during the compilation and should be enabled in order to compile with the waf"
+import (
+	"fmt"
+	"runtime"
+)
+
+var disabledReason = fmt.Sprintf("the target operating-system %s or architecture %s are not supported", runtime.GOOS, runtime.GOARCH)
