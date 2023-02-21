@@ -9,8 +9,8 @@ package waf
 
 import (
 	"fmt"
-	"unsafe"
 	"os"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 
@@ -19,16 +19,16 @@ import (
 
 var dlState struct {
 	symbolCache map[string]uintptr
-	libddwaf uintptr
-	opened bool
+	libddwaf    uintptr
+	opened      bool
 } = struct {
 	symbolCache map[string]uintptr
-	libddwaf uintptr
-	opened bool
+	libddwaf    uintptr
+	opened      bool
 }{
 	symbolCache: make(map[string]uintptr),
-	libddwaf: 0,
-	opened: false,
+	libddwaf:    0,
+	opened:      false,
 }
 
 // goString copies a char* to a Go string.
@@ -61,14 +61,14 @@ func cString(name string) *byte {
 
 // Using the embeded shared library file, we dump it into a file and load it using dlopen
 func loadLib() (uintptr, error) {
-	
-	file, err := os.CreateTemp("dd", "libddwaf")
+
+	file, err := os.CreateTemp("", "libddwaf-*.so")
 	if err != nil {
-		return uintptr(0), err
+		return uintptr(0), fmt.Errorf("Error creating temp file: %w", err)
 	}
 
 	if err := os.WriteFile(file.Name(), vendor.Libddwaf, 0400); err != nil {
-		return uintptr(0), err
+		return uintptr(0), fmt.Errorf("Error writing file: %w", err)
 	}
 
 	lib := purego.Dlopen(file.Name(), purego.RTLD_GLOBAL|purego.RTLD_NOW)
