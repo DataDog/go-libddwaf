@@ -11,5 +11,5 @@ package vendor
 
 import _ "embed"
 
-//go:embed libddwaf.dylib
+//go:embed _libddwaf.dylib
 var Libddwaf []byte
