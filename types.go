@@ -30,12 +30,15 @@ type RulesetInfo struct {
 
 // Errors the WAF can return when running it.
 const (
-	ErrInternal RunError = iota + 1
-	ErrInvalidObject
-	ErrInvalidArgument
-	ErrTimeout
-	ErrOutOfMemory
-	ErrEmptyRuleAddresses
+	ErrInternal RunError = -3
+	ErrInvalidObject RunError = -2
+	ErrInvalidArgument RunError = -1
+	OK = 0
+	Match = 1
+
+	ErrOutOfMemory RunError = 5
+	ErrEmptyRuleAddresses RunError = 6
+	ErrTimeout RunError = 7
 )
 
 // Error returns the string representation of the RunError.
