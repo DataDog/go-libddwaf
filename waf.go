@@ -379,15 +379,6 @@ func getWAFVersion() string {
 	return C.GoString(cversion)
 }
 
-// Errors the encoder and decoder can return.
-var (
-	errMaxDepth         = errors.New("max depth reached")
-	errUnsupportedValue = errors.New("unsupported Go value")
-	errOutOfMemory      = errors.New("out of memory")
-	errInvalidMapKey    = errors.New("invalid WAF object map key")
-	errNilObjectPtr     = errors.New("nil WAF object pointer")
-)
-
 // isIgnoredValueError returns true if the error is only about ignored Go values
 // (errUnsupportedValue or errMaxDepth).
 func isIgnoredValueError(err error) bool {

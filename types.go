@@ -6,6 +6,7 @@
 package waf
 
 import (
+	"errors"
 	"fmt"
 
 	"go.uber.org/atomic"
@@ -59,3 +60,13 @@ func (e RunError) Error() string {
 
 // AtomicU64 can be used to perform atomic operations on an uint64 type
 type AtomicU64 = atomic.Uint64
+
+// Errors the encoder and decoder can return.
+var (
+	errMaxDepth         = errors.New("max depth reached")
+	errUnsupportedValue = errors.New("unsupported Go value")
+	errOutOfMemory      = errors.New("out of memory")
+	errInvalidMapKey    = errors.New("invalid WAF object map key")
+	errNilObjectPtr     = errors.New("nil WAF object pointer")
+)
+
