@@ -18,6 +18,7 @@ import (
 	"time"
 	"unsafe"
 
+	rc "github.com/DataDog/datadog-agent/pkg/remoteconfig/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -252,7 +253,7 @@ func TestActions(t *testing.T) {
 	t.Run("multiple-actions", testActions([]string{"action 1", "action 2", "action 3"}))
 }
 
-func TestUpdateRuleData(t *testing.T) {
+func TestUpdateRulesData(t *testing.T) {
 	defer requireZeroNBLiveCObjects(t)
 
 	var (
@@ -330,39 +331,39 @@ func TestUpdateRuleData(t *testing.T) {
 }
 `)
 
-		testBlockingRuleData = []byte(`
-[
-    {
-		"id": "blocked_users",
-		"type": "data_with_expiration",
-		"data": [
-			{ "value": "moutix" }
-		]
-	},
+		testBlockingRulesData = []rc.ASMDataRuleData{
+			{
+				ID:   "blocked_users",
+				Type: "data_with_expiration",
+				Data: []rc.ASMDataRuleDataEntry{
+					{
+						Value: "moutix",
+					},
+				},
+			},
+			{
+				ID:   "blocked_ips",
+				Type: "ip_with_expiration",
+				Data: []rc.ASMDataRuleDataEntry{
+					{
+						Value: "10.0.0.1",
+					},
+				},
+			},
+		}
 
-	{
-		"id": "blocked_ips",
-		"type": "ip_with_expiration",
-		"data": [
-			{ "value": "10.0.0.1" }
-		]
-	}
-]`)
-
-		testEmptyRuleData = []byte(`
-[
-    {
-		"id": "blocked_users",
-		"type": "data_with_expiration",
-		"data": []
-	},
-
-	{
-		"id": "blocked_ips",
-		"type": "ip_with_expiration",
-		"data": []
-	}
-]`)
+		testEmptyRulesData = []rc.ASMDataRuleData{
+			{
+				ID:   "blocked_users",
+				Type: "data_with_expiration",
+				Data: []rc.ASMDataRuleDataEntry{},
+			},
+			{
+				ID:   "blocked_ips",
+				Type: "ip_with_expiration",
+				Data: []rc.ASMDataRuleDataEntry{},
+			},
+		}
 	)
 
 	waf, err := newDefaultHandle(testBlockingRule)
@@ -404,7 +405,7 @@ func TestUpdateRuleData(t *testing.T) {
 	}, []string{"block_user", "block_ip"})
 
 	// Update the rules' data
-	err = waf.UpdateRuleData(testBlockingRuleData)
+	err = waf.UpdateRulesData(testBlockingRulesData)
 	require.NoError(t, err)
 
 	// Not matching because the address values match the updated rules data
@@ -420,7 +421,7 @@ func TestUpdateRuleData(t *testing.T) {
 	}, []string{"block_user", "block_ip"})
 
 	// Empty the rules data so that nothing matches anymore
-	err = waf.UpdateRuleData(testEmptyRuleData)
+	err = waf.UpdateRulesData(testEmptyRulesData)
 	require.NoError(t, err)
 
 	test(map[string]interface{}{
@@ -434,7 +435,7 @@ func TestUpdateRuleData(t *testing.T) {
 	}, nil)
 
 	// Update the rules' data again
-	err = waf.UpdateRuleData(testBlockingRuleData)
+	err = waf.UpdateRulesData(testBlockingRulesData)
 	require.NoError(t, err)
 
 	// Matching because the address values don't match the updated rules data
@@ -539,7 +540,7 @@ func TestConcurrency(t *testing.T) {
 			defer stopBarrier.Done() // Signal we are done when returning
 
 			for c := 0; c < nbRun; c++ {
-				if err := waf.UpdateRuleData([]byte(`[]`)); err != nil {
+				if err := waf.UpdateRulesData([]rc.ASMDataRuleData{}); err != nil {
 					panic(err)
 				}
 				time.Sleep(time.Microsecond) // This is going to be more than this when under pressure
