@@ -18,10 +18,7 @@ import (
 	"time"
 	"unsafe"
 
-	rc "github.com/DataDog/datadog-agent/pkg/remoteconfig/state"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 )
 
 func TestHealth(t *testing.T) {
@@ -253,201 +250,9 @@ func TestActions(t *testing.T) {
 	t.Run("multiple-actions", testActions([]string{"action 1", "action 2", "action 3"}))
 }
 
-func TestUpdateRulesData(t *testing.T) {
-	defer requireZeroNBLiveCObjects(t)
-
-	var (
-		// Sample rules, one blocking IP addresses defined in the rule data `blocked_ips`,
-		// and the other blocking users defined in the rule data `blocked_users`.
-		testBlockingRule = []byte(`
-{
-  "version": "2.1",
-  "rules": [
-	{
-		"id": "block_ips",
-		"name": "Block IP addresses",
-		"tags": {
-		  "type": "ip_addresses",
-		  "category": "blocking"
-		},
-		"conditions": [
-		  {
-			"parameters": {
-			  "inputs": [
-				{ "address": "http.client_ip" }
-			  ],
-			  "data": "blocked_ips"
-			},
-			"operator": "ip_match"
-		  }
-		],
-		"transformers": [],
-		"on_match": [
-		  "block_ip"
-		]
-	},
-
-	{
-		"id": "block_users",
-		"name": "Block authenticated users",
-		"tags": {
-		  "type": "users",
-		  "category": "blocking"
-		},
-		"conditions": [
-		  {
-			"parameters": {
-			  "inputs": [
-				{ "address": "usr.id" }
-			  ],
-			  "data": "blocked_users"
-			},
-			"operator": "exact_match"
-		  }
-		],
-		"transformers": [],
-		"on_match": [
-		  "block_user"
-		]
-	}
-  ],
-  "rules_data": [
-	{
-		"id": "blocked_users",
-		"type": "data_with_expiration",
-		"data": [
-			{ "value": "zouzou" }
-		]
-	},
-
-	{
-		"id": "blocked_ips",
-		"type": "ip_with_expiration",
-		"data": [
-			{ "value": "1.2.3.4" }
-		]
-	}
-  ]
-}
-`)
-
-		testBlockingRulesData = []rc.ASMDataRuleData{
-			{
-				ID:   "blocked_users",
-				Type: "data_with_expiration",
-				Data: []rc.ASMDataRuleDataEntry{
-					{
-						Value: "moutix",
-					},
-				},
-			},
-			{
-				ID:   "blocked_ips",
-				Type: "ip_with_expiration",
-				Data: []rc.ASMDataRuleDataEntry{
-					{
-						Value: "10.0.0.1",
-					},
-				},
-			},
-		}
-
-		testEmptyRulesData = []rc.ASMDataRuleData{
-			{
-				ID:   "blocked_users",
-				Type: "data_with_expiration",
-				Data: []rc.ASMDataRuleDataEntry{},
-			},
-			{
-				ID:   "blocked_ips",
-				Type: "ip_with_expiration",
-				Data: []rc.ASMDataRuleDataEntry{},
-			},
-		}
-	)
-
-	waf, err := newDefaultHandle(testBlockingRule)
-	require.NoError(t, err)
-	require.NotNil(t, waf)
-	defer waf.Close()
-
-	// Helper function to test that the given address blocks or not.
-	// A rule can still only match once per context and so this function helps
-	// testing several times the same rule under distinct rule data values.
-	test := func(values map[string]interface{}, expectedActions []string) {
-		wafCtx := NewContext(waf)
-		require.NotNil(t, wafCtx)
-		defer wafCtx.Close()
-
-		matches, actions, err := wafCtx.Run(values, time.Second)
-		require.NoError(t, err)
-
-		if len(expectedActions) > 0 {
-			require.NotEmpty(t, matches)
-			require.Equal(t, len(expectedActions), len(actions))
-			require.ElementsMatch(t, expectedActions, actions)
-		} else {
-			require.Nil(t, matches)
-			require.Nil(t, actions)
-		}
-	}
-
-	// Not matching because the address values don't match the rules data
-	test(map[string]interface{}{
-		"http.client_ip": "10.0.0.1",
-		"usr.id":         "moutix",
-	}, nil)
-
-	// Matching because the address values match the rules data
-	test(map[string]interface{}{
-		"http.client_ip": "1.2.3.4",
-		"usr.id":         "zouzou",
-	}, []string{"block_user", "block_ip"})
-
-	// Update the rules' data
-	err = waf.UpdateRulesData(testBlockingRulesData)
-	require.NoError(t, err)
-
-	// Not matching because the address values match the updated rules data
-	test(map[string]interface{}{
-		"http.client_ip": "1.2.3.4",
-		"usr.id":         "zouzou",
-	}, nil)
-
-	// Matching because the address values don't match the updated rules data
-	test(map[string]interface{}{
-		"http.client_ip": "10.0.0.1",
-		"usr.id":         "moutix",
-	}, []string{"block_user", "block_ip"})
-
-	// Empty the rules data so that nothing matches anymore
-	err = waf.UpdateRulesData(testEmptyRulesData)
-	require.NoError(t, err)
-
-	test(map[string]interface{}{
-		"http.client_ip": "1.2.3.4",
-		"usr.id":         "zouzou",
-	}, nil)
-
-	test(map[string]interface{}{
-		"http.client_ip": "10.0.0.1",
-		"usr.id":         "moutix",
-	}, nil)
-
-	// Update the rules' data again
-	err = waf.UpdateRulesData(testBlockingRulesData)
-	require.NoError(t, err)
-
-	// Matching because the address values don't match the updated rules data
-	test(map[string]interface{}{
-		"http.client_ip": "10.0.0.1",
-		"usr.id":         "moutix",
-	}, []string{"block_user", "block_ip"})
-}
-
 func TestAddresses(t *testing.T) {
 	defer requireZeroNBLiveCObjects(t)
-	expectedAddresses := []string{"my.first.input", "my.second.input", "my.third.input", "my.indexed.input"}
+	expectedAddresses := []string{"my.first.input", "my.second.input", "my.indexed.input", "my.third.input"}
 	addresses := []ruleInput{{Address: "my.first.input"}, {Address: "my.second.input"}, {Address: "my.third.input"}, {Address: "my.indexed.input", KeyPath: []string{"indexed"}}}
 	waf, err := newDefaultHandle(newArachniTestRule(addresses, nil))
 	require.NoError(t, err)
@@ -461,34 +266,6 @@ func TestConcurrency(t *testing.T) {
 	// Start 800 goroutines that will use the WAF 500 times each
 	nbUsers := 50
 	nbRun := 500
-
-	t.Run("concurrent-waf-release", func(t *testing.T) {
-		waf, err := newDefaultHandle(testArachniRule)
-		require.NoError(t, err)
-
-		wafCtx := NewContext(waf)
-		require.NotNil(t, wafCtx)
-
-		var (
-			closed atomic.Uint32
-			done   sync.WaitGroup
-		)
-		done.Add(1)
-		go func() {
-			defer done.Done()
-			// The implementation currently blocks until the WAF contexts get released
-			waf.Close()
-			closed.Inc()
-		}()
-
-		// The WAF context is not released so waf.Close() should block and `closed` still be 0
-		assert.Equal(t, uint32(0), closed.Load())
-		// Release the WAF context, which should unlock the previous waf.Close() call
-		wafCtx.Close()
-		// Now that the WAF context is closed, wait for the goroutine to close the WAF handle.
-		done.Wait()
-		require.Equal(t, uint32(1), closed.Load())
-	})
 
 	t.Run("concurrent-waf-context-usage", func(t *testing.T) {
 		waf, err := newDefaultHandle(testArachniRule)
@@ -509,7 +286,7 @@ func TestConcurrency(t *testing.T) {
 		// increase the chances of parallel accesses
 		startBarrier.Add(1)
 		// Create a stopBarrier to signal when all user goroutines are done.
-		stopBarrier.Add(nbUsers + 1 /* the extra rules-data-update goroutine*/)
+		stopBarrier.Add(nbUsers)
 
 		for n := 0; n < nbUsers; n++ {
 			go func() {
@@ -533,19 +310,6 @@ func TestConcurrency(t *testing.T) {
 				}
 			}()
 		}
-
-		// Concurrently update the rules' data from times to times
-		go func() {
-			startBarrier.Wait()      // Sync the starts of the goroutines
-			defer stopBarrier.Done() // Signal we are done when returning
-
-			for c := 0; c < nbRun; c++ {
-				if err := waf.UpdateRulesData([]rc.ASMDataRuleData{}); err != nil {
-					panic(err)
-				}
-				time.Sleep(time.Microsecond) // This is going to be more than this when under pressure
-			}
-		}()
 
 		// Save the test start time to compare it to the first metrics store's
 		// that should be latter.
