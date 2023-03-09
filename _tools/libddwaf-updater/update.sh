@@ -29,7 +29,6 @@ tmpdir=$(mktemp -d /tmp/libddwaf-XXXXXXXX)
 echo Using $tmpdir
 
 LD_REQUIRED_DEFINED="--require-defined=ddwaf_init \
-                    --require-defined=ddwaf_update \
                     --require-defined=ddwaf_get_version \
                     --require-defined=ddwaf_destroy \
                     --require-defined=ddwaf_context_init \
@@ -52,7 +51,7 @@ run_strip() {
 echo Updating libddwaf for darwin/arm64
 curl -L https://github.com/DataDog/libddwaf/releases/download/$version/libddwaf-$version-darwin-arm64.tar.gz | tar -xz -C$tmpdir
 echo Copying the darwin/arm64 library
-cp -v $tmpdir/libddwaf-$version-darwin-arm64/lib/libddwaf.a $bindings_dir/lib/darwin-arm64
+cp -v $tmpdir/libddwaf-$version-darwin-arm64/lib/libddwaf.a.stripped $bindings_dir/lib/darwin-arm64/libddwaf.a
 
 #
 # darwin/amd64
