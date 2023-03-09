@@ -57,10 +57,10 @@ cp -v $tmpdir/libddwaf-$version-darwin-arm64/lib/libddwaf.a.stripped $bindings_d
 # darwin/amd64
 #
 
-echo Updating libddwaf for darwin/amd64
+echo Updating libddwaf for darwin/amd64yes
 curl -L https://github.com/DataDog/libddwaf/releases/download/$version/libddwaf-$version-darwin-x86_64.tar.gz | tar -xz -C$tmpdir
 echo Copying the darwin/amd64 library
-cp -v $tmpdir/libddwaf-$version-darwin-x86_64/lib/libddwaf.a $bindings_dir/lib/darwin-amd64
+cp -v $tmpdir/libddwaf-$version-darwin-x86_64/lib/libddwaf.a.stripped $bindings_dir/lib/darwin-amd64/libddwaf.a
 
 #
 # linux/amd64
