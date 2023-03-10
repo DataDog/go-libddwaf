@@ -1,0 +1,9 @@
+{
+    "go.toolsEnvVars": {
+        "CGO_ENABLED": "0"
+    },
+    "go.testEnvVars": {
+        "CGO_ENABLED": "0"
+    },
+    "cmake.sourceDirectory": "${workspaceFolder}/libddwaf-yaml"
+}

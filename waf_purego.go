@@ -555,18 +555,25 @@ type encoder struct {
 	maxMapLength uint32
 }
 
-func (e *encoder) encode(v interface{}) (object *wafObject, err error) {
+func (e *encoder) encode(v interface{}) (obj *wafObject, err error) {
 	defer func() {
 		if v := recover(); v != nil {
 			err = fmt.Errorf("waf panic: %v", v)
 		}
 	}()
-	wo := &wafObject{}
-	err = e.encodeValue(reflect.ValueOf(v), wo, e.maxDepth)
+	jsonBytes, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
-	return wo, nil
+
+	ddwaf_object_from_json := getSymbol("ddwaf_object_from_json")
+	jsonCString := cstring(string(jsonBytes))
+	wo := wafObject{}
+	ptr, _, _ := purego.SyscallN(ddwaf_object_from_json, uintptr(unsafe.Pointer(&wo)), uintptr(unsafe.Pointer(jsonCString)))
+	if ptr == 0 {
+		return nil, fmt.Errorf("Error converting json to ddwaf object");
+	}
+	return (*wafObject)(unsafe.Pointer(ptr)), nil
 }
 
 func (e *encoder) encodeValue(v reflect.Value, wo *wafObject, depth uint32) error {
@@ -768,15 +775,22 @@ func (e *encoder) encodeUint64(n uint64, wo *wafObject) error {
 	return e.encodeString(strconv.FormatUint(n, 10), wo)
 }
 
-func decodeErrors(wo *wafObject) (map[string]interface{}, error) {
-	v, err := decodeMap(wo)
-	if err != nil {
+func decodeErrors(wo *wafObject) (output map[string]interface{}, err error) {
+
+	ddwaf_object_to_json := getSymbol("ddwaf_object_to_json")
+	jsonCBytes, _, _ := purego.SyscallN(ddwaf_object_to_json, uintptr(unsafe.Pointer(wo)))
+	if jsonCBytes == 0 {
+		return nil, fmt.Errorf("Error converting ddwaf object to json");
+	}
+
+	jsonGoBytes := []byte(gostring(jsonCBytes))
+	if err := json.Unmarshal(jsonGoBytes, &output); err != nil {
 		return nil, err
 	}
-	if len(v) == 0 {
-		v = nil // enforce a nil map when the ddwaf map was empty
-	}
-	return v, nil
+
+	//TODO(eliott.bouhana) Find something to free jsonCBytes using stdlib free
+
+	return output, nil
 }
 
 func decodeObject(wo *wafObject) (v interface{}, err error) {

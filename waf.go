@@ -417,9 +417,6 @@ func (e *encoder) encode(v interface{}) (object *wafObject, err error) {
 		if v := recover(); v != nil {
 			err = fmt.Errorf("waf panic: %v", v)
 		}
-		if err != nil && object != nil {
-			freeWO(object)
-		}
 	}()
 
 	jsonBytes, err := json.Marshal(v)

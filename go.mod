@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.43.0
-	github.com/ebitengine/purego v0.2.0
+	github.com/ebitengine/purego v0.3.0-alpha
 	github.com/stretchr/testify v1.8.1
 	go.uber.org/atomic v1.10.0
 )
