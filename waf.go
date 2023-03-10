@@ -430,12 +430,18 @@ func (e *encoder) encode(v interface{}) (object *wafObject, err error) {
 			freeWO(object)
 		}
 	}()
-	wo := &wafObject{}
-	err = e.encodeValue(reflect.ValueOf(v), wo, e.maxDepth)
+
+	jsonBytes, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
-	return wo, nil
+
+	wo := wafObject{}
+	if ptr, err := C.ddwaf_object_from_json((*C.ddwaf_object)(&wo), C.CString(string(jsonBytes))); ptr == nil {
+		return nil, fmt.Errorf("Error converting json to ddwaf object: %w", err);
+	}
+
+	return &wo, nil
 }
 
 func (e *encoder) encodeValue(v reflect.Value, wo *wafObject, depth int) error {
@@ -661,15 +667,21 @@ func (e *encoder) encodeUint64(n uint64, wo *wafObject) error {
 	return e.encodeString(strconv.FormatUint(n, 10), wo)
 }
 
-func decodeErrors(wo *wafObject) (map[string]interface{}, error) {
-	v, err := decodeMap(wo)
-	if err != nil {
+func decodeErrors(wo *wafObject) (output map[string]interface{}, err error) {
+
+	jsonCBytes, err := C.ddwaf_object_to_json((*C.ddwaf_object)(wo))
+	if jsonCBytes == nil {
 		return nil, err
 	}
-	if len(v) == 0 {
-		v = nil // enforce a nil map when the ddwaf map was empty
+
+	jsonGoBytes := []byte(C.GoString(jsonCBytes))
+	if err := json.Unmarshal(jsonGoBytes, &output); err != nil {
+		return nil, err
 	}
-	return v, nil
+
+	cFree(unsafe.Pointer(jsonCBytes))
+
+	return output, nil
 }
 
 func decodeObject(wo *wafObject) (v interface{}, err error) {

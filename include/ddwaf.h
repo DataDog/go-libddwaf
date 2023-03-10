@@ -8,11 +8,12 @@
 #define DDWAF_H
 
 #ifdef __cplusplus
+#include <memory>
 namespace ddwaf{
 class waf;
 class context;
 } // namespace ddwaf
-using ddwaf_handle = ddwaf::waf *;
+using ddwaf_handle = std::shared_ptr<ddwaf::waf> *;
 using ddwaf_context = ddwaf::context *;
 
 extern "C"
@@ -327,6 +328,29 @@ void ddwaf_context_destroy(ddwaf_context context);
  * @param result Structure to free. (nonnull)
  **/
 void ddwaf_result_free(ddwaf_result *result);
+
+/**
+ * ddwaf_object_from_json
+ *
+ * Creates an object from a json string.
+ *
+ * @param json Object to perform the operation on. (nonnull)
+ *
+ * @return A pointer to the passed object or NULL if the operation failed.
+ **/
+ddwaf_object *ddwaf_object_from_json(ddwaf_object *object, const char *json);
+
+/**
+ * ddwaf_object_to_json
+ *
+ * Creates an object from a json string.
+ *
+ * @param object Object to perform the operation on. (nonnull)
+ *
+ * @return A pointer to the passed object or NULL if the operation failed.
+ **/
+const char* ddwaf_object_to_json(const ddwaf_object *object);
+
 
 /**
  * ddwaf_object_invalid
