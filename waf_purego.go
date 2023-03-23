@@ -24,7 +24,7 @@ import (
 
 	"github.com/ebitengine/purego"
 
-	vendor "github.com/DataDog/go-libddwaf/lib/darwin-arm64"
+	vendor "github.com/DataDog/go-libddwaf/lib/shared"
 )
 
 const (

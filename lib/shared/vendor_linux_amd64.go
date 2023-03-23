@@ -3,13 +3,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build !cgo && darwin && arm64
-
 // Package vendor is required to help go tools support vendoring.
 // DO NOT REMOVE
+
+//go:build linux && amd64
+
 package vendor
 
 import _ "embed"
 
-//go:embed _libddwaf.dylib
+//go:embed linux-amd64
 var Libddwaf []byte
