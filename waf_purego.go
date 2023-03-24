@@ -27,6 +27,11 @@ import (
 	vendor "github.com/DataDog/go-libddwaf/lib/shared"
 )
 
+//go:cgo_import_dynamic purego_ceilf ceilf "libm.so.6"
+//go:cgo_import_dynamic _ _ "libm.so.6"
+
+var purego_cielf uintptr
+
 const (
 	wafMaxStringLength = 4096
 	wafMaxContainerDepth = 20
