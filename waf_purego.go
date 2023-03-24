@@ -186,6 +186,15 @@ func Version() string {
 	return gostring(r1)
 }
 
+func newMaxEncoder() *encoder {
+	return &encoder{
+		maxDepth:        math.MaxInt32,
+		maxStringLength: math.MaxInt32,
+		maxArrayLength:  math.MaxInt32,
+		maxMapLength:    math.MaxInt32,
+	}
+}
+
 // Handle represents an instance of the WAF for a given ruleset.
 type Handle struct {
 	// Instance of the WAF
