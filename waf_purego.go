@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"reflect"
@@ -102,6 +103,24 @@ var dlState = struct {
 	opened:      false,
 }
 
+var (
+	ddwaf_ruleset_info_free uintptr
+	ddwaf_init uintptr
+	ddwaf_object_free uintptr
+	ddwaf_destroy uintptr
+	ddwaf_required_addresses uintptr
+	ddwaf_update_rule_data uintptr
+	ddwaf_get_version uintptr
+	ddwaf_object_from_json uintptr
+	ddwaf_object_to_json uintptr
+	ddwaf_context_init uintptr
+	ddwaf_context_destroy uintptr
+	ddwaf_result_free uintptr
+	ddwaf_run uintptr
+	libddwaf_dl uintptr = loadLib()
+)
+
+
 // gostring copies a char* to a Go string.
 func gostring(c uintptr) string {
 	// We take the address and then dereference it to trick go vet from creating a possible misuse of unsafe.Pointer
@@ -131,49 +150,39 @@ func cstring(name string) *byte {
 }
 
 // Using the embeded shared library file, we dump it into a file and load it using dlopen
-func loadLib() (uintptr, error) {
+func loadLib() uintptr {
 
 	file, err := os.CreateTemp("", "libddwaf-*.so")
 	if err != nil {
-		return uintptr(0), fmt.Errorf("Error creating temp file: %w", err)
+		panic(fmt.Errorf("Error creating temp file: %w", err))
 	}
 
 	if err := os.WriteFile(file.Name(), vendor.Libddwaf, 0400); err != nil {
-		return uintptr(0), fmt.Errorf("Error writing file: %w", err)
+		panic(fmt.Errorf("Error writing file: %w", err))
 	}
 
 	lib, err := purego.Dlopen(file.Name(), purego.RTLD_GLOBAL|purego.RTLD_NOW)
 	if err != nil {
-		return uintptr(0), fmt.Errorf("Error opening shared library at path '%s'. Reason: %s", file.Name(), err)
+		panic(fmt.Errorf("Error opening shared library at path '%s'. Reason: %s", file.Name(), err))
 	}
 
-	return lib, nil
-}
+	ddwaf_ruleset_info_free, _ = purego.Dlsym(lib, "ddwaf_ruleset_info_free")
+	ddwaf_init, _ = purego.Dlsym(lib, "ddwaf_init")
+	ddwaf_object_free, _ = purego.Dlsym(lib, "ddwaf_object_free")
+	ddwaf_destroy, _ = purego.Dlsym(lib, "ddwaf_destroy")
+	ddwaf_required_addresses, _ = purego.Dlsym(lib, "ddwaf_required_addresses")
+	ddwaf_update_rule_data, _ = purego.Dlsym(lib, "ddwaf_update_rule_data")
+	ddwaf_get_version, _ = purego.Dlsym(lib, "ddwaf_get_version")
+	ddwaf_object_from_json, _ = purego.Dlsym(lib, "ddwaf_object_from_json")
+	ddwaf_object_to_json, _ = purego.Dlsym(lib, "ddwaf_object_to_json")
+	ddwaf_context_init, _ = purego.Dlsym(lib, "ddwaf_context_init")
+	ddwaf_context_destroy, _ = purego.Dlsym(lib, "ddwaf_context_destroy")
+	ddwaf_result_free, _ = purego.Dlsym(lib, "ddwaf_result_free")
+	ddwaf_run, _ = purego.Dlsym(lib, "ddwaf_run")
 
-// Main utility load library and symbols, also maintains a symbols cache
-// TODO(eliott.bouhana): make it thread safe
-func getSymbol(symbolName string) uintptr {
-	if !dlState.opened {
-		lib, err := loadLib()
-		if err != nil {
-			panic(err)
-		}
+	log.Println("Loaded WAF handle")
 
-		dlState.libddwaf = lib
-		dlState.opened = true
-	}
-
-	if symbol, ok := dlState.symbolCache[symbolName]; ok {
-		return symbol
-	}
-
-	symbol, err := purego.Dlsym(dlState.libddwaf, symbolName)
-	if err != nil {
-		panic(err)
-	}
-
-	dlState.symbolCache[symbolName] = symbol
-	return symbol
+	return lib
 }
 
 func Health() error {
@@ -181,8 +190,7 @@ func Health() error {
 }
 
 func Version() string {
-	symbol := getSymbol("ddwaf_get_version")
-	r1, _, _ := purego.SyscallN(symbol)
+	r1, _, _ := purego.SyscallN(ddwaf_get_version)
 	return gostring(r1)
 }
 
@@ -265,20 +273,19 @@ func NewHandle(jsonRule []byte, keyRegex, valueRegex string) (*Handle, error) {
 	}
 
 	defer func() {
-		ddwaf_ruleset_info_free := getSymbol("ddwaf_ruleset_info_free")
 		purego.SyscallN(ddwaf_ruleset_info_free, uintptr(unsafe.Pointer(&wafRInfo)))
 	}()
 	
-	ddwaf_init := getSymbol("ddwaf_init")
 	handle, _, _ := purego.SyscallN(ddwaf_init, uintptr(unsafe.Pointer(wafRule)), uintptr(unsafe.Pointer(&wafCfg)), uintptr(unsafe.Pointer(&wafRInfo)))
 	if handle == 0 {
 		return nil, errors.New("could not instantiate the waf rule")
 	}
 
+	purego.SyscallN(ddwaf_object_free, uintptr(unsafe.Pointer(wafRule)))
+
 	// Decode the ruleset information returned by the WAF
 	errors, err := decodeErrors((*wafObject)(&wafRInfo.errors))
 	if err != nil {
-		ddwaf_destroy := getSymbol("ddwaf_destroy")
 		purego.SyscallN(ddwaf_destroy, handle)
 		return nil, err
 	}
@@ -292,7 +299,6 @@ func NewHandle(jsonRule []byte, keyRegex, valueRegex string) (*Handle, error) {
 	// Get the addresses the rule listens to
 	addresses, err := ruleAddresses(handle)
 	if err != nil {
-		ddwaf_destroy := getSymbol("ddwaf_destroy")
 		purego.SyscallN(ddwaf_destroy, handle)
 		return nil, err
 	}
@@ -311,14 +317,12 @@ func (h *Handle) release() {
 	if h.handle == 0 {
 		return // already released - only happens if Close() is called more than once
 	}
-	ddwaf_destroy := getSymbol("ddwaf_destroy")
 	purego.SyscallN(ddwaf_destroy, h.handle)
 	h.handle = 0
 }
 
 func ruleAddresses(handle uintptr) ([]string, error) {
 	var nbAddresses uint32
-	ddwaf_required_addresses := getSymbol("ddwaf_required_addresses")
 	caddresses, _, _ := purego.SyscallN(ddwaf_required_addresses, handle, uintptr(unsafe.Pointer(&nbAddresses)))
 	if nbAddresses == 0 {
 		return nil, ErrEmptyRuleAddresses
@@ -354,7 +358,9 @@ func (h *Handle) UpdateRuleData(jsonData []byte) error {
 		return fmt.Errorf("could not encode the JSON WAF rule data into a WAF object: %v", err)
 	}
 
-	return h.updateRuleData(encoded)
+	err = h.updateRuleData(encoded)
+	purego.SyscallN(ddwaf_object_free, uintptr(unsafe.Pointer(encoded)))
+	return err
 }
 
 // updateRuleData is the critical section of UpdateRuleData
@@ -367,7 +373,6 @@ func (h *Handle) updateRuleData(data *wafObject) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	ddwaf_update_rule_data := getSymbol("ddwaf_update_rule_data")
 	rc, _, _ := purego.SyscallN(ddwaf_update_rule_data, h.handle, uintptr(unsafe.Pointer(data)))
 	if rc != OK {
 		return fmt.Errorf("unexpected error number `%d` while updating the WAF rule data", rc)
@@ -422,8 +427,6 @@ func NewContext(handle *Handle) *Context {
 		return nil // The WAF handle got released
 	}
 
-	ddwaf_context_init := getSymbol("ddwaf_context_init")
-
 	context, _, _ := purego.SyscallN(ddwaf_context_init, handle.handle)
 	if context == 0 {
 		handle.decrementReferences()
@@ -453,7 +456,9 @@ func (c *Context) Run(values map[string]interface{}, timeout time.Duration) (mat
 		return nil, nil, err
 	}
 
-	return c.run(wafValue, timeout)
+	matches, actions, err = c.run(wafValue, timeout)
+	purego.SyscallN(ddwaf_object_free, uintptr(unsafe.Pointer(wafValue)))
+	return matches, actions, err
 }
 
 // run is the critical section of Run
@@ -468,7 +473,6 @@ func (c *Context) run(data *wafObject, timeout time.Duration) (matches []byte, a
 	defer c.handle.mu.RUnlock()
 
 	var result wafResult
-	ddwaf_run := getSymbol("ddwaf_run")
 	rc, _, _ := purego.SyscallN(ddwaf_run, c.context, uintptr(unsafe.Pointer(data)), uintptr(unsafe.Pointer(&result)), uintptr(uint64(timeout/time.Microsecond)))
 
 	c.totalRuntimeNs.Add(uint64(result.total_runtime))
@@ -477,6 +481,8 @@ func (c *Context) run(data *wafObject, timeout time.Duration) (matches []byte, a
 	if err == ErrTimeout {
 		c.timeoutCount.Inc()
 	}
+
+	purego.SyscallN(ddwaf_result_free, uintptr(unsafe.Pointer(&result)))
 
 	return matches, actions, err
 }
@@ -533,7 +539,6 @@ func goRunError(rc int) error {
 func (c *Context) Close() {
 	// RUnlock the WAF RWMutex to decrease the count of WAF Contexts using it.
 	defer c.handle.decrementReferences()
-	ddwaf_context_destroy := getSymbol("ddwaf_context_destroy")
 	purego.SyscallN(ddwaf_context_destroy, c.context)
 }
 
@@ -575,14 +580,13 @@ func (e *encoder) encode(v interface{}) (obj *wafObject, err error) {
 		return nil, err
 	}
 
-	ddwaf_object_from_json := getSymbol("ddwaf_object_from_json")
 	jsonCString := cstring(string(jsonBytes))
 	wo := wafObject{}
 	ptr, _, _ := purego.SyscallN(ddwaf_object_from_json, uintptr(unsafe.Pointer(&wo)), uintptr(unsafe.Pointer(jsonCString)))
 	if ptr == 0 {
 		return nil, fmt.Errorf("Error converting json to ddwaf object");
 	}
-	return (*wafObject)(unsafe.Pointer(ptr)), nil
+	return &wo, nil
 }
 
 func (e *encoder) encodeValue(v reflect.Value, wo *wafObject, depth uint32) error {
@@ -786,7 +790,6 @@ func (e *encoder) encodeUint64(n uint64, wo *wafObject) error {
 
 func decodeErrors(wo *wafObject) (output map[string]interface{}, err error) {
 
-	ddwaf_object_to_json := getSymbol("ddwaf_object_to_json")
 	jsonCBytes, _, _ := purego.SyscallN(ddwaf_object_to_json, uintptr(unsafe.Pointer(wo)))
 	if jsonCBytes == 0 {
 		return nil, fmt.Errorf("Error converting ddwaf object to json");

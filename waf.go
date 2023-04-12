@@ -884,24 +884,7 @@ func cstring(str string, maxLength int) (*C.char, int, error) {
 }
 
 func freeWO(v *wafObject) {
-	if v == nil {
-		return
-	}
-	// Free the map key if any
-	if key := v.mapKey(); key != nil {
-		cFree(unsafe.Pointer(v.parameterName))
-	}
-	// Free allocated values
-	switch v._type {
-	case wafInvalidType:
-		return
-	case wafStringType:
-		cFree(unsafe.Pointer(v.string()))
-	case wafMapType, wafArrayType:
-		freeWOContainer(v)
-	}
-	// Make the value invalid to make it unusable
-	v.setInvalid()
+	C.ddwaf_object_free((*C.ddwaf_object)(v))
 }
 
 func freeWOContainer(v *wafObject) {
