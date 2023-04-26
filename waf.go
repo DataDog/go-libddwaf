@@ -174,6 +174,67 @@ func NewHandleFromRuleSet(ruleset interface{}, keyRegex, valueRegex string) (*Ha
 	}, nil
 }
 
+// Update adds and merge the ruleset passed as parameter with the ruleset of previous handle, producing a new one
+// `jsonRule` must be a byte array forming a json
+func (h *Handle) Update(jsonRule []byte) (*Handle, error) {
+	var ruleset interface{}
+	if err := json.Unmarshal(jsonRule, &ruleset); err != nil {
+		return nil, fmt.Errorf("could not parse the WAF rule: %v", err)
+	}
+	return h.UpdateFromRuleset(ruleset)
+}
+
+// UpdateFromRuleset adds and merge the ruleset passed as parameter with the ruleset of previous handle, producing a new one
+// `ruleset` must be a map[string]interface, ideally coming directly from json.Unmarshal
+func (h *Handle) UpdateFromRuleset(ruleset interface{}) (*Handle, error) {
+	// Create a temporary unlimited encoder for the rules
+	ruleEncoder := newMaxEncoder()
+	wafRule, err := ruleEncoder.encode(ruleset)
+	if err != nil {
+		return nil, fmt.Errorf("could not encode the WAF ruleset into a WAF object: %v", err)
+	}
+	defer freeWO(wafRule)
+
+	var wafRInfo C.ddwaf_ruleset_info
+	defer C.ddwaf_ruleset_info_free(&wafRInfo)
+
+	handle := C.ddwaf_update(h.handle, wafRule.ctype(), &wafRInfo)
+	if handle == nil {
+		return nil, errors.New("could not update the waf rule")
+	}
+
+	//TODO check if the previous handle has to be destroyed manually
+	incNbLiveCObjects()
+
+	// Decode the ruleset information returned by the WAF
+	errors, err := decodeErrors((*wafObject)(&wafRInfo.errors))
+	if err != nil {
+		C.ddwaf_destroy(handle)
+		decNbLiveCObjects()
+		return nil, err
+	}
+	rInfo := RulesetInfo{
+		Failed:  uint16(wafRInfo.failed),
+		Loaded:  uint16(wafRInfo.loaded),
+		Version: C.GoString(wafRInfo.version),
+		Errors:  errors,
+	}
+	// Get the addresses the rule listens to
+	addresses, err := ruleAddresses(handle)
+	if err != nil {
+		C.ddwaf_destroy(handle)
+		decNbLiveCObjects()
+		return nil, err
+	}
+	return &Handle{
+		handle:      handle,
+		refCounter:  (*atomicRefCounter)(atomic.NewUint32(1)),
+		encoder:     h.encoder,
+		addresses:   addresses,
+		rulesetInfo: rInfo,
+	}, nil
+}
+
 // Increment the ref counter and return true if the handle can be used, false
 // otherwise.
 func (h *Handle) incrementReferences() bool {

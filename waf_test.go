@@ -147,6 +147,129 @@ func TestNewWAF(t *testing.T) {
 	})
 }
 
+func TestWAFUpdate(t *testing.T) {
+	defer requireZeroNBLiveCObjects(t)
+	t.Run("same-rule", func(t *testing.T) {
+		waf, err := newDefaultHandle(testArachniRule)
+		require.NoError(t, err)
+		newWaf, err := waf.Update(testArachniRule)
+		require.NoError(t, err)
+		require.NotNil(t, newWaf)
+		defer waf.Close()
+		defer newWaf.Close()
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		waf, err := newDefaultHandle(testArachniRule)
+		require.NoError(t, err)
+		newWaf, err := waf.Update([]byte(`{}`))
+		require.Error(t, err)
+		require.Nil(t, newWaf)
+		defer waf.Close()
+	})
+
+	t.Run("invalid-json", func(t *testing.T) {
+		waf, err := newDefaultHandle(testArachniRule)
+		require.NoError(t, err)
+		newWaf, err := waf.Update([]byte(`not json`))
+		require.Error(t, err)
+		require.Nil(t, newWaf)
+		defer waf.Close()
+	})
+
+	t.Run("invalid-rule", func(t *testing.T) {
+		// Test with a valid JSON but invalid rule format (field events should be an array)
+		const rule = `
+{
+  "version": "2.1",
+  "events": [
+	{
+	  "id": "ua0-600-12x",
+	  "name": "Arachni",
+	  "tags": {
+		"type": "security_scanner"
+	  },
+	  "conditions": [
+		{
+		  "operation": "match_regex",
+		  "parameters": {
+			"inputs": {
+			  { "address": "server.request.headers.no_cookies" }
+			},
+			"regex": "^Arachni"
+		  }
+		}
+	  ],
+	  "transformers": []
+	}
+  ]
+}
+`
+		waf, err := newDefaultHandle(testArachniRule)
+		require.NoError(t, err)
+		newWaf, err := waf.Update([]byte(rule))
+		require.Error(t, err)
+		require.Nil(t, newWaf)
+		defer waf.Close()
+	})
+}
+
+func TestUpdateOneRule(t *testing.T) {
+	defer requireZeroNBLiveCObjects(t)
+
+	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	require.NotNil(t, waf)
+
+	require.Equal(t, []string{"my.input"}, waf.Addresses())
+
+	wafCtx := NewContext(waf)
+	require.NotNil(t, wafCtx)
+
+	// Matching
+	values := map[string]interface{}{
+		"my.input": "Arachni",
+	}
+	matches, actions, err := wafCtx.Run(values, time.Second)
+	require.NoError(t, err)
+	require.NotEmpty(t, matches)
+	require.Nil(t, actions)
+
+	// Update the address of the rule
+	newWaf, err := waf.Update(newArachniTestRule([]ruleInput{{Address: "my.other.input"}}, nil))
+	require.NoError(t, err)
+	require.NotNil(t, newWaf)
+
+	waf.Close()
+
+	require.Equal(t, []string{"my.other.input"}, newWaf.Addresses())
+
+	wafCtx.Close()
+	wafCtx = NewContext(newWaf)
+	require.NotNil(t, wafCtx)
+
+	// Not matching because the address value was updated
+	values = map[string]interface{}{
+		"my.input": "Arachni",
+	}
+	matches, actions, err = wafCtx.Run(values, time.Second)
+	require.NoError(t, err)
+	require.Nil(t, matches)
+	require.Nil(t, actions)
+
+	// Matching
+	values = map[string]interface{}{
+		"my.other.input": "Arachni",
+	}
+	matches, actions, err = wafCtx.Run(values, time.Second)
+	require.NoError(t, err)
+	require.NotEmpty(t, matches)
+	require.Nil(t, actions)
+
+	wafCtx.Close()
+	newWaf.Close()
+}
+
 func TestMatching(t *testing.T) {
 	defer requireZeroNBLiveCObjects(t)
 
