@@ -52,6 +52,7 @@ echo Updating libddwaf for darwin/arm64
 curl -L https://github.com/DataDog/libddwaf/releases/download/$version/libddwaf-$version-darwin-arm64.tar.gz | tar -xz -C$tmpdir
 echo Copying the darwin/arm64 library
 cp -v $tmpdir/libddwaf-$version-darwin-arm64/lib/libddwaf.a.stripped $bindings_dir/lib/darwin-arm64/libddwaf.a
+cp -v "$tmpdir/libddwaf-$version-darwin-arm64/lib/libddwaf.dylib" "$bindings_dir/purego/embed/darwin-arm64"
 
 #
 # darwin/amd64
@@ -61,6 +62,7 @@ echo Updating libddwaf for darwin/amd64yes
 curl -L https://github.com/DataDog/libddwaf/releases/download/$version/libddwaf-$version-darwin-x86_64.tar.gz | tar -xz -C$tmpdir
 echo Copying the darwin/amd64 library
 cp -v $tmpdir/libddwaf-$version-darwin-x86_64/lib/libddwaf.a.stripped $bindings_dir/lib/darwin-amd64/libddwaf.a
+cp -v "$tmpdir/libddwaf-$version-darwin-x86_64/lib/libddwaf.dylib" "$bindings_dir/purego/embed/darwin-amd64"
 
 #
 # linux/amd64
@@ -81,6 +83,8 @@ run_binutils x86_64-linux-gnu-ld \
    $tmpdir/libddwaf-$version-linux-x86_64/lib/libddwaf.a $libcxx_dir/libc++.a $libcxx_dir/libc++abi.a $libcxx_dir/libunwind.a
 # 4. Strip
 run_strip x86_64-linux-gnu $bindings_dir/lib/linux-amd64/libddwaf.a
+cp -v "$tmpdir/libddwaf-$version-linux-x86_64/lib/libddwaf.so" "$bindings_dir/purego/embed/linux-amd64"
+run_strip x86_64-linux-gnu "$bindings_dir/purego/embed/linux-amd64"
 
 #
 # linux/arm64
@@ -101,6 +105,8 @@ run_binutils aarch64-linux-gnu-ld \
    $tmpdir/libddwaf-$version-linux-aarch64/lib/libddwaf.a $libcxx_dir/libc++.a $libcxx_dir/libc++abi.a $libcxx_dir/libunwind.a
 # 4. Strip
 run_strip aarch64-linux-gnu $bindings_dir/lib/linux-arm64/libddwaf.a
+cp -v "$tmpdir/libddwaf-$version-linux-aarch64/lib/libddwaf.so" "$bindings_dir/purego/embed/linux-arm64"
+run_strip aarch64-linux-gnu "$bindings_dir/purego/embed/linux-arm64"
 
 #
 # ddwaf.h
