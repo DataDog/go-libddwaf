@@ -3,20 +3,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Package vendor is required to help go tools support vendoring.
-// DO NOT REMOVE
+//go:build !cgo && linux
 
-//go:build linux && arm64
-
-package shared
+package waf
 
 // Adds a dynamic import for libm.so because libddwaf needs the ceilf symbol
+// This mechanic only works when CGO is not enabled
 //go:cgo_import_dynamic purego_ceilf ceilf "libm.so.6"
 //go:cgo_import_dynamic _ _ "libm.so.6"
 
-import _ "embed" // Needed for go:embed
-
-//go:embed linux-arm64
-var Libddwaf []byte
-
-var purego_ceilf uint
+var purego_ceilf uintptr
