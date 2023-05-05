@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Purego only works on linux/macOS with amd64 and arm64 from now
+// Purego only works on linux/macOS with amd64 and arm64 for now
 //go:build (linux || darwin) && (amd64 || arm64) && !cgo
 
 package waf
@@ -120,7 +120,7 @@ func gostring(c uintptr) string {
 
 // cstring converts a go string to *byte that can be passed to C code.
 func cstring(name string) *byte {
-	// Has suffix
+	// check if the string is already null-terminated
 	if len(name) >= len("\x00") && name[len(name)-len("\x00"):] == "\x00" {
 		return &(*(*[]byte)(unsafe.Pointer(&name)))[0]
 	}
