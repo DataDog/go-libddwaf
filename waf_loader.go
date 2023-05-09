@@ -46,18 +46,31 @@ type wafLoader struct {
 	ddwaf_run                uintptr
 }
 
-// newWafLoader loads the waf shared library and loads all the needed symbols
-func newWafLoader() (*wafLoader, error) {
+func dumpWafLibrary() (*os.File, error) {
 	file, err := os.CreateTemp("", "libddwaf-*.so")
 	if err != nil {
 		return nil, fmt.Errorf("Error creating temp file: %w", err)
 	}
 
-	defer os.Remove(file.Name())
-
 	if err := os.WriteFile(file.Name(), libddwaf, 0400); err != nil {
 		return nil, fmt.Errorf("Error writing file: %w", err)
 	}
+
+	return file, nil
+}
+
+// newWafLoader loads the waf shared library and loads all the needed symbols
+func newWafLoader() (*wafLoader, error) {
+
+	file, err := dumpWafLibrary()
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		file.Close()
+		os.Remove(file.Name())
+	}()
 
 	lib, symbols, err := dlOpen(file.Name(), wafSymbols)
 	if err != nil {
