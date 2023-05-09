@@ -16,8 +16,18 @@ import (
 
 func TestWafOpen(t *testing.T) {
 
-	loader, err := wafOpen()
+	loader, err := newWafLoader()
 	require.NoError(t, err)
-	loader.dlClose()
+	defer loader.dlClose()
+
+}
+
+func TestWafGetVersion(t *testing.T) {
+
+	loader, err := newWafLoader()
+	require.NoError(t, err)
+	defer loader.dlClose()
+
+	require.Regexp(t, `[0-9]+\.[0-9]+\.[0-9]+`, loader.wafGetVersion())
 
 }
