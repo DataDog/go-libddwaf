@@ -20,21 +20,17 @@ import (
 )
 
 func TestWafOpen(t *testing.T) {
-
 	loader, err := newWafLoader()
 	require.NoError(t, err)
-	defer loader.dlClose()
-
+	defer loader.Close()
 }
 
 func TestWafGetVersion(t *testing.T) {
-
 	loader, err := newWafLoader()
 	require.NoError(t, err)
-	defer loader.dlClose()
+	defer loader.Close()
 
 	require.Regexp(t, `[0-9]+\.[0-9]+\.[0-9]+`, loader.wafGetVersion())
-
 }
 
 // TestVerifyELFHeader is here to ease the debug cases that will likely need
@@ -65,7 +61,6 @@ func TestVerifyELFHeader(t *testing.T) {
 	require.Equal(t, elf.ET_DYN, elfFile.Type, "Is not a shared library")
 
 	//TODO(eliott.bouhana) add more checks
-
 }
 
 // TestVerifyMachOHeader is here to ease the debug cases that will likely need

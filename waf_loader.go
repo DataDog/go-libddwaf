@@ -14,36 +14,23 @@ import (
 	"unsafe"
 )
 
-var wafSymbols = []string{
-	"ddwaf_ruleset_info_free",
-	"ddwaf_init",
-	"ddwaf_object_free",
-	"ddwaf_destroy",
-	"ddwaf_required_addresses",
-	"ddwaf_get_version",
-	"ddwaf_context_init",
-	"ddwaf_context_destroy",
-	"ddwaf_result_free",
-	"ddwaf_run",
-}
-
 // wafLoader is the type wrapper for all C calls to the waf
 // It uses `libLoader` to make C calls
 // All calls must go though this one liner to be type safe
 // since purego calls are not type safe
 type wafLoader struct {
-	libLoader
+	LibLoader
 
-	ddwaf_ruleset_info_free  uintptr
-	ddwaf_init               uintptr
-	ddwaf_object_free        uintptr
-	ddwaf_destroy            uintptr
-	ddwaf_required_addresses uintptr
-	ddwaf_get_version        uintptr
-	ddwaf_context_init       uintptr
-	ddwaf_context_destroy    uintptr
-	ddwaf_result_free        uintptr
-	ddwaf_run                uintptr
+	Ddwaf_ruleset_info_free  uintptr `dlsym:"ddwaf_ruleset_info_free"`
+	Ddwaf_init               uintptr `dlsym:"ddwaf_init"`
+	Ddwaf_object_free        uintptr `dlsym:"ddwaf_object_free"`
+	Ddwaf_destroy            uintptr `dlsym:"ddwaf_destroy"`
+	Ddwaf_required_addresses uintptr `dlsym:"ddwaf_required_addresses"`
+	Ddwaf_get_version        uintptr `dlsym:"ddwaf_get_version"`
+	Ddwaf_context_init       uintptr `dlsym:"ddwaf_context_init"`
+	Ddwaf_context_destroy    uintptr `dlsym:"ddwaf_context_destroy"`
+	Ddwaf_result_free        uintptr `dlsym:"ddwaf_result_free"`
+	Ddwaf_run                uintptr `dlsym:"ddwaf_run"`
 }
 
 func dumpWafLibrary() (*os.File, error) {
@@ -61,7 +48,6 @@ func dumpWafLibrary() (*os.File, error) {
 
 // newWafLoader loads the waf shared library and loads all the needed symbols
 func newWafLoader() (*wafLoader, error) {
-
 	file, err := dumpWafLibrary()
 	if err != nil {
 		return nil, err
@@ -72,56 +58,53 @@ func newWafLoader() (*wafLoader, error) {
 		os.Remove(file.Name())
 	}()
 
-	lib, symbols, err := dlOpen(file.Name(), wafSymbols)
-	if err != nil {
+	var loader wafLoader
+	if err := dlOpen(file.Name(), &loader); err != nil {
 		return nil, fmt.Errorf("Error opening waf library: %w", err)
 	}
 
-	waf := &wafLoader{
-		libLoader:                *lib,
-		ddwaf_ruleset_info_free:  symbols["ddwaf_ruleset_info_free"],
-		ddwaf_init:               symbols["ddwaf_init"],
-		ddwaf_object_free:        symbols["ddwaf_object_free"],
-		ddwaf_destroy:            symbols["ddwaf_destroy"],
-		ddwaf_required_addresses: symbols["ddwaf_required_addresses"],
-		ddwaf_get_version:        symbols["ddwaf_get_version"],
-		ddwaf_context_init:       symbols["ddwaf_context_init"],
-		ddwaf_context_destroy:    symbols["ddwaf_context_destroy"],
-		ddwaf_result_free:        symbols["ddwaf_result_free"],
-		ddwaf_run:                symbols["ddwaf_run"],
-	}
-
 	// try a call to the waf to make sure everything is fine
-	if waf.syscall(waf.ddwaf_get_version) == 0 {
-		return nil, fmt.Errorf("Test call in the C world failed: cannot load %s shared object", file.Name())
+	if err := loader.tryCall(); err != nil {
+		return nil, fmt.Errorf("test call in the C world failed: cannot load %s shared object. Reason: %v", file.Name(), err)
 	}
 
-	return waf, nil
+	return &loader, nil
 }
 
+func (loader *wafLoader) tryCall() (err any) {
+	defer func() {
+		err = recover()
+	}()
+
+	loader.wafGetVersion()
+	return nil
+}
+
+// wafGetVersion returned string is a static string so we do not need to free it
 func (loader *wafLoader) wafGetVersion() string {
-	return gostring(loader.syscall(loader.ddwaf_get_version))
+	return gostring(loader.syscall(loader.Ddwaf_get_version))
 }
 
 func (loader *wafLoader) wafInit(obj *wafObject, config *wafConfig, info *wafRulesetInfo) wafHandle {
-	return wafHandle(loader.syscall(loader.ddwaf_init, uintptr(unsafe.Pointer(obj)), uintptr(unsafe.Pointer(config)), uintptr(unsafe.Pointer(info))))
+	return wafHandle(loader.syscall(loader.Ddwaf_init, uintptr(unsafe.Pointer(obj)), uintptr(unsafe.Pointer(config)), uintptr(unsafe.Pointer(info))))
 }
 
 func (loader *wafLoader) wafRulesetInfoFree(info *wafRulesetInfo) {
-	loader.syscall(loader.ddwaf_ruleset_info_free, uintptr(unsafe.Pointer(info)))
+	loader.syscall(loader.Ddwaf_ruleset_info_free, uintptr(unsafe.Pointer(info)))
 }
 
 func (loader *wafLoader) wafObjectFree(obj *wafObject) {
-	loader.syscall(loader.ddwaf_object_free, uintptr(unsafe.Pointer(obj)))
+	loader.syscall(loader.Ddwaf_object_free, uintptr(unsafe.Pointer(obj)))
 }
 
 func (loader *wafLoader) wafDestroy(handle wafHandle) {
-	loader.syscall(loader.ddwaf_destroy, uintptr(handle))
+	loader.syscall(loader.Ddwaf_destroy, uintptr(handle))
 }
 
+// wafRequiredAddresses returns statis strings so we do not need to free them
 func (loader *wafLoader) wafRequiredAddresses(handle wafHandle) []string {
 	var nbAddresses uint32
-	arrayVoidC := loader.syscall(loader.ddwaf_required_addresses, uintptr(handle), uintptr(unsafe.Pointer(&nbAddresses)))
+	arrayVoidC := loader.syscall(loader.Ddwaf_required_addresses, uintptr(handle), uintptr(unsafe.Pointer(&nbAddresses)))
 	if arrayVoidC == 0 {
 		return nil
 	}
@@ -135,17 +118,17 @@ func (loader *wafLoader) wafRequiredAddresses(handle wafHandle) []string {
 }
 
 func (loader *wafLoader) wafContextInit(handle wafHandle) wafContext {
-	return wafContext(loader.syscall(loader.ddwaf_context_init, uintptr(handle)))
+	return wafContext(loader.syscall(loader.Ddwaf_context_init, uintptr(handle)))
 }
 
 func (loader *wafLoader) wafContextDestroy(context wafContext) {
-	loader.syscall(loader.ddwaf_context_destroy, uintptr(context))
+	loader.syscall(loader.Ddwaf_context_destroy, uintptr(context))
 }
 
 func (loader *wafLoader) wafResultFree(result *wafResult) {
-	loader.syscall(loader.ddwaf_result_free, uintptr(unsafe.Pointer(result)))
+	loader.syscall(loader.Ddwaf_result_free, uintptr(unsafe.Pointer(result)))
 }
 
 func (loader *wafLoader) wafRun(context wafContext, obj *wafObject, result *wafResult, timeout uint64) wafReturnCode {
-	return wafReturnCode(loader.syscall(loader.ddwaf_run, uintptr(context), uintptr(unsafe.Pointer(obj)), uintptr(unsafe.Pointer(result)), uintptr(timeout)))
+	return wafReturnCode(loader.syscall(loader.Ddwaf_run, uintptr(context), uintptr(unsafe.Pointer(obj)), uintptr(unsafe.Pointer(result)), uintptr(timeout)))
 }

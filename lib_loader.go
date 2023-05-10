@@ -10,12 +10,13 @@ package waf
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/ebitengine/purego"
 )
 
-// libLoader is created to wraps all interactions with the purego library
-type libLoader struct {
+// LibLoader is created to wraps all interactions with the purego library
+type LibLoader struct {
 	handle uintptr
 }
 
@@ -23,31 +24,44 @@ type libLoader struct {
 // the libLoader object is only a wrapped type for the linker handle
 // The `symbolsNeeded` is the list of symbols needed in the lib to load.
 // These symbols are returned via the map of symbols
-func dlOpen(name string, symbolsNeeded []string) (*libLoader, map[string]uintptr, error) {
+func dlOpen(name string, loader any) error {
+
 	handle, err := purego.Dlopen(name, purego.RTLD_GLOBAL|purego.RTLD_NOW)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error opening shared library '%s'. Reason: %w", name, err)
+		return fmt.Errorf("error opening shared library '%s'. Reason: %w", name, err)
 	}
 
-	symbols := make(map[string]uintptr, len(symbolsNeeded))
-	loader := &libLoader{
-		handle: handle,
-	}
+	foundHandle := false
 
-	for _, symbolName := range symbolsNeeded {
-		symbols[symbolName], err = purego.Dlsym(handle, symbolName)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Cannot load symbol '%s' from library '%s'. Reason: %w", symbolName, name, err)
+	loaderValue := reflect.ValueOf(loader).Elem()
+	loaderType := reflect.TypeOf(loader).Elem()
+	libLoader := &LibLoader{handle: handle}
+
+	for i := 0; i < loaderValue.NumField(); i++ {
+		fieldType := loaderType.Field(i)
+
+		symbolName, ok := fieldType.Tag.Lookup("dlsym")
+		if ok {
+			symbol, err := purego.Dlsym(handle, symbolName)
+			if err != nil {
+				return fmt.Errorf("cannot load symbol '%s' from library '%s'. Reason: %w", symbolName, name, err)
+			}
+
+			loaderValue.Field(i).Set(reflect.ValueOf(symbol))
+			continue
+		}
+
+		if fieldType.Type == reflect.TypeOf(libLoader).Elem() {
+			loaderValue.Field(i).Set(reflect.ValueOf(libLoader).Elem())
+			foundHandle = true
 		}
 	}
 
-	return loader, symbols, nil
-}
+	if !foundHandle {
+		return fmt.Errorf("could not find `libLoader` embedding to set the library handle, cowardly refusing the handle to be lost")
+	}
 
-// getSymbol reloads a symbol from the shared library
-// if the uintptr symbol returned is 0 (nil), the error is a string given by dlerror()
-func (loader *libLoader) getSymbol(name string) (uintptr, error) {
-	return purego.Dlsym(loader.handle, name)
+	return nil
 }
 
 // syscall is the only way to make C calls with this interface.
@@ -57,11 +71,11 @@ func (loader *libLoader) getSymbol(name string) (uintptr, error) {
 //	1st - The return value is a pointer or a int of any type
 //	2nd - The return value is a float
 //	3rd - The value of `errno` at the end of the call
-func (loader *libLoader) syscall(fn uintptr, args ...uintptr) uintptr {
+func (loader *LibLoader) syscall(fn uintptr, args ...uintptr) uintptr {
 	ret, _, _ := purego.SyscallN(fn, args...)
 	return ret
 }
 
-func (loader *libLoader) dlClose() {
-	purego.Dlclose(loader.handle)
+func (loader *LibLoader) Close() error {
+	return purego.Dlclose(loader.handle)
 }
