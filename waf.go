@@ -374,6 +374,10 @@ func goRunError(rc C.DDWAF_RET_CODE) error {
 	}
 }
 
+func getWAFVersionBench() {
+	C.ddwaf_get_version() // static mem pointer returned - no need to free it
+}
+
 func getWAFVersion() string {
 	cversion := C.ddwaf_get_version() // static mem pointer returned - no need to free it
 	return C.GoString(cversion)
