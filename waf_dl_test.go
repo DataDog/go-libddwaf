@@ -20,13 +20,13 @@ import (
 )
 
 func TestWafOpen(t *testing.T) {
-	loader, err := newWafLoader()
+	loader, err := newWafDl()
 	require.NoError(t, err)
 	defer loader.Close()
 }
 
 func TestWafGetVersion(t *testing.T) {
-	loader, err := newWafLoader()
+	loader, err := newWafDl()
 	require.NoError(t, err)
 	defer loader.Close()
 

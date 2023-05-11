@@ -11,6 +11,7 @@ package waf
 import (
 	"fmt"
 	"reflect"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -26,7 +27,7 @@ type libDl struct {
 // dlOpen will fill the object with symbols loaded from the library
 // the struct of type `loader` must have a field of type `LibLoader`
 // to be able to close the handle later
-func dlOpen(name string, loader any) error {
+func dlOpen(name string, lib any) error {
 	handle, err := purego.Dlopen(name, purego.RTLD_GLOBAL|purego.RTLD_NOW)
 	if err != nil {
 		return fmt.Errorf("error opening shared library '%s'. Reason: %w", name, err)
@@ -36,7 +37,7 @@ func dlOpen(name string, loader any) error {
 
 	libValue := reflect.ValueOf(lib).Elem()
 	libType := reflect.TypeOf(lib).Elem()
-	liblib := &libDl{handle: handle}
+	dl := libDl{handle: handle}
 
 	for i := 0; i < libValue.NumField(); i++ {
 		fieldType := libType.Field(i)
@@ -52,8 +53,8 @@ func dlOpen(name string, loader any) error {
 			continue
 		}
 
-		if fieldType.Type == reflect.TypeOf(liblib).Elem() {
-			libValue.Field(i).Set(reflect.ValueOf(liblib).Elem())
+		if fieldType.Type == reflect.TypeOf(dl) {
+			reflect.NewAt(reflect.TypeOf(dl), unsafe.Pointer(libValue.Field(i).UnsafeAddr())).Elem().Set(reflect.ValueOf(dl))
 			foundHandle = true
 		}
 	}
