@@ -22,10 +22,11 @@ type LibLoader struct {
 
 // dlOpen open a handle for the shared library `name`.
 // the libLoader object is only a wrapped type for the linker handle
-// The `symbolsNeeded` is the list of symbols needed in the lib to load.
-// These symbols are returned via the map of symbols
+// the `loader` parameter must have tags in the form of `dlsym:<symbol_name>`
+// dlOpen will fill the object with symbols loaded from the library
+// the struct of type `loader` must have a field of type `LibLoader`
+// to be able to close the handle later
 func dlOpen(name string, loader any) error {
-
 	handle, err := purego.Dlopen(name, purego.RTLD_GLOBAL|purego.RTLD_NOW)
 	if err != nil {
 		return fmt.Errorf("error opening shared library '%s'. Reason: %w", name, err)
