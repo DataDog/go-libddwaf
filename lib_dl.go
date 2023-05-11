@@ -15,8 +15,8 @@ import (
 	"github.com/ebitengine/purego"
 )
 
-// LibLoader is created to wraps all interactions with the purego library
-type LibLoader struct {
+// libDl is created to wraps all interactions with the purego library
+type libDl struct {
 	handle uintptr
 }
 
@@ -34,12 +34,12 @@ func dlOpen(name string, loader any) error {
 
 	foundHandle := false
 
-	loaderValue := reflect.ValueOf(loader).Elem()
-	loaderType := reflect.TypeOf(loader).Elem()
-	libLoader := &LibLoader{handle: handle}
+	libValue := reflect.ValueOf(lib).Elem()
+	libType := reflect.TypeOf(lib).Elem()
+	liblib := &libDl{handle: handle}
 
-	for i := 0; i < loaderValue.NumField(); i++ {
-		fieldType := loaderType.Field(i)
+	for i := 0; i < libValue.NumField(); i++ {
+		fieldType := libType.Field(i)
 
 		symbolName, ok := fieldType.Tag.Lookup("dlsym")
 		if ok {
@@ -48,12 +48,12 @@ func dlOpen(name string, loader any) error {
 				return fmt.Errorf("cannot load symbol '%s' from library '%s'. Reason: %w", symbolName, name, err)
 			}
 
-			loaderValue.Field(i).Set(reflect.ValueOf(symbol))
+			libValue.Field(i).Set(reflect.ValueOf(symbol))
 			continue
 		}
 
-		if fieldType.Type == reflect.TypeOf(libLoader).Elem() {
-			loaderValue.Field(i).Set(reflect.ValueOf(libLoader).Elem())
+		if fieldType.Type == reflect.TypeOf(liblib).Elem() {
+			libValue.Field(i).Set(reflect.ValueOf(liblib).Elem())
 			foundHandle = true
 		}
 	}
@@ -72,11 +72,11 @@ func dlOpen(name string, loader any) error {
 //	1st - The return value is a pointer or a int of any type
 //	2nd - The return value is a float
 //	3rd - The value of `errno` at the end of the call
-func (loader *LibLoader) syscall(fn uintptr, args ...uintptr) uintptr {
+func (lib *libDl) syscall(fn uintptr, args ...uintptr) uintptr {
 	ret, _, _ := purego.SyscallN(fn, args...)
 	return ret
 }
 
-func (loader *LibLoader) Close() error {
-	return purego.Dlclose(loader.handle)
+func (lib *libDl) Close() error {
+	return purego.Dlclose(lib.handle)
 }
