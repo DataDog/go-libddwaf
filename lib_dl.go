@@ -54,6 +54,7 @@ func dlOpen(name string, lib any) error {
 		}
 
 		if fieldType.Type == reflect.TypeOf(dl) {
+			// Bypass the fact the reflect package doesn't allow writing to private struct fields by directly writing to the field's memory address ourselves
 			reflect.NewAt(reflect.TypeOf(dl), unsafe.Pointer(libValue.Field(i).UnsafeAddr())).Elem().Set(reflect.ValueOf(dl))
 			foundHandle = true
 		}
