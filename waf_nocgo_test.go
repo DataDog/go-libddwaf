@@ -17,11 +17,12 @@ import (
 // The goal is to compare it with the exact same benchmark when using CGO, and purego WITH CGO
 func BenchmarkBindingsNoCGO(b *testing.B) {
 	lib := getLibddwaf()
+	get_version_sym := getSymbol(lib, "ddwaf_get_version")
 
-	b.Run("purego", func(b *testing.B) {
+	b.Run("purego-without-CGO", func(b *testing.B) {
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
-			purego.SyscallN(getSymbol(lib, "ddwaf_get_version"))
+			purego.SyscallN(get_version_sym)
 		}
 	})
 }

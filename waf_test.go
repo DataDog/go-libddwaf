@@ -1366,11 +1366,12 @@ func BenchmarkEncoder(b *testing.B) {
 // The goal is to compare it with the exact same benchmark when using CGO, and purego WITH CGO
 func BenchmarkBindingsPuregoWithCGO(b *testing.B) {
 	lib := getLibddwaf()
+	get_version_sym := getSymbol(lib, "ddwaf_get_version")
 
 	b.Run("purego-with-CGO", func(b *testing.B) {
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
-			purego.SyscallN(getSymbol(lib, "ddwaf_get_version"))
+			purego.SyscallN(get_version_sym)
 		}
 	})
 }
@@ -1378,7 +1379,6 @@ func BenchmarkBindingsPuregoWithCGO(b *testing.B) {
 // BenchmarkBindingsCGO is a simple nominal benchmark to test the cost of using purego for libddwaf bindings
 // The goal is to compare it with the exact same benchmark when using CGO, and purego WITH CGO
 func BenchmarkBindingsCGO(b *testing.B) {
-
 	b.Run("CGO", func(b *testing.B) {
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
