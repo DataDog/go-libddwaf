@@ -4,7 +4,7 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Purego only works on linux/macOS with amd64 and arm64 from now
-//go:build (linux || darwin) && (amd64 || arm64) && !cgo
+//go:build (linux || darwin) && (amd64 || arm64)
 
 package waf
 
@@ -33,10 +33,6 @@ func newLibcDl() (*libcDl, error) {
 	return &libc, nil
 }
 
-func (lib *libcDl) malloc(size uint64) uintptr {
-	return lib.syscall(lib.Libc_malloc, uintptr(size))
-}
-
 func (lib *libcDl) calloc(num, objSize uint64) uintptr {
 	return lib.syscall(lib.Libc_calloc, uintptr(num), uintptr(objSize))
 }
@@ -47,4 +43,8 @@ func (lib *libcDl) free(ptr uintptr) {
 
 func (lib *libcDl) strlen(str uintptr) uint64 {
 	return uint64(lib.syscall(lib.Libc_strlen, str))
+}
+
+func (lib *libcDl) strlen(uintptr) uint64 {
+	return uint64(lib.syscall(uintptr(ptr)))
 }

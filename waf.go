@@ -129,12 +129,12 @@ func NewHandleFromRuleSet(ruleset interface{}, keyRegex, valueRegex string) (*Ha
 	if err != nil {
 		return nil, fmt.Errorf("could not convert the obfuscator key regexp string to a C string: %v", err)
 	}
-	defer cFree(unsafe.Pointer(keyRegexC))
+	defer cFree(uintptr(unsafe.Pointer(keyRegexC)))
 	valueRegexC, _, err := cstringLimited(valueRegex, encoder.maxStringLength)
 	if err != nil {
 		return nil, fmt.Errorf("could not convert the obfuscator value regexp to a C string: %v", err)
 	}
-	defer cFree(unsafe.Pointer(valueRegexC))
+	defer cFree(uintptr(unsafe.Pointer(valueRegexC)))
 	wafCfg := wafConfig{
 		limits: wafConfigLimits{
 			maxContainerSize:  uint32(encoder.maxArrayLength),
@@ -316,7 +316,7 @@ func (c *Context) Close() {
 	// But ddwaf_context_destroy has already destroyed all the wafObjects except the top level ones
 	// so we only need to free the top-level objects
 	for _, obj := range c.wafObjects {
-		cFree(unsafe.Pointer(obj))
+		cFree(uintptr(unsafe.Pointer(obj)))
 	}
 }
 
@@ -345,7 +345,7 @@ func goReturnValues(rc wafReturnCode, result *wafResult) (matches []byte, action
 
 	case wafMatch:
 		if result.data != 0 {
-			matches = unsafe.Slice((*byte)(unsafe.Pointer(result.data)), libcWrapper.strlen(unsafe.Pointer(result.data)))
+			matches = unsafe.Slice((*byte)(unsafe.Pointer(result.data)), libcWrapper.strlen(result.data))
 		}
 		if size := result.actions.size; size > 0 {
 			cactions := result.actions.array
@@ -426,7 +426,7 @@ func (e *encoder) encode(v interface{}) (object *wafObject, err error) {
 		}
 	}()
 
-	wo := (*wafObject)(C.calloc(1, C.sizeof_ddwaf_object))
+	wo := (*wafObject)(unsafe.Pointer(libcWrapper.calloc(1, uint64(unsafe.Sizeof(wafObject{})))))
 	if wo == nil {
 		return nil, ErrOutOfMemory
 	}
@@ -771,7 +771,7 @@ func (v *wafObject) setContainer(typ wafObjectType, length uint64) error {
 	// Allocate the zero'd array.
 	var a *wafObject
 	if length > 0 {
-		a = (*wafObject)(libcWrapper.calloc(length, uint64(unsafe.Sizeof(*a))))
+		a = (*wafObject)(unsafe.Pointer(libcWrapper.calloc(length, uint64(unsafe.Sizeof(*a)))))
 		if a == nil {
 			return ErrOutOfMemory
 		}
@@ -824,18 +824,6 @@ func toCUint64(v uint) uint64 {
 	return uint64(v)
 }
 
-// gostring returns the Go version of the C string `str`, copying at most `len` bytes from the original string.
-func gostring(str *C.char, len C.uint64_t) (string, error) {
-	if str == nil {
-		return "", ErrInvalidArgument
-	}
-	goLen := C.int(len)
-	if C.uint64_t(goLen) != len {
-		return "", ErrInvalidArgument
-	}
-	return C.GoStringN(str, goLen), nil
-}
-
 // cstring returns the C string of the given Go string `str` with up to maxWAFStringSize bytes, along with the string
 // size that was allocated and copied.
 func cstringLimited(str string, maxLength int) (*byte, int, error) {
@@ -848,7 +836,7 @@ func cstringLimited(str string, maxLength int) (*byte, int, error) {
 	// The copy is required as the pointer will be stored into the C structures,
 	// so using a Go pointer is impossible.
 	cstr := cstring(str[:l])
-	if cstr == 0 {
+	if cstr == nil {
 		return nil, 0, errOutOfMemory
 	}
 	return (*byte)(unsafe.Pointer(cstr)), l, nil
@@ -860,14 +848,14 @@ func freeWO(v *wafObject) {
 	}
 	// Free the map key if any
 	if key := v.mapKey(); key != nil {
-		cFree(unsafe.Pointer(v.parameterName))
+		cFree(v.parameterName)
 	}
 	// Free allocated values
 	switch v._type {
 	case wafInvalidType:
 		return
 	case wafStringType:
-		cFree(unsafe.Pointer(v.string()))
+		cFree(uintptr(unsafe.Pointer(v.string())))
 	case wafMapType, wafArrayType:
 		freeWOContainer(v)
 	}
@@ -881,7 +869,7 @@ func freeWOContainer(v *wafObject) {
 		freeWO(v.index(i))
 	}
 	if a := *v.arrayValuePtr(); a != nil {
-		cFree(a)
+		cFree(uintptr(unsafe.Pointer(a)))
 	}
 }
 

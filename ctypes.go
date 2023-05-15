@@ -4,11 +4,14 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Purego only works on linux/macOS with amd64 and arm64 for now
-//go:build (linux || darwin) && (amd64 || arm64) && !cgo
+//go:build (linux || darwin) && (amd64 || arm64)
 
 package waf
 
-import "unsafe"
+import (
+	"runtime"
+	"unsafe"
+)
 
 const (
 	wafMaxStringLength   = 4096
@@ -118,9 +121,25 @@ func gostring(c uintptr) string {
 	return string(unsafe.Slice((*byte)(ptr), length))
 }
 
+// gostring copies a char* to a Go string.
+func gostringSized(c *byte, length uint64) string {
+	// We take the address and then dereference it to trick go vet from creating a possible misuse of unsafe.Pointer
+	ptr := *(*unsafe.Pointer)(unsafe.Pointer(&c))
+	if ptr == nil {
+		return ""
+	}
+	return string(unsafe.Slice((*byte)(ptr), length))
+}
+
 // cstring converts a go string to *byte that can be passed to C code.
 func cstring(name string) *byte {
 	var b = make([]byte, len(name)+1)
 	copy(b, name)
 	return &b[0]
+}
+
+func keepAlive(undeads ...any) {
+	for _, undead := range undeads {
+		runtime.KeepAlive(undead)
+	}
 }
