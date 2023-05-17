@@ -117,7 +117,7 @@ func gostring(c uintptr) string {
 		}
 		length++
 	}
-	//string builtin copies the slice
+	// Copy is done by the string builtin
 	return string(unsafe.Slice((*byte)(ptr), length))
 }
 
@@ -133,9 +133,13 @@ func gostringSized(c *byte, length uint64) string {
 
 // cstring converts a go string to *byte that can be passed to C code.
 func cstring(name string) *byte {
-	var b = make([]byte, len(name)+1)
-	copy(b, name)
-	return &b[0]
+	cStr := libcWrapper.calloc(1, uint64(len(name))+1)
+	if cStr == 0 {
+		panic("failed to allocate memory") // TODO handle this
+	}
+
+	copy(unsafe.Slice((*byte)(unsafe.Pointer(cStr)), len(name)), name)
+	return (*byte)(unsafe.Pointer(cStr))
 }
 
 func keepAlive(undeads ...any) {

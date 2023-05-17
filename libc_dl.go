@@ -10,8 +10,14 @@ package waf
 
 import (
 	"fmt"
+	"unsafe"
+
 	"github.com/ebitengine/purego"
 )
+
+//go:linkname runtime_noescape runtime.noescape
+//go:noescape
+func runtime_noescape(p unsafe.Pointer) unsafe.Pointer // from runtime/stubs.go
 
 type libcDl struct {
 	libDl
@@ -43,8 +49,4 @@ func (lib *libcDl) free(ptr uintptr) {
 
 func (lib *libcDl) strlen(str uintptr) uint64 {
 	return uint64(lib.syscall(lib.Libc_strlen, str))
-}
-
-func (lib *libcDl) strlen(uintptr) uint64 {
-	return uint64(lib.syscall(uintptr(ptr)))
 }

@@ -111,7 +111,7 @@ func (waf *wafDl) wafRequiredAddresses(handle wafHandle) []string {
 
 	addresses := make([]string, int(nbAddresses))
 	for i := 0; i < int(nbAddresses); i++ {
-		addresses[i] = gostring(uintptr(unsafe.Add(unsafe.Pointer(arrayVoidC), uintptr(i))))
+		addresses[i] = gostring(*(*uintptr)(unsafe.Add(unsafe.Pointer(arrayVoidC), uintptr(i)*unsafe.Sizeof(&nbAddresses))))
 	}
 
 	return addresses

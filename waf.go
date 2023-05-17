@@ -12,8 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +33,9 @@ import (
 	_ "github.com/DataDog/go-libddwaf/lib/linux-arm64"
 )
 
+//go:linkname cgoCheckPointer runtime.cgoCheckPointer
+func cgoCheckPointer(any, any)
+
 var libcWrapper *libcDl
 var wafWrapper *wafDl
 var wafInitErr error
@@ -40,10 +43,10 @@ var wafVersion string
 
 func init() {
 	//TODO(eliott.bouhana): move at runtime instead of static init for remote activation
-	if _, ok := os.LookupEnv("DD_APPSEC_ENABLED"); !ok {
-		wafInitErr = errors.New("DD_APPSEC_ENABLED env var is not set, not starting the WAF")
-		return
-	}
+	//	if _, ok := os.LookupEnv("DD_APPSEC_ENABLED"); !ok {
+	//		wafInitErr = errors.New("DD_APPSEC_ENABLED env var is not set, not starting the WAF")
+	//		return
+	//	}
 
 	wafWrapper, wafInitErr = newWafDl()
 	if wafInitErr != nil {
@@ -148,6 +151,7 @@ func NewHandleFromRuleSet(ruleset interface{}, keyRegex, valueRegex string) (*Ha
 		freeFn: 0,
 	}
 	defer wafWrapper.wafRulesetInfoFree(&wafRInfo)
+
 	handle := wafWrapper.wafInit(wafRule, &wafCfg, &wafRInfo)
 	if handle == 0 {
 		return nil, errors.New("could not instantiate the waf rule")
@@ -271,6 +275,7 @@ func (c *Context) Run(values map[string]interface{}, timeout time.Duration) (mat
 	}
 
 	wafValue, err := c.handle.encoder.encode(values)
+	defer runtime.KeepAlive(wafValue)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -345,7 +350,9 @@ func goReturnValues(rc wafReturnCode, result *wafResult) (matches []byte, action
 
 	case wafMatch:
 		if result.data != 0 {
-			matches = unsafe.Slice((*byte)(unsafe.Pointer(result.data)), libcWrapper.strlen(result.data))
+			strlen := libcWrapper.strlen(uintptr(unsafe.Pointer(result.data)))
+			matches = make([]byte, strlen)
+			copy(matches, unsafe.Slice((*byte)(unsafe.Pointer(result.data)), strlen))
 		}
 		if size := result.actions.size; size > 0 {
 			cactions := result.actions.array
@@ -706,7 +713,7 @@ func decodeArray(wo *wafObject) ([]interface{}, error) {
 }
 
 func decodeMap(wo *wafObject) (map[string]interface{}, error) {
-	if wo == nil {
+	if wo == nil || (wo.value == 0 && wo.length() > 0) {
 		return nil, errNilObjectPtr
 	}
 	length := wo.length()
@@ -737,11 +744,11 @@ func decodeMapKey(wo *wafObject) (string, error) {
 }
 
 // Return the pointer to the union field. It can be cast to the union type that needs to be accessed.
-func (v *wafObject) valuePtr() unsafe.Pointer        { return unsafe.Pointer(v.value) }
+func (v *wafObject) valuePtr() unsafe.Pointer   { return unsafe.Pointer(&v.value) }
 func (v *wafObject) arrayValuePtr() **wafObject { return (**wafObject)(v.valuePtr()) }
-func (v *wafObject) int64ValuePtr() *int64       { return (*int64)(v.valuePtr()) }
-func (v *wafObject) uint64ValuePtr() *uint64     { return (*uint64)(v.valuePtr()) }
-func (v *wafObject) stringValuePtr() **byte        { return (**byte)(v.valuePtr()) }
+func (v *wafObject) int64ValuePtr() *int64      { return (*int64)(v.valuePtr()) }
+func (v *wafObject) uint64ValuePtr() *uint64    { return (*uint64)(v.valuePtr()) }
+func (v *wafObject) stringValuePtr() **byte     { return (**byte)(v.valuePtr()) }
 
 func (v *wafObject) setUint64(n uint64) {
 	v._type = wafUintType
@@ -812,8 +819,9 @@ func (v *wafObject) index(i uint64) *wafObject {
 		panic(errors.New("out of bounds access to waf array"))
 	}
 	// Go pointer arithmetic equivalent to the C expression `a->value.array[i]`
-	base := uintptr(unsafe.Pointer(*v.arrayValuePtr()))
-	return (*wafObject)(unsafe.Pointer(base + unsafe.Sizeof(*v) * uintptr(i))) //nolint:govet
+	return (*wafObject)(unsafe.Add(unsafe.Pointer(*v.arrayValuePtr()), unsafe.Sizeof(*v)*uintptr(i)))
+	//base := uintptr(unsafe.Pointer(*v.arrayValuePtr()))
+	//return (*wafObject)(unsafe.Pointer(base + unsafe.Sizeof(*v)*uintptr(i))) //nolint:govet
 }
 
 // Helper functions for testing, where direct cgo import is not allowed
@@ -828,18 +836,21 @@ func toCUint64(v uint) uint64 {
 // size that was allocated and copied.
 func cstringLimited(str string, maxLength int) (*byte, int, error) {
 	// Limit the maximum string size to copy
-	l := len(str)
-	if l > maxLength {
-		l = maxLength
+	l := uint64(len(str))
+	if l > uint64(maxLength) {
+		l = uint64(maxLength)
 	}
+
 	// Copy the string up to l.
 	// The copy is required as the pointer will be stored into the C structures,
 	// so using a Go pointer is impossible.
-	cstr := cstring(str[:l])
+	cstr := (*byte)(unsafe.Pointer(libcWrapper.calloc(l+1, 1)))
 	if cstr == nil {
 		return nil, 0, errOutOfMemory
 	}
-	return (*byte)(unsafe.Pointer(cstr)), l, nil
+	cstrSlice := unsafe.Slice(cstr, l)
+	copy(cstrSlice, str[:])
+	return cstr, int(l), nil
 }
 
 func freeWO(v *wafObject) {
