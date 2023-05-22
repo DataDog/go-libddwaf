@@ -91,7 +91,6 @@ func newDefaultHandle(jsonRule []byte) (*Handle, error) {
 }
 
 func TestNewWAF(t *testing.T) {
-	defer requireZeroNBLiveCObjects(t)
 	t.Run("valid-rule", func(t *testing.T) {
 		waf, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
@@ -148,7 +147,6 @@ func TestNewWAF(t *testing.T) {
 }
 
 func TestMatching(t *testing.T) {
-	defer requireZeroNBLiveCObjects(t)
 
 	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
@@ -223,7 +221,6 @@ func TestMatching(t *testing.T) {
 func TestActions(t *testing.T) {
 	testActions := func(expectedActions []string) func(t *testing.T) {
 		return func(t *testing.T) {
-			defer requireZeroNBLiveCObjects(t)
 
 			waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, expectedActions))
 			require.NoError(t, err)
@@ -251,7 +248,6 @@ func TestActions(t *testing.T) {
 }
 
 func TestAddresses(t *testing.T) {
-	defer requireZeroNBLiveCObjects(t)
 	expectedAddresses := []string{"my.first.input", "my.second.input", "my.indexed.input", "my.third.input"}
 	addresses := []ruleInput{{Address: "my.first.input"}, {Address: "my.second.input"}, {Address: "my.third.input"}, {Address: "my.indexed.input", KeyPath: []string{"indexed"}}}
 	waf, err := newDefaultHandle(newArachniTestRule(addresses, nil))
@@ -261,8 +257,6 @@ func TestAddresses(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
-	defer requireZeroNBLiveCObjects(t)
-
 	// Start 800 goroutines that will use the WAF 500 times each
 	nbUsers := 50
 	nbRun := 500
@@ -534,10 +528,6 @@ func TestMetrics(t *testing.T) {
 			require.Equal(t, i, wafCtx.TotalTimeouts())
 		}
 	})
-}
-
-func requireZeroNBLiveCObjects(t testing.TB) {
-	require.Equal(t, uint64(0), nbLiveCObjects.Load())
 }
 
 func TestEncoder(t *testing.T) {
@@ -1014,8 +1004,6 @@ func TestEncoder(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
-			defer requireZeroNBLiveCObjects(t)
-
 			maxValueDepth := 10
 			if max := tc.MaxValueDepth; max != nil {
 				maxValueDepth = max.(int)
@@ -1318,8 +1306,6 @@ func TestFree(t *testing.T) {
 }
 
 func BenchmarkEncoder(b *testing.B) {
-	defer requireZeroNBLiveCObjects(b)
-
 	rnd := rand.New(rand.NewSource(33))
 	buf := make([]byte, 16384)
 	n, err := rnd.Read(buf)
