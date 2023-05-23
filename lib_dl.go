@@ -33,6 +33,10 @@ func dlOpen(name string, lib any) error {
 		return fmt.Errorf("error opening shared library '%s'. Reason: %w", name, err)
 	}
 
+	return dlOpenFromHandle(handle, lib)
+}
+
+func dlOpenFromHandle(handle uintptr, lib any) error {
 	foundHandle := false
 
 	libValue := reflect.ValueOf(lib).Elem()
@@ -46,7 +50,7 @@ func dlOpen(name string, lib any) error {
 		if ok {
 			symbol, err := purego.Dlsym(handle, symbolName)
 			if err != nil {
-				return fmt.Errorf("cannot load symbol '%s' from library '%s'. Reason: %w", symbolName, name, err)
+				return fmt.Errorf("cannot load symbol '%s'. Reason: %w", symbolName, err)
 			}
 
 			libValue.Field(i).Set(reflect.ValueOf(symbol))

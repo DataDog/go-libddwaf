@@ -46,7 +46,7 @@ type wafObject struct {
 	value               uintptr
 	nbEntries           uint64
 	_type               wafObjectType
-	_                   [4]byte 
+	_                   [4]byte
 	// Forced padding
 	// We only support 2 archs and cgo generated the same padding to both.
 	// We don't want the C struct to be packed because actually go will do the same padding itself,
@@ -54,7 +54,6 @@ type wafObject struct {
 	// And we cannot pack a struct in go so it will get tricky if the struct is
 	// packed (apart from breaking all tracers of course)
 }
-
 
 type wafConfig struct {
 	limits     wafConfigLimits
@@ -115,15 +114,12 @@ func gostring(c uintptr) string {
 		}
 		length++
 	}
+	//string builtin copies the slice
 	return string(unsafe.Slice((*byte)(ptr), length))
 }
 
 // cstring converts a go string to *byte that can be passed to C code.
 func cstring(name string) *byte {
-	// check if the string is already null-terminated
-	if len(name) >= len("\x00") && name[len(name)-len("\x00"):] == "\x00" {
-		return &(*(*[]byte)(unsafe.Pointer(&name)))[0]
-	}
 	var b = make([]byte, len(name)+1)
 	copy(b, name)
 	return &b[0]

@@ -10,31 +10,41 @@ package waf
 
 import (
 	"fmt"
-	"unsafe"
+	"github.com/ebitengine/purego"
 )
 
 type libcDl struct {
 	libDl
 
-	Libc_malloc uintptr `dlsym:malloc`
-	Libc_free   uintptr `dlsym:free`
+	Libc_malloc uintptr `dlsym:"malloc"`
+	Libc_calloc uintptr `dlsym:"calloc"`
+	Libc_free   uintptr `dlsym:"free"`
+	Libc_strlen uintptr `dlsym:"strlen"`
 }
 
 func newLibcDl() (*libcDl, error) {
 	var libc libcDl
 
-	// libc.so.6 is already loaded so it's cheap
-	if err := dlOpen("libc.so.6", &libc); err != nil {
-		return nil, fmt.Errorf("Error opening libc library: %w", err)
+	// RTLD_DEFAULT is a pseudo-handle to search symbols from any already loaded library
+	if err := dlOpenFromHandle(purego.RTLD_DEFAULT, &libc); err != nil {
+		return nil, fmt.Errorf("Reading libc symbols: %w", err)
 	}
 
 	return &libc, nil
 }
 
-func (lib *libcDl) malloc(size uint) unsafe.Pointer {
-	return unsafe.Pointer(lib.syscall(lib.Libc_malloc, uintptr(size)))
+func (lib *libcDl) malloc(size uint64) uintptr {
+	return lib.syscall(lib.Libc_malloc, uintptr(size))
 }
 
-func (lib *libcDl) free(ptr unsafe.Pointer) {
-	lib.syscall(lib.Libc_free, uintptr(ptr))
+func (lib *libcDl) calloc(num, objSize uint64) uintptr {
+	return lib.syscall(lib.Libc_calloc, uintptr(num), uintptr(objSize))
+}
+
+func (lib *libcDl) free(ptr uintptr) {
+	lib.syscall(lib.Libc_free, ptr)
+}
+
+func (lib *libcDl) strlen(str uintptr) uint64 {
+	return uint64(lib.syscall(lib.Libc_strlen, str))
 }
