@@ -287,6 +287,7 @@ func (c *Context) Run(values map[string]interface{}, timeout time.Duration) (mat
 // run is the critical section of Run
 func (c *Context) run(data *wafObject, timeout time.Duration) (matches []byte, actions []string, err error) {
 	// Exclusively lock this WAF context for the time of this run
+	defer runtime.KeepAlive(data)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	// RLock the handle to safely get read access to the WAF handle and prevent concurrent changes of it
@@ -442,6 +443,7 @@ func (e *encoder) encode(v interface{}) (object *wafObject, err error) {
 	if err != nil {
 		return nil, err
 	}
+	runtime.KeepAlive(wo)
 	return wo, nil
 }
 
