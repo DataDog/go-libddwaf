@@ -6,10 +6,9 @@
 package waf
 
 import (
+	"go.uber.org/atomic"
 	"sync"
 	"time"
-
-	"go.uber.org/atomic"
 )
 
 // TODO: temps d'execution
@@ -59,11 +58,54 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 }
 
 func (context *Context) run(obj *wafObject, timeout time.Duration) ([]byte, []string, error) {
-	return nil, nil, nil
+	// RLock the handle to safely get read access to the WAF handle and prevent concurrent changes of it
+	// such as a rules-data update.
+	context.handle.mutex.RLock()
+	defer context.handle.mutex.RUnlock()
+
+	result := new(wafResult)
+	defer context.handle.cLibrary.wafResultFree(result)
+
+	ret := context.handle.cLibrary.wafRun(context.cContext, obj, result, uint64(timeout/time.Microsecond))
+
+	context.totalRuntimeNs.Add(result.total_runtime)
+	matches, actions, err := unwrapWafResult(ret, result)
+	if err == ErrTimeout {
+		context.timeoutCount.Inc()
+	}
+
+	return matches, actions, err
+}
+
+func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []byte, actions []string, err error) {
+	if result.timeout > 0 {
+		err = ErrTimeout
+	}
+
+	if ret == wafOK {
+		return nil, nil, err
+	}
+
+	if ret != wafMatch {
+		return nil, nil, goRunError(ret)
+	}
+
+	if result.data != 0 {
+		matches = []byte(gostring(result.data))
+	}
+
+	if size := result.actions.size; size > 0 {
+		actions = decodeActions(result.actions.array, size)
+	}
+
+	return matches, actions, err
 }
 
 // Close calls handle.CloseContext which calls ddwaf_context_destroy
 func (context *Context) Close() {
+	// Needed to make sure the garbage collector does not throw the values send to the WAF
+	// earlier than necessary
+	context.allocator.KeepAlive()
 	context.handle.CloseContext(context)
 }
 

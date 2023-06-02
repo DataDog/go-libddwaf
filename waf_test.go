@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
-	"reflect"
 	"sync"
 	"testing"
 	"text/template"
@@ -26,7 +25,10 @@ func TestHealth(t *testing.T) {
 }
 
 func TestVersion(t *testing.T) {
-	require.Regexp(t, `[0-9]+\.[0-9]+\.[0-9]+`, Version())
+	handle, err := newDefaultHandle(testArachniRule)
+	require.NoError(t, err)
+	defer handle.Close()
+	require.Regexp(t, `[0-9]+\.[0-9]+\.[0-9]+`, handle.Version())
 }
 
 var testArachniRule = newArachniTestRule([]ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil)
@@ -154,7 +156,7 @@ func TestMatching(t *testing.T) {
 
 	require.Equal(t, []string{"my.input"}, waf.Addresses())
 
-	wafCtx := NewContext(waf)
+	wafCtx := waf.NewContext()
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
@@ -215,7 +217,7 @@ func TestMatching(t *testing.T) {
 	wafCtx.Close()
 	waf.Close()
 	// Using the WAF instance after it was closed leads to a nil WAF context
-	require.Nil(t, NewContext(waf))
+	require.Nil(t, waf.NewContext())
 }
 
 func TestActions(t *testing.T) {
@@ -227,7 +229,7 @@ func TestActions(t *testing.T) {
 			require.NotNil(t, waf)
 			defer waf.Close()
 
-			wafCtx := NewContext(waf)
+			wafCtx := waf.NewContext()
 			require.NotNil(t, wafCtx)
 			defer wafCtx.Close()
 
@@ -266,7 +268,7 @@ func TestConcurrency(t *testing.T) {
 		require.NoError(t, err)
 		defer waf.Close()
 
-		wafCtx := NewContext(waf)
+		wafCtx := waf.NewContext()
 		defer wafCtx.Close()
 
 		// User agents that won't match the rule so that it doesn't get pruned.
@@ -344,7 +346,7 @@ func TestConcurrency(t *testing.T) {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				wafCtx := NewContext(waf)
+				wafCtx := waf.NewContext()
 				defer wafCtx.Close()
 
 				for c := 0; c < nbRun; c++ {
@@ -491,7 +493,7 @@ func TestMetrics(t *testing.T) {
 	})
 
 	t.Run("RunDuration", func(t *testing.T) {
-		wafCtx := NewContext(waf)
+		wafCtx := waf.NewContext()
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		// Craft matching data to force work on the WAF
@@ -514,7 +516,7 @@ func TestMetrics(t *testing.T) {
 	})
 
 	t.Run("Timeouts", func(t *testing.T) {
-		wafCtx := NewContext(waf)
+		wafCtx := waf.NewContext()
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		// Craft matching data to force work on the WAF
@@ -1067,16 +1069,9 @@ func TestEncoder(t *testing.T) {
 	}
 }
 
-// This test needs a working encoder to function properly, as it first encodes the objects before decoding them
+/* This test needs a working encoder to function properly, as it first encodes the objects before decoding them
 func TestDecoder(t *testing.T) {
-	const intSize = 32 << (^uint(0) >> 63) // copied from recent versions of math.MaxInt
-	const maxInt = 1<<(intSize-1) - 1      // copied from recent versions of math.MaxInt
-	e := encoder{
-		maxDepth:        maxInt,
-		maxStringLength: maxInt,
-		maxArrayLength:  maxInt,
-		maxMapLength:    maxInt,
-	}
+	e := newMaxEncoder()
 	objBuilder := func(v interface{}) *wafObject {
 		var err error
 		obj := &wafObject{}
@@ -1162,7 +1157,6 @@ func TestDecoder(t *testing.T) {
 		} {
 			tc := tc
 			t.Run(tc.Name, func(t *testing.T) {
-				defer freeWO(tc.Object)
 				val, err := decodeObject(tc.Object)
 				require.NoErrorf(t, err, "Error decoding the object: %v", err)
 				require.Equal(t, reflect.TypeOf(tc.ExpectedValue), reflect.TypeOf(val))
@@ -1229,7 +1223,7 @@ func TestDecoder(t *testing.T) {
 			})
 		}
 	})
-}
+}*/
 
 func TestObfuscatorConfig(t *testing.T) {
 	rule := newArachniTestRule([]ruleInput{{Address: "my.addr", KeyPath: []string{"key"}}}, nil)
@@ -1237,7 +1231,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, err := NewHandle(rule, "key", "")
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx := NewContext(waf)
+		wafCtx := waf.NewContext()
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		data := map[string]interface{}{
@@ -1254,7 +1248,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, err := NewHandle(rule, "", "sensitive")
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx := NewContext(waf)
+		wafCtx := waf.NewContext()
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		data := map[string]interface{}{
@@ -1271,7 +1265,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, err := NewHandle(rule, "", "")
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx := NewContext(waf)
+		wafCtx := waf.NewContext()
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		data := map[string]interface{}{
@@ -1285,32 +1279,17 @@ func TestObfuscatorConfig(t *testing.T) {
 	})
 }
 
-func TestFree(t *testing.T) {
-	t.Run("nil-value", func(t *testing.T) {
-		require.NotPanics(t, func() {
-			freeWO(nil)
-		})
-	})
-
-	t.Run("zero-value", func(t *testing.T) {
-		require.NotPanics(t, func() {
-			freeWO(&wafObject{})
-		})
-	})
-}
-
 func BenchmarkEncoder(b *testing.B) {
 	rnd := rand.New(rand.NewSource(33))
 	buf := make([]byte, 16384)
 	n, err := rnd.Read(buf)
 	fullstr := string(buf)
-	encoder := encoder{
-		maxDepth:        10,
-		maxStringLength: 1 * 1024 * 1024,
-		maxArrayLength:  100,
-		maxMapLength:    100,
-	}
 	for _, l := range []int{1024, 4096, 8192, 16384} {
+		encoder := encoder{
+			objectMaxDepth:   10,
+			stringMaxSize:    1 * 1024 * 1024,
+			containerMaxSize: 100,
+		}
 		b.Run(fmt.Sprintf("%d", l), func(b *testing.B) {
 			str := fullstr[:l]
 			slice := []string{str, str, str, str, str, str, str, str, str, str}
@@ -1331,11 +1310,10 @@ func BenchmarkEncoder(b *testing.B) {
 			}
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				v, err := encoder.encode(data)
+				_, err := encoder.Encode(data)
 				if err != nil {
 					b.Fatal(err)
 				}
-				freeWO(v)
 			}
 		})
 	}

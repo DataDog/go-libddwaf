@@ -28,9 +28,22 @@ func (allocator *allocator) KeepAlive() {
 	runtime.KeepAlive(allocator.stringRefs)
 }
 
+func (allocator *allocator) AllocRawString(str string) uintptr {
+	goArray := make([]byte, len(str)+1)
+	copy(goArray, str)
+	allocator.stringRefs = append(allocator.stringRefs, goArray)
+	goArray[len(str)] = 0 // Null termination byte for C strings
+
+	return uintptr(unsafe.Pointer(&goArray[0]))
+}
+
 func (allocator *allocator) AllocString(obj *wafObject, typ wafObjectType, str string) {
 	if typ != wafIntType && typ != wafStringType && typ != wafUintType {
 		panic("Cannot allocate this waf object data type from a string: " + strconv.Itoa(int(typ)))
+	}
+
+	if len(str) == 0 {
+		return
 	}
 
 	goArray := make([]byte, len(str))
@@ -67,6 +80,10 @@ func (allocator *allocator) AllocArray(obj *wafObject, typ wafObjectType, size u
 }
 
 func (allocator *allocator) AllocMapKey(obj *wafObject, str string) {
+	if len(str) == 0 {
+		return
+	}
+
 	goArray := make([]byte, len(str))
 	copy(goArray, str)
 	allocator.stringRefs = append(allocator.stringRefs, goArray)

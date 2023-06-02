@@ -30,12 +30,10 @@ type encoder struct {
 }
 
 func newMaxEncoder() *encoder {
-	const intSize = 32 << (^int(0) >> 63) // copied from recent versions of math.MaxInt
-	const maxInt = 1<<(intSize-1) - 1     // copied from recent versions of math.MaxInt
 	return &encoder{
-		containerMaxSize: maxInt,
-		stringMaxSize:    maxInt,
-		objectMaxDepth:   maxInt,
+		containerMaxSize: math.MaxInt,
+		stringMaxSize:    math.MaxInt,
+		objectMaxDepth:   math.MaxInt,
 	}
 }
 

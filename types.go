@@ -5,10 +5,9 @@
 
 package waf
 
+import "C"
 import (
 	"fmt"
-
-	"go.uber.org/atomic"
 )
 
 // RunError the WAF can return when running it.
@@ -22,7 +21,7 @@ type RulesetInfo struct {
 	Failed uint16
 	// Map from an error string to an array of all the rule ids for which
 	// that error was raised. {error: [rule_ids]}
-	Errors map[string]interface{}
+	Errors map[string][]string
 	// Ruleset version
 	Version string
 }
@@ -57,5 +56,15 @@ func (e RunError) Error() string {
 	}
 }
 
-// AtomicU64 can be used to perform atomic operations on an uint64 type
-type AtomicU64 = atomic.Uint64
+func goRunError(rc wafReturnCode) error {
+	switch rc {
+	case wafErrInternal:
+		return ErrInternal
+	case wafErrInvalidObject:
+		return ErrInvalidObject
+	case wafErrInvalidArgument:
+		return ErrInvalidArgument
+	default:
+		return fmt.Errorf("unknown waf return code %d", int(rc))
+	}
+}

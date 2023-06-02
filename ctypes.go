@@ -68,8 +68,8 @@ type wafConfigLimits struct {
 }
 
 type wafConfigObfuscator struct {
-	keyRegex   uintptr
-	valueRegex uintptr
+	keyRegex   uintptr // char *
+	valueRegex uintptr // char *
 }
 
 type wafResult struct {
@@ -80,7 +80,7 @@ type wafResult struct {
 }
 
 type wafResultActions struct {
-	array *uintptr
+	array uintptr // char **
 	size  uint32
 	_     [4]byte // Forced padding
 }
@@ -89,7 +89,7 @@ type wafRulesetInfo struct {
 	loaded  uint16
 	failed  uint16
 	errors  wafObject
-	version uintptr
+	version uintptr // char *
 }
 
 // wafHandle is a forward declaration in ddwaf.h header
@@ -116,6 +116,14 @@ func gostring(c uintptr) string {
 	}
 	//string builtin copies the slice
 	return string(unsafe.Slice((*byte)(ptr), length))
+}
+
+func gostringSized(c uintptr, size uint64) string {
+	ptr := *(*unsafe.Pointer)(unsafe.Pointer(&c))
+	if ptr == nil {
+		return ""
+	}
+	return string(unsafe.Slice((*byte)(ptr), size))
 }
 
 // cstring converts a go string to *byte that can be passed to C code.
