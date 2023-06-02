@@ -3,17 +3,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Build when the target OS or Arch are not supported
-//go:build windows || !(amd64 || arm64)
+// Purego only works on linux/macOS with amd64 and arm64 from now
+//go:build (linux || darwin) && (amd64 || arm64)
 
 package waf
 
-import (
-	"testing"
-
-	"github.com/stretchr/testify/require"
-)
-
-func TestHealth(t *testing.T) {
-	require.Error(t, Health())
+func Health() error {
+	return nil
 }

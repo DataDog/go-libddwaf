@@ -4,7 +4,7 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Purego only works on linux/macOS with amd64 and arm64 from now
-//go:build (linux || darwin) && (amd64 || arm64) && !cgo
+//go:build (linux || darwin) && (amd64 || arm64)
 
 package waf
 
@@ -78,7 +78,7 @@ func TestWafObject(t *testing.T) {
 
 	t.Run("padding", func(t *testing.T) {
 		var actual [3]wafObject
-		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), uintptr(unsafe.Pointer(&actual)), uintptr(unsafe.Pointer(cstring("toto1"))))
+		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), uintptr(unsafe.Pointer(&actual[0])), uintptr(unsafe.Pointer(cstring("toto1"))))
 		require.NotEqualValues(t, 0, r1)
 		require.Equal(t, "toto1", gostring(actual[0].value))
 		require.EqualValues(t, wafStringType, actual[0]._type)

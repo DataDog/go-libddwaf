@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Build when CGO is enabled but the target OS or architecture are not supported
+// Build when the target OS or architecture are not supported
 //go:build windows || !(amd64 || arm64)
 
 package waf
