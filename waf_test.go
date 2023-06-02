@@ -1012,28 +1012,22 @@ func TestEncoder(t *testing.T) {
 			if max := tc.MaxArrayLength; max != nil {
 				maxArrayLength = max.(int)
 			}
-			maxMapLength := 1000
-			if max := tc.MaxMapLength; max != nil {
-				maxMapLength = max.(int)
-			}
 			maxStringLength := 4096
 			if max := tc.MaxStringLength; max != nil {
 				maxStringLength = max.(int)
 			}
 			e := encoder{
-				maxDepth:        maxValueDepth,
-				maxStringLength: maxStringLength,
-				maxArrayLength:  maxArrayLength,
-				maxMapLength:    maxMapLength,
+				objectMaxDepth:   maxValueDepth,
+				stringMaxSize:    maxStringLength,
+				containerMaxSize: maxArrayLength,
 			}
-			wo, err := e.encode(tc.Data)
+			wo, err := e.Encode(tc.Data)
 			if tc.ExpectedError != nil {
 				require.Error(t, err)
 				require.Equal(t, tc.ExpectedError, err)
 				require.Nil(t, wo)
 				return
 			}
-			defer freeWO(wo)
 
 			require.NoError(t, err)
 			require.NotEqual(t, &wafObject{}, wo)
@@ -1046,7 +1040,7 @@ func TestEncoder(t *testing.T) {
 			}
 			if expectedStr := tc.ExpectedWAFString; expectedStr != "" {
 				require.Equal(t, wafStringType, int(wo._type), "bad waf string value type")
-				cbuf := uintptr(unsafe.Pointer(*wo.stringValuePtr()))
+				cbuf := wo.value
 				gobuf := []byte(expectedStr)
 				require.Equal(t, len(gobuf), int(wo.nbEntries), "bad waf value length")
 				for i, gobyte := range gobuf {
@@ -1062,7 +1056,7 @@ func TestEncoder(t *testing.T) {
 			waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 			require.NoError(t, err)
 			defer waf.Close()
-			wafCtx := NewContext(waf)
+			wafCtx := waf.NewContext()
 			require.NotNil(t, wafCtx)
 			defer wafCtx.Close()
 			_, _, err = wafCtx.Run(map[string]interface{}{

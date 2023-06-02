@@ -40,9 +40,9 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 	}()
 
 	encoder := encoder{
-		stringMaxSize:  wafMaxStringLength,
-		arrayMaxSize:   wafMaxContainerSize,
-		objectMaxDepth: wafMaxContainerDepth,
+		stringMaxSize:    wafMaxStringLength,
+		containerMaxSize: wafMaxContainerSize,
+		objectMaxDepth:   wafMaxContainerDepth,
 	}
 	obj, err := encoder.Encode(addressesToData)
 	if err != nil {

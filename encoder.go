@@ -5,21 +5,253 @@
 
 package waf
 
+import (
+	"errors"
+	"math"
+	"reflect"
+	"strconv"
+	"strings"
+	"unicode"
+)
+
+var (
+	errMaxDepth         = errors.New("max depth reached")
+	errUnsupportedValue = errors.New("unsupported Go value")
+	errOutOfMemory      = errors.New("out of memory")
+	errInvalidMapKey    = errors.New("invalid WAF object map key")
+	errNilObjectPtr     = errors.New("nil WAF object pointer")
+)
+
 type encoder struct {
-	arrayMaxSize   uint64
-	stringMaxSize  uint64
-	objectMaxDepth uint64
-	allocator      allocator
+	containerMaxSize int
+	stringMaxSize    int
+	objectMaxDepth   int
+	allocator        allocator
 }
 
 func newMaxEncoder() *encoder {
+	const intSize = 32 << (^int(0) >> 63) // copied from recent versions of math.MaxInt
+	const maxInt = 1<<(intSize-1) - 1     // copied from recent versions of math.MaxInt
 	return &encoder{
-		arrayMaxSize:   1<<63 - 1,
-		stringMaxSize:  1<<63 - 1,
-		objectMaxDepth: 1<<63 - 1,
+		containerMaxSize: maxInt,
+		stringMaxSize:    maxInt,
+		objectMaxDepth:   maxInt,
 	}
 }
 
-func (e encoder) Encode(data any) (*wafObject, error) {
-	return nil, nil
+func (encoder *encoder) Encode(data any) (*wafObject, error) {
+	wo := &wafObject{}
+	if err := encoder.encode(reflect.ValueOf(data), wo, encoder.objectMaxDepth); err != nil {
+		return nil, err
+	}
+
+	return wo, nil
+}
+
+func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) error {
+	switch kind := value.Kind(); {
+	// Terminal cases (leafs of the tree)
+	// 		Booleans
+	case kind == reflect.Bool && value.Bool(): // true
+		return encoder.encodeString("true", wafStringType, obj)
+	case kind == reflect.Bool && !value.Bool(): // false
+		return encoder.encodeString("false", wafStringType, obj)
+
+	// 		Numbers
+	case value.CanInt(): // any int type or alias
+		return encoder.encodeString(strconv.FormatInt(value.Int(), 10), wafIntType, obj)
+	case value.CanUint(): // any Uint type or alias
+		return encoder.encodeString(strconv.FormatUint(value.Uint(), 10), wafUintType, obj)
+	case value.CanFloat(): // any float type or alias
+		return encoder.encodeString(strconv.FormatInt(int64(math.Round(value.Float())), 10), wafIntType, obj)
+
+	//		Strings
+	case kind == reflect.String: // string type
+		return encoder.encodeString(value.String(), wafStringType, obj)
+	case value.Type() == reflect.TypeOf([]byte(nil)): // byte array -> string
+		return encoder.encodeString(string(value.Bytes()), wafStringType, obj)
+
+	// Recursive cases (internal nodes of the tree)
+	case kind == reflect.Interface || kind == reflect.Pointer: // Pointer and interfaces are not taken into account
+		return encoder.encode(value.Elem(), obj, depth)
+	case kind == reflect.Array || kind == reflect.Slice: // either an array or a slice of an array
+		return encoder.encodeArray(value, obj, depth)
+	case kind == reflect.Map:
+		return encoder.encodeMap(value, obj, depth)
+	case kind == reflect.Struct:
+		return encoder.encodeStruct(value, obj, depth)
+
+	default:
+		return errUnsupportedValue
+	}
+}
+
+func (encoder *encoder) encodeString(str string, typ wafObjectType, obj *wafObject) error {
+	if len(str) > encoder.stringMaxSize {
+		str = str[:encoder.stringMaxSize]
+	}
+
+	encoder.allocator.AllocString(obj, typ, str)
+	return nil
+}
+
+func getFieldNameFromType(field reflect.StructField) (string, bool) {
+	fieldName := field.Name
+
+	// Private and synthetics fields
+	if len(fieldName) < 1 || unicode.IsLower(rune(fieldName[0])) {
+		return "", false
+	}
+
+	// Use the json tag name as field name if present
+	if tag, ok := field.Tag.Lookup("json"); ok {
+		if i := strings.IndexByte(tag, byte(',')); i > 0 {
+			tag = tag[:i]
+		}
+		if len(tag) > 0 {
+			fieldName = tag
+		}
+	}
+
+	return fieldName, true
+}
+
+// encodeStruct takes a reflect.Value and a wafObject pointer and iterate on the struct field to build
+// a wafObject map of type wafMapType. The specificities are the following:
+// - It will only take the first encoder.containerMaxSize elements of the struct
+// - If the field has a json tag it will become the field name
+// - Private fields and also values producing an error at encoding will be skipped
+func (encoder *encoder) encodeStruct(value reflect.Value, obj *wafObject, depth int) error {
+	if depth < 0 {
+		return errMaxDepth
+	}
+
+	typ := value.Type()
+	nbFields := typ.NumField()
+	capacity := nbFields
+	length := 0
+	if capacity > encoder.containerMaxSize {
+		capacity = encoder.containerMaxSize
+	}
+
+	objArray := encoder.allocator.AllocArray(obj, wafMapType, uint64(capacity))
+	for i := 0; length < capacity && i < nbFields; i++ {
+		fieldType := typ.Field(i)
+		fieldName, usable := getFieldNameFromType(fieldType)
+		if !usable {
+			continue
+		}
+
+		objElem := &objArray[length]
+		if encoder.encodeMapKey(reflect.ValueOf(fieldName), objElem) != nil {
+			continue
+		}
+
+		if encoder.encode(value.Field(i), objElem, depth-1) != nil {
+			continue
+		}
+
+		length++
+	}
+
+	// Fix the size because we skipped fields
+	obj.nbEntries = uint64(length)
+	return nil
+}
+
+// encodeMap takes a reflect.Value and a wafObject pointer and iterate on the map elements and returns
+// a wafObject map of type wafMapType. The specificities are the following:
+// - It will only take the first encoder.containerMaxSize elements of the map
+// - Values and keys producing an error at encoding will be skipped
+func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int) error {
+	if depth < 0 {
+		return errMaxDepth
+	}
+
+	capacity := value.Len()
+	length := 0
+	if capacity > encoder.containerMaxSize {
+		capacity = encoder.containerMaxSize
+	}
+
+	objArray := encoder.allocator.AllocArray(obj, wafMapType, uint64(capacity))
+	for iter := value.MapRange(); iter.Next(); {
+		if length == capacity {
+			break
+		}
+
+		objElem := &objArray[length]
+		if encoder.encodeMapKey(iter.Key(), objElem) != nil {
+			continue
+		}
+
+		if encoder.encode(iter.Value(), objElem, depth-1) != nil {
+			continue
+		}
+
+		length++
+	}
+
+	// Fix the size because we skipped map entries
+	obj.nbEntries = uint64(length)
+	return nil
+}
+
+// encodeMapKey takes a reflect.Value and a wafObject and returns a wafObject ready to be considered a map key
+// We use the function allocator.AllocMapKey to set store the key in the wafObject. But first we need
+// To grab the real underlying value by recursing through the pointer and interface values.
+func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject) error {
+
+	kind := value.Kind()
+	for ; kind == reflect.Pointer || kind == value.Interface(); value, kind = value.Elem(), value.Elem().Kind() {
+		if value.IsNil() {
+			return errUnsupportedValue
+		}
+	}
+
+	if kind != reflect.String && value.Type() != reflect.TypeOf([]byte(nil)) {
+		return errUnsupportedValue
+	}
+
+	if value.Type() == reflect.TypeOf([]byte(nil)) {
+		encoder.allocator.AllocMapKey(obj, string(value.Bytes()))
+	}
+
+	if reflect.String == kind {
+		encoder.allocator.AllocMapKey(obj, value.String())
+	}
+
+	return nil
+}
+
+// encodeArray takes a reflect.Value and a wafObject pointer and iterate on the elements and returns
+// a wafObject array of type wafArrayType. The specificities are the following:
+// - It will only take the first encoder.containerMaxSize elements of the array
+// - Values producing an error at encoding will be skipped
+func (encoder *encoder) encodeArray(value reflect.Value, obj *wafObject, depth int) error {
+	if depth < 0 {
+		return errMaxDepth
+	}
+
+	length := value.Len()
+	capacity := length
+	if capacity > encoder.containerMaxSize {
+		capacity = encoder.containerMaxSize
+	}
+
+	currIndex := 0
+	objArray := encoder.allocator.AllocArray(obj, wafArrayType, uint64(capacity))
+	for i := 0; currIndex < capacity && i < length; i++ {
+
+		objElem := &objArray[currIndex]
+		if encoder.encode(value.Index(i), objElem, depth-1) != nil {
+			continue
+		}
+
+		currIndex++
+	}
+
+	// Fix the size because we skipped map entries
+	obj.nbEntries = uint64(length)
+	return nil
 }
