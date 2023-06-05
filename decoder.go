@@ -26,7 +26,7 @@ func decodeErrors(obj *wafObject) (map[string][]string, error) {
 		}
 
 		errorMessage := gostringSized(objElem.parameterName, objElem.parameterNameLength)
-		ruleIds, err := decodeRuleIdArray(objElem.value)
+		ruleIds, err := decodeRuleIdArray(objElem)
 		if err != nil {
 			return nil, err
 		}
@@ -37,8 +37,7 @@ func decodeErrors(obj *wafObject) (map[string][]string, error) {
 	return wafErrors, nil
 }
 
-func decodeRuleIdArray(objPtr uintptr) ([]string, error) {
-	obj := (*wafObject)(unsafe.Pointer(objPtr))
+func decodeRuleIdArray(obj *wafObject) ([]string, error) {
 	if obj._type != wafArrayType {
 		return nil, ErrInvalidObject
 	}

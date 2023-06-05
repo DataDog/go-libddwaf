@@ -42,7 +42,11 @@ func (allocator *allocator) AllocString(obj *wafObject, typ wafObjectType, str s
 		panic("Cannot allocate this waf object data type from a string: " + strconv.Itoa(int(typ)))
 	}
 
+	obj._type = typ
+
 	if len(str) == 0 {
+		obj.nbEntries = 0
+		obj.value = 0
 		return
 	}
 
@@ -53,7 +57,6 @@ func (allocator *allocator) AllocString(obj *wafObject, typ wafObjectType, str s
 	// This line firstly gets the value from the stringRef array. Then manage to get a *byte from the string.
 	// Then cast it into unsafe.Pointer then into uintptr
 	obj.value = uintptr(unsafe.Pointer(&goArray[0]))
-	obj._type = typ
 	obj.nbEntries = uint64(len(goArray))
 }
 

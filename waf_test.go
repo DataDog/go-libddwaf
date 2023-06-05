@@ -9,6 +9,7 @@ package waf
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -77,7 +78,7 @@ type ruleInput struct {
 	KeyPath []string
 }
 
-func newArachniTestRule(inputs []ruleInput, actions []string) []byte {
+func newArachniTestRule(inputs []ruleInput, actions []string) map[string]any {
 	var buf bytes.Buffer
 	if err := testArachniRuleTmpl.Execute(&buf, struct {
 		Inputs  []ruleInput
@@ -85,11 +86,17 @@ func newArachniTestRule(inputs []ruleInput, actions []string) []byte {
 	}{Inputs: inputs, Actions: actions}); err != nil {
 		panic(err)
 	}
-	return buf.Bytes()
+	parsed := map[string]any{}
+
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		return nil
+	}
+
+	return parsed
 }
 
-func newDefaultHandle(jsonRule []byte) (*Handle, error) {
-	return NewHandle(jsonRule, "", "")
+func newDefaultHandle(rule any) (*Handle, error) {
+	return NewHandle(rule, "", "")
 }
 
 func TestNewWAF(t *testing.T) {
@@ -98,20 +105,6 @@ func TestNewWAF(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, waf)
 		defer waf.Close()
-	})
-
-	t.Run("invalid-json", func(t *testing.T) {
-		waf, err := newDefaultHandle([]byte(`not json`))
-		require.Error(t, err)
-		require.Nil(t, waf)
-	})
-
-	t.Run("rule-encoding-error", func(t *testing.T) {
-		// For now, the null value cannot be encoded into a WAF object representation so it allows us to cover this
-		// case where the JSON rule cannot be encoded into a WAF object.
-		waf, err := newDefaultHandle([]byte(`null`))
-		require.Error(t, err)
-		require.Nil(t, waf)
 	})
 
 	t.Run("invalid-rule", func(t *testing.T) {
@@ -130,9 +123,9 @@ func TestNewWAF(t *testing.T) {
 		{
 		  "operation": "match_regex",
 		  "parameters": {
-			"inputs": {
+			"inputs": [
 			  { "address": "server.request.headers.no_cookies" }
-			},
+			],
 			"regex": "^Arachni"
 		  }
 		}
@@ -142,7 +135,11 @@ func TestNewWAF(t *testing.T) {
   ]
 }
 `
-		waf, err := newDefaultHandle([]byte(rule))
+		var parsed any
+
+		require.NoError(t, json.Unmarshal([]byte(rule), &parsed))
+
+		waf, err := newDefaultHandle(parsed)
 		require.Error(t, err)
 		require.Nil(t, waf)
 	})
@@ -356,7 +353,9 @@ func TestConcurrency(t *testing.T) {
 							"user-agent": userAgents[i],
 						},
 					}
+
 					matches, _, err := wafCtx.Run(data, time.Minute)
+
 					if err != nil {
 						panic(err)
 					}
@@ -422,8 +421,7 @@ func TestRunError(t *testing.T) {
 }
 
 func TestMetrics(t *testing.T) {
-	rules := `
-{
+	rules := `{
   "version": "2.1",
   "metadata": {
 	"rules_version": "1.2.7"
@@ -476,7 +474,11 @@ func TestMetrics(t *testing.T) {
   ]
 }
 `
-	waf, err := newDefaultHandle([]byte(rules))
+	var parsed any
+
+	require.NoError(t, json.Unmarshal([]byte(rules), &parsed))
+
+	waf, err := newDefaultHandle(parsed)
 	require.NoError(t, err)
 	defer waf.Close()
 	// TODO: (Francois Mazeau) see if we can make this test more configurable to future proof against libddwaf changes
@@ -486,9 +488,9 @@ func TestMetrics(t *testing.T) {
 		require.Equal(t, uint16(1), rInfo.Loaded)
 		require.Equal(t, 2, len(rInfo.Errors))
 		require.Equal(t, "1.2.7", rInfo.Version)
-		require.Equal(t, map[string]interface{}{
-			"missing key 'tags'": []interface{}{"missing-tags-1", "missing-tags-2"},
-			"missing key 'name'": []interface{}{"missing-name"},
+		require.Equal(t, map[string][]string{
+			"missing key 'tags'": {"missing-tags-1", "missing-tags-2"},
+			"missing key 'name'": {"missing-name"},
 		}, rInfo.Errors)
 	})
 
@@ -541,8 +543,7 @@ func TestEncoder(t *testing.T) {
 		ExpectedWAFValueLength int
 		ExpectedWAFString      string
 		MaxValueDepth          interface{}
-		MaxArrayLength         interface{}
-		MaxMapLength           interface{}
+		MaxContainerLength     interface{}
 		MaxStringLength        interface{}
 	}{
 		{
@@ -551,12 +552,12 @@ func TestEncoder(t *testing.T) {
 			ExpectedError: errUnsupportedValue,
 		},
 		{
-			Name:              "string",
+			Name:              "string-hekki",
 			Data:              "hello, waf",
 			ExpectedWAFString: "hello, waf",
 		},
 		{
-			Name:                   "string",
+			Name:                   "string-empty",
 			Data:                   "",
 			ExpectedWAFValueType:   wafStringType,
 			ExpectedWAFValueLength: 0,
@@ -818,14 +819,14 @@ func TestEncoder(t *testing.T) {
 		},
 		{
 			Name:                   "array-max-length",
-			MaxArrayLength:         3,
+			MaxContainerLength:     3,
 			Data:                   []interface{}{1, 2, 3, 4, 5},
 			ExpectedWAFValueType:   wafArrayType,
 			ExpectedWAFValueLength: 3,
 		},
 		{
 			Name:                   "map-max-length",
-			MaxMapLength:           3,
+			MaxContainerLength:     3,
 			Data:                   map[string]string{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": "v5"},
 			ExpectedWAFValueType:   wafMapType,
 			ExpectedWAFValueLength: 3,
@@ -845,63 +846,63 @@ func TestEncoder(t *testing.T) {
 		},
 		{
 			Name:                   "unsupported-array-values",
-			MaxArrayLength:         1,
+			MaxContainerLength:     1,
 			Data:                   []interface{}{"supported", func() {}, "supported", make(chan struct{})},
 			ExpectedWAFValueType:   wafArrayType,
 			ExpectedWAFValueLength: 1,
 		},
 		{
 			Name:                   "unsupported-array-values",
-			MaxArrayLength:         2,
+			MaxContainerLength:     2,
 			Data:                   []interface{}{"supported", func() {}, "supported", make(chan struct{})},
 			ExpectedWAFValueType:   wafArrayType,
 			ExpectedWAFValueLength: 2,
 		},
 		{
 			Name:                   "unsupported-array-values",
-			MaxArrayLength:         1,
+			MaxContainerLength:     1,
 			Data:                   []interface{}{func() {}, "supported", make(chan struct{}), "supported"},
 			ExpectedWAFValueType:   wafArrayType,
 			ExpectedWAFValueLength: 1,
 		},
 		{
 			Name:                   "unsupported-array-values",
-			MaxArrayLength:         2,
+			MaxContainerLength:     2,
 			Data:                   []interface{}{func() {}, "supported", make(chan struct{}), "supported"},
 			ExpectedWAFValueType:   wafArrayType,
 			ExpectedWAFValueLength: 2,
 		},
 		{
 			Name:                   "unsupported-array-values",
-			MaxArrayLength:         1,
+			MaxContainerLength:     1,
 			Data:                   []interface{}{func() {}, make(chan struct{}), "supported"},
 			ExpectedWAFValueType:   wafArrayType,
 			ExpectedWAFValueLength: 1,
 		},
 		{
 			Name:                   "unsupported-array-values",
-			MaxArrayLength:         3,
+			MaxContainerLength:     3,
 			Data:                   []interface{}{"supported", func() {}, make(chan struct{})},
 			ExpectedWAFValueType:   wafArrayType,
 			ExpectedWAFValueLength: 1,
 		},
 		{
 			Name:                   "unsupported-array-values",
-			MaxArrayLength:         3,
+			MaxContainerLength:     3,
 			Data:                   []interface{}{func() {}, "supported", make(chan struct{})},
 			ExpectedWAFValueType:   wafArrayType,
 			ExpectedWAFValueLength: 1,
 		},
 		{
 			Name:                   "unsupported-array-values",
-			MaxArrayLength:         3,
+			MaxContainerLength:     3,
 			Data:                   []interface{}{func() {}, make(chan struct{}), "supported"},
 			ExpectedWAFValueType:   wafArrayType,
 			ExpectedWAFValueLength: 1,
 		},
 		{
 			Name:                   "unsupported-array-values",
-			MaxArrayLength:         2,
+			MaxContainerLength:     2,
 			Data:                   []interface{}{func() {}, make(chan struct{}), "supported", "supported"},
 			ExpectedWAFValueType:   wafArrayType,
 			ExpectedWAFValueLength: 2,
@@ -938,7 +939,7 @@ func TestEncoder(t *testing.T) {
 				"k1": func() {},
 				"k2": make(chan struct{}),
 			},
-			MaxMapLength:           3,
+			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 1,
 		},
 		{
@@ -948,7 +949,7 @@ func TestEncoder(t *testing.T) {
 				"k1": "supported",
 				"k2": make(chan struct{}),
 			},
-			MaxMapLength:           3,
+			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 2,
 		},
 		{
@@ -958,7 +959,7 @@ func TestEncoder(t *testing.T) {
 				"k1": "supported",
 				"k2": make(chan struct{}),
 			},
-			MaxMapLength:           1,
+			MaxContainerLength:     1,
 			ExpectedWAFValueLength: 1,
 		},
 		{
@@ -972,7 +973,7 @@ func TestEncoder(t *testing.T) {
 				F1: func() {},
 				F2: make(chan struct{}),
 			},
-			MaxMapLength:           3,
+			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 1,
 		},
 		{
@@ -986,7 +987,7 @@ func TestEncoder(t *testing.T) {
 				F1: "supported",
 				F2: make(chan struct{}),
 			},
-			MaxMapLength:           3,
+			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 2,
 		},
 		{
@@ -1000,7 +1001,7 @@ func TestEncoder(t *testing.T) {
 				F1: "supported",
 				F2: make(chan struct{}),
 			},
-			MaxMapLength:           1,
+			MaxContainerLength:     1,
 			ExpectedWAFValueLength: 1,
 		},
 	} {
@@ -1010,9 +1011,9 @@ func TestEncoder(t *testing.T) {
 			if max := tc.MaxValueDepth; max != nil {
 				maxValueDepth = max.(int)
 			}
-			maxArrayLength := 1000
-			if max := tc.MaxArrayLength; max != nil {
-				maxArrayLength = max.(int)
+			maxContainerLength := 1000
+			if max := tc.MaxContainerLength; max != nil {
+				maxContainerLength = max.(int)
 			}
 			maxStringLength := 4096
 			if max := tc.MaxStringLength; max != nil {
@@ -1021,7 +1022,7 @@ func TestEncoder(t *testing.T) {
 			e := encoder{
 				objectMaxDepth:   maxValueDepth,
 				stringMaxSize:    maxStringLength,
-				containerMaxSize: maxArrayLength,
+				containerMaxSize: maxContainerLength,
 			}
 			wo, err := e.Encode(tc.Data)
 			if tc.ExpectedError != nil {

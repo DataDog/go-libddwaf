@@ -5,7 +5,6 @@
 
 package waf
 
-import "C"
 import (
 	"fmt"
 )

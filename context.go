@@ -7,6 +7,7 @@ package waf
 
 import (
 	"go.uber.org/atomic"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -50,14 +51,14 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 
 	// ddwaf_run cannot run concurrently and the next append write on the context state so we need a mutex
 	context.mutex.Lock()
+
 	defer context.mutex.Unlock()
+	defer context.allocator.append(encoder.allocator)
 
-	context.allocator.append(encoder.allocator)
-
-	return context.run(obj, timeout)
+	return context.run(obj, timeout, &encoder.allocator)
 }
 
-func (context *Context) run(obj *wafObject, timeout time.Duration) ([]byte, []string, error) {
+func (context *Context) run(obj *wafObject, timeout time.Duration, allocator *allocator) ([]byte, []string, error) {
 	// RLock the handle to safely get read access to the WAF handle and prevent concurrent changes of it
 	// such as a rules-data update.
 	context.handle.mutex.RLock()
@@ -67,6 +68,9 @@ func (context *Context) run(obj *wafObject, timeout time.Duration) ([]byte, []st
 	defer context.handle.cLibrary.wafResultFree(result)
 
 	ret := context.handle.cLibrary.wafRun(context.cContext, obj, result, uint64(timeout/time.Microsecond))
+	// Needed to prevent the GC
+	allocator.KeepAlive()
+	runtime.KeepAlive(obj)
 
 	context.totalRuntimeNs.Add(result.total_runtime)
 	matches, actions, err := unwrapWafResult(ret, result)

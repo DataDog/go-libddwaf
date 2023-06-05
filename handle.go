@@ -70,8 +70,18 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 }
 
 func (handle *Handle) NewContext() *Context {
+	// Handle has been released
+	if handle.contextCounter.Load() == 0 {
+		return nil
+	}
+
+	cContext := handle.cLibrary.wafContextInit(handle.cHandle)
+	if cContext == 0 {
+		return nil
+	}
+
 	handle.contextCounter.Inc()
-	return nil
+	return &Context{handle: handle, cContext: cContext}
 }
 
 func (handle *Handle) RulesetInfo() RulesetInfo {

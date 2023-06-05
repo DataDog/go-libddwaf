@@ -49,6 +49,9 @@ func (encoder *encoder) Encode(data any) (*wafObject, error) {
 func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) error {
 	switch kind := value.Kind(); {
 	// Terminal cases (leafs of the tree)
+	case kind == reflect.Invalid:
+		return errUnsupportedValue
+
 	// 		Booleans
 	case kind == reflect.Bool && value.Bool(): // true
 		return encoder.encodeString("true", wafStringType, obj)
@@ -57,11 +60,11 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) e
 
 	// 		Numbers
 	case value.CanInt(): // any int type or alias
-		return encoder.encodeString(strconv.FormatInt(value.Int(), 10), wafIntType, obj)
+		return encoder.encodeString(strconv.FormatInt(value.Int(), 10), wafStringType, obj)
 	case value.CanUint(): // any Uint type or alias
-		return encoder.encodeString(strconv.FormatUint(value.Uint(), 10), wafUintType, obj)
+		return encoder.encodeString(strconv.FormatUint(value.Uint(), 10), wafStringType, obj)
 	case value.CanFloat(): // any float type or alias
-		return encoder.encodeString(strconv.FormatInt(int64(math.Round(value.Float())), 10), wafIntType, obj)
+		return encoder.encodeString(strconv.FormatInt(int64(math.Round(value.Float())), 10), wafStringType, obj)
 
 	//		Strings
 	case kind == reflect.String: // string type
@@ -201,7 +204,7 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int
 func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject) error {
 
 	kind := value.Kind()
-	for ; kind == reflect.Pointer || kind == value.Interface(); value, kind = value.Elem(), value.Elem().Kind() {
+	for ; kind == reflect.Pointer || kind == reflect.Interface; value, kind = value.Elem(), value.Elem().Kind() {
 		if value.IsNil() {
 			return errUnsupportedValue
 		}
@@ -250,6 +253,6 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *wafObject, depth i
 	}
 
 	// Fix the size because we skipped map entries
-	obj.nbEntries = uint64(length)
+	obj.nbEntries = uint64(currIndex)
 	return nil
 }
