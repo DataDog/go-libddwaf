@@ -8,6 +8,14 @@
 
 package waf
 
+// For now we have to do dlopen on a global level because MacOS WAF behaves stangely
+// when we do a second dlopen on the same file
+var wafLib, wafErr = newWafDl()
+
 func Health() error {
-	return nil
+	return wafErr
+}
+
+func Version() string {
+	return wafLib.wafGetVersion()
 }

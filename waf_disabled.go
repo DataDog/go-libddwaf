@@ -4,7 +4,7 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Build when the target OS or Arch are not supported
-//go:build windows || !(amd64 || arm64)
+//go:build (!linux && !darwin) || (!amd64 && !arm64)
 
 package waf
 
@@ -30,12 +30,7 @@ func Health() error { return errDisabledReason }
 func Version() string { return "" }
 
 // NewHandle creates a new instance of the WAF with the given JSON rule.
-func NewHandle([]byte, string, string) (*Handle, error) { return nil, errDisabledReason }
-
-// NewHandleFromRuleSet creates a new instance of the WAF with the given ruleset and key/value regexps for obfuscation.
-func NewHandleFromRuleSet(interface{}, string, string) (*Handle, error) {
-	return nil, errDisabledReason
-}
+func NewHandle(any, string, string) (*Handle, error) { return nil, errDisabledReason }
 
 // Addresses returns the list of addresses the WAF rule is expecting.
 func (*Handle) Addresses() []string { return nil }
@@ -50,7 +45,7 @@ func (*Handle) Close() {}
 // NewContext a new WAF context and increase the number of references to the WAF
 // handle. A nil value is returned when the WAF handle can no longer be used
 // or the WAF context couldn't be created.
-func NewContext(*Handle) *Context { return nil }
+func (*Handle) NewContext() *Context { return nil }
 
 // Run the WAF with the given Go values and timeout.
 func (*Context) Run(map[string]interface{}, time.Duration) ([]byte, []string, error) {

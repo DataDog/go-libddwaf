@@ -26,10 +26,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestVersion(t *testing.T) {
-	handle, err := newDefaultHandle(testArachniRule)
-	require.NoError(t, err)
-	defer handle.Close()
-	require.Regexp(t, `[0-9]+\.[0-9]+\.[0-9]+`, handle.Version())
+	require.Regexp(t, `[0-9]+\.[0-9]+\.[0-9]+`, Version())
 }
 
 var testArachniRule = newArachniTestRule([]ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil)

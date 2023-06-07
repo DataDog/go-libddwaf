@@ -8,12 +8,12 @@ package waf
 import (
 	"errors"
 	"fmt"
+	empty_free "github.com/DataDog/go-libddwaf/internal/empty-free"
 	"go.uber.org/atomic"
 	"sync"
 )
 
 type Handle struct {
-	cLibrary       *wafDl
 	cHandle        wafHandle
 	mutex          sync.RWMutex
 	contextCounter *atomic.Uint32
@@ -28,11 +28,6 @@ type Handle struct {
 // - Check for errors and streamline the ddwaf_ruleset_info returned
 func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string) (*Handle, error) {
 
-	wafDl, err := newWafDl()
-	if err != nil {
-		return nil, err
-	}
-
 	encoder := newMaxEncoder()
 	obj, err := encoder.Encode(rules)
 	if err != nil {
@@ -44,12 +39,12 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	config := newConfig(&encoder.allocator, keyObfuscatorRegex, valueObfuscatorRegex)
 	cRulesetInfo := new(wafRulesetInfo)
 
-	cHandle := wafDl.wafInit(obj, config, cRulesetInfo)
+	cHandle := wafLib.wafInit(obj, config, cRulesetInfo)
 	if cHandle == 0 {
 		return nil, errors.New("could not instanciate the WAF")
 	}
 
-	defer wafDl.wafRulesetInfoFree(cRulesetInfo)
+	defer wafLib.wafRulesetInfoFree(cRulesetInfo)
 
 	errorsMap, err := decodeErrors(&cRulesetInfo.errors)
 	if err != nil { // Something is very wrong
@@ -57,7 +52,6 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	}
 
 	return &Handle{
-		cLibrary:       wafDl,
 		cHandle:        cHandle,
 		contextCounter: atomic.NewUint32(1), // We count the handle itself in the counter
 		rulesetInfo: RulesetInfo{
@@ -75,7 +69,7 @@ func (handle *Handle) NewContext() *Context {
 		return nil
 	}
 
-	cContext := handle.cLibrary.wafContextInit(handle.cHandle)
+	cContext := wafLib.wafContextInit(handle.cHandle)
 	if cContext == 0 {
 		return nil
 	}
@@ -89,28 +83,21 @@ func (handle *Handle) RulesetInfo() RulesetInfo {
 }
 
 func (handle *Handle) Addresses() []string {
-	return handle.cLibrary.wafRequiredAddresses(handle.cHandle)
-}
-
-// Version returns libddwaf.so version string
-func (handle *Handle) Version() string {
-	return handle.cLibrary.wafGetVersion()
+	return wafLib.wafRequiredAddresses(handle.cHandle)
 }
 
 // CloseContext call ddwaf_context_destroy and eventually ddwaf_destroy on the handle
 func (handle *Handle) CloseContext(context *Context) {
-	handle.cLibrary.wafContextDestroy(context.cContext)
+	wafLib.wafContextDestroy(context.cContext)
 	if handle.contextCounter.Dec() == 0 {
-		handle.cLibrary.wafDestroy(handle.cHandle)
-		handle.cLibrary.Close()
+		wafLib.wafDestroy(handle.cHandle)
 	}
 }
 
 // Close put the handle in termination state, when all the contexts are close the handle will be destroyed
 func (handle *Handle) Close() {
 	if handle.contextCounter.Dec() == 0 {
-		handle.cLibrary.wafDestroy(handle.cHandle)
-		handle.cLibrary.Close()
+		wafLib.wafDestroy(handle.cHandle)
 	}
 }
 
@@ -126,7 +113,7 @@ func newConfig(allocator *allocator, keyObfuscatorRegex string, valueObfuscatorR
 			keyRegex:   allocator.AllocRawString(keyObfuscatorRegex),
 			valueRegex: allocator.AllocRawString(valueObfuscatorRegex),
 		},
-		freeFn: 0,
+		freeFn: empty_free.EmptyFreeFn,
 	}
 	return config
 }

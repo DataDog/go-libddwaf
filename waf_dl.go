@@ -59,6 +59,7 @@ func newWafDl() (*wafDl, error) {
 	}()
 
 	var waf wafDl
+
 	if err := dlOpen(file.Name(), &waf); err != nil {
 		return nil, fmt.Errorf("Error opening waf library: %w", err)
 	}

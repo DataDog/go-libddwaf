@@ -3,17 +3,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Build when the target OS or Arch are not supported
-//go:build (!linux && !darwin) || (!amd64 && !arm64)
+package empty_free
 
-package waf
+import "unsafe"
 
-import (
-	"testing"
-
-	"github.com/stretchr/testify/require"
-)
-
-func TestHealth(t *testing.T) {
-	require.Error(t, Health())
-}
+//go:linkname _empty_free _empty_free
+var _empty_free byte
+var EmptyFreeFn uintptr = uintptr(unsafe.Pointer(&_empty_free))

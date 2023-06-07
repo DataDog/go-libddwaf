@@ -65,9 +65,9 @@ func (context *Context) run(obj *wafObject, timeout time.Duration, allocator *al
 	defer context.handle.mutex.RUnlock()
 
 	result := new(wafResult)
-	defer context.handle.cLibrary.wafResultFree(result)
+	defer wafLib.wafResultFree(result)
 
-	ret := context.handle.cLibrary.wafRun(context.cContext, obj, result, uint64(timeout/time.Microsecond))
+	ret := wafLib.wafRun(context.cContext, obj, result, uint64(timeout/time.Microsecond))
 	// Needed to prevent the GC
 	allocator.KeepAlive()
 	runtime.KeepAlive(obj)

@@ -20,15 +20,21 @@ import (
 )
 
 func TestWafOpen(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("Cannot do mutiple dlopen() on darwin")
+	}
 	loader, err := newWafDl()
 	require.NoError(t, err)
-	defer loader.Close()
+	require.NoError(t, loader.Close())
 }
 
 func TestWafGetVersion(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("Cannot do mutiple dlopen() on darwin")
+	}
 	loader, err := newWafDl()
 	require.NoError(t, err)
-	defer loader.Close()
+	defer require.NoError(t, loader.Close())
 
 	require.Regexp(t, `[0-9]+\.[0-9]+\.[0-9]+`, loader.wafGetVersion())
 }
