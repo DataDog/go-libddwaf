@@ -21,6 +21,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func init() {
+	InitWaf()
+}
+
 func TestHealth(t *testing.T) {
 	require.NoError(t, Health())
 }

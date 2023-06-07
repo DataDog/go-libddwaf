@@ -10,7 +10,23 @@ package waf
 
 // For now we have to do dlopen on a global level because MacOS WAF behaves stangely
 // when we do a second dlopen on the same file
-var wafLib, wafErr = newWafDl()
+var wafLib *wafDl
+var wafErr error
+
+func InitWaf() error {
+	if wafLib == nil {
+		wafLib, wafErr = newWafDl()
+	}
+
+	return wafErr
+}
+
+func CloseWaf() error {
+	err := wafLib.Close()
+	wafLib = nil
+	wafErr = nil
+	return err
+}
 
 func Health() error {
 	return wafErr
