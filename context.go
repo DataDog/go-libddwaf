@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// TODO: temps d'execution
+// Context is a WAF execution context.
 type Context struct {
 	handle    *Handle
 	cContext  wafContext

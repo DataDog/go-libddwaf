@@ -7,7 +7,10 @@
 
 package waf
 
-import "unsafe"
+import (
+	"fmt"
+	"unsafe"
+)
 
 // decodeErrors tranform the wafObject received by the wafRulesetInfo after the call to wafDl.wafInit, to a map where
 // keys are the error message and the value is a array of all the rule ids which triggered this specific error

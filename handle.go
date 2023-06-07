@@ -15,6 +15,7 @@ import (
 	"sync"
 )
 
+// Handle represents an instance of the WAF for a given ruleset.
 type Handle struct {
 	cHandle        wafHandle
 	mutex          sync.RWMutex
@@ -118,4 +119,17 @@ func newConfig(allocator *allocator, keyObfuscatorRegex string, valueObfuscatorR
 		freeFn: empty_free.EmptyFreeFn,
 	}
 	return config
+}
+
+func goRunError(rc wafReturnCode) error {
+	switch rc {
+	case wafErrInternal:
+		return ErrInternal
+	case wafErrInvalidObject:
+		return ErrInvalidObject
+	case wafErrInvalidArgument:
+		return ErrInvalidArgument
+	default:
+		return fmt.Errorf("unknown waf return code %d", int(rc))
+	}
 }

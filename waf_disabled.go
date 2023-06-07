@@ -13,14 +13,15 @@ import (
 	"time"
 )
 
-type (
-	// Handle represents an instance of the WAF for a given ruleset.
-	Handle struct{}
-	// Context is a WAF execution context.
-	Context struct{}
-)
+type Handle struct{}
+
+type Context struct{}
 
 var errDisabledReason = errors.New(disabledReason)
+
+func InitWaf() error { return errDisabledReason }
+
+func CloseWaf() error { return errDisabledReason }
 
 // Health allows knowing if the WAF can be used. It returns a nil error when the WAF library is healthy.
 // Otherwise, it returns an error describing the issue.

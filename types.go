@@ -3,16 +3,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build (linux || darwin) && (amd64 || arm64)
-
 package waf
 
 import (
 	"fmt"
 )
-
-// RunError the WAF can return when running it.
-type RunError int
 
 // RulesetInfo stores the information - provided by the WAF - about WAF rules initialization.
 type RulesetInfo struct {
@@ -26,6 +21,9 @@ type RulesetInfo struct {
 	// Ruleset version
 	Version string
 }
+
+// RunError the WAF can return when running it.
+type RunError int
 
 // Errors the WAF can return when running it.
 const (
@@ -54,18 +52,5 @@ func (e RunError) Error() string {
 		return "empty rule addresses"
 	default:
 		return fmt.Sprintf("unknown waf error %d", e)
-	}
-}
-
-func goRunError(rc wafReturnCode) error {
-	switch rc {
-	case wafErrInternal:
-		return ErrInternal
-	case wafErrInvalidObject:
-		return ErrInvalidObject
-	case wafErrInvalidArgument:
-		return ErrInvalidArgument
-	default:
-		return fmt.Errorf("unknown waf return code %d", int(rc))
 	}
 }
