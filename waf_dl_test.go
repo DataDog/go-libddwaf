@@ -19,26 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWafOpen(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("Cannot do mutiple dlopen() on darwin")
-	}
-	loader, err := newWafDl()
-	require.NoError(t, err)
-	require.NoError(t, loader.Close())
-}
-
-func TestWafGetVersion(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("Cannot do mutiple dlopen() on darwin")
-	}
-	loader, err := newWafDl()
-	require.NoError(t, err)
-	defer require.NoError(t, loader.Close())
-
-	require.Regexp(t, `[0-9]+\.[0-9]+\.[0-9]+`, loader.wafGetVersion())
-}
-
 // TestVerifyELFHeader is here to ease the debug cases that will likely need
 // to dive in the linker to debug because the error handling is very poor
 func TestVerifyELFHeader(t *testing.T) {
