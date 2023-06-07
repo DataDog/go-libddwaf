@@ -16,18 +16,18 @@ import (
 // keys are the error message and the value is a array of all the rule ids which triggered this specific error
 func decodeErrors(obj *wafObject) (map[string][]string, error) {
 	if obj._type != wafMapType {
-		return nil, ErrInvalidObject
+		return nil, fmt.Errorf("top-level error object is not a map but %v", obj._type)
 	}
 
 	if obj.value == 0 && obj.nbEntries > 0 {
-		return nil, ErrInternal
+		return nil, fmt.Errorf("top-level error map is malformed")
 	}
 
 	wafErrors := map[string][]string{}
 	for i := uint64(0); i < obj.nbEntries; i++ {
 		objElem := (*wafObject)(unsafe.Pointer(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{})))
 		if objElem._type != wafArrayType {
-			return nil, ErrInvalidObject
+			return nil, fmt.Errorf("mid-level error object is not a array but %v", obj._type)
 		}
 
 		errorMessage := gostringSized(objElem.parameterName, objElem.parameterNameLength)
@@ -44,18 +44,18 @@ func decodeErrors(obj *wafObject) (map[string][]string, error) {
 
 func decodeRuleIdArray(obj *wafObject) ([]string, error) {
 	if obj._type != wafArrayType {
-		return nil, ErrInvalidObject
+		return nil, fmt.Errorf("mid-level error object is not a array but %v", obj._type)
 	}
 
 	if obj.value == 0 && obj.nbEntries > 0 {
-		return nil, ErrInternal
+		return nil, fmt.Errorf("mid-level error array is malformed")
 	}
 
 	var ruleIds []string
 	for i := uint64(0); i < obj.nbEntries; i++ {
 		objElem := (*wafObject)(unsafe.Pointer(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{})))
 		if objElem._type != wafStringType {
-			return nil, ErrInvalidObject
+			return nil, fmt.Errorf("error object is not a string but %v", obj._type)
 		}
 
 		ruleIds = append(ruleIds, gostringSized(objElem.value, objElem.nbEntries))
