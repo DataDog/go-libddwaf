@@ -132,3 +132,7 @@ func cstring(name string) *byte {
 	copy(b, name)
 	return &b[0]
 }
+
+func toWafobject(ptr uintptr) *wafObject {
+	return (*wafObject)(unsafe.Pointer(ptr))
+}

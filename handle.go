@@ -31,6 +31,10 @@ type Handle struct {
 // - Check for errors and streamline the ddwaf_ruleset_info returned
 func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string) (*Handle, error) {
 
+	if err := InitWaf(); err != nil {
+		return nil, err
+	}
+
 	encoder := newMaxEncoder()
 	obj, err := encoder.Encode(rules)
 	if err != nil {

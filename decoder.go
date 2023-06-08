@@ -25,7 +25,7 @@ func decodeErrors(obj *wafObject) (map[string][]string, error) {
 
 	wafErrors := map[string][]string{}
 	for i := uint64(0); i < obj.nbEntries; i++ {
-		objElem := (*wafObject)(unsafe.Pointer(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{})))
+		objElem := toWafobject(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{}))
 		if objElem._type != wafArrayType {
 			return nil, fmt.Errorf("mid-level error object is not a array but %v", obj._type)
 		}
@@ -53,7 +53,7 @@ func decodeRuleIdArray(obj *wafObject) ([]string, error) {
 
 	var ruleIds []string
 	for i := uint64(0); i < obj.nbEntries; i++ {
-		objElem := (*wafObject)(unsafe.Pointer(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{})))
+		objElem := toWafobject(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{}))
 		if objElem._type != wafStringType {
 			return nil, fmt.Errorf("error object is not a string but %v", obj._type)
 		}
