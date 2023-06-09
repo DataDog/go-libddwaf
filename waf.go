@@ -8,14 +8,19 @@
 
 package waf
 
+import "sync"
+
 // For now we have to do dlopen on a global level because MacOS WAF behaves stangely
 // when we do a second dlopen on the same file
 var wafLib *wafDl
 var wafErr error
+var openWafOnce sync.Once
 
 func InitWaf() error {
 	if wafLib == nil {
-		wafLib, wafErr = newWafDl()
+		openWafOnce.Do(func() {
+			wafLib, wafErr = newWafDl()
+		})
 	}
 
 	return wafErr
@@ -29,7 +34,7 @@ func CloseWaf() error {
 }
 
 func Health() error {
-	return wafErr
+	return InitWaf()
 }
 
 func Version() string {
