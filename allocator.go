@@ -8,7 +8,6 @@
 package waf
 
 import (
-	"reflect"
 	"runtime"
 	"strconv"
 	"unsafe"
@@ -16,7 +15,7 @@ import (
 
 // TODO document all this
 type allocator struct {
-	stringRefs []string
+	stringRefs [][]byte
 	arrayRefs  [][]wafObject
 }
 
@@ -31,21 +30,15 @@ func (allocator *allocator) KeepAlive() {
 	runtime.KeepAlive(allocator.stringRefs)
 }
 
-// AllocRawString creates a null-terminated string and adds it to the allocator and returns a pointer to it
 func (allocator *allocator) AllocRawString(str string) uintptr {
-	// Is the string already null-terminated ?
-	if len(str) < len("\x00") || str[len(str)-len("\x00"):] != "\x00" {
-		str += "\x00"
-	}
+	goArray := make([]byte, len(str)+1)
+	copy(goArray, str)
+	allocator.stringRefs = append(allocator.stringRefs, goArray)
+	goArray[len(str)] = 0 // Null termination byte for C strings
 
-	allocator.stringRefs = append(allocator.stringRefs, str)
-
-	// Since a string is a struct of type StringHeader we have to cast it to get the pointer to the real data
-	return (*reflect.StringHeader)(unsafe.Pointer(&str)).Data
+	return uintptr(unsafe.Pointer(&goArray[0]))
 }
 
-// AllocString fills a wafObject with the type typ. Since the string do not have to be null-terminated here we can
-// directly grab the string passed as parameter and use it without anyway copy
 func (allocator *allocator) AllocString(obj *wafObject, typ wafObjectType, str string) {
 	if typ != wafIntType && typ != wafStringType && typ != wafUintType {
 		panic("Cannot allocate this waf object data type from a string: " + strconv.Itoa(int(typ)))
@@ -59,11 +52,14 @@ func (allocator *allocator) AllocString(obj *wafObject, typ wafObjectType, str s
 		return
 	}
 
-	allocator.stringRefs = append(allocator.stringRefs, str)
+	goArray := make([]byte, len(str))
+	copy(goArray, str)
+	allocator.stringRefs = append(allocator.stringRefs, goArray)
 
-	// Since a string is a struct of type StringHeader we have to cast it to get the pointer to the real data
-	obj.value = (*reflect.StringHeader)(unsafe.Pointer(&str)).Data
-	obj.nbEntries = uint64((*reflect.StringHeader)(unsafe.Pointer(&str)).Len)
+	// This line firstly gets the value from the stringRef array. Then manage to get a *byte from the string.
+	// Then cast it into unsafe.Pointer then into uintptr
+	obj.value = uintptr(unsafe.Pointer(&goArray[0]))
+	obj.nbEntries = uint64(len(goArray))
 }
 
 func (allocator *allocator) AllocArray(obj *wafObject, typ wafObjectType, size uint64) []wafObject {
@@ -88,15 +84,15 @@ func (allocator *allocator) AllocArray(obj *wafObject, typ wafObjectType, size u
 	return goArray
 }
 
-// AllocMapKey fills only the elements of a wafObject that will transform it into a key-value pair for the waf.
 func (allocator *allocator) AllocMapKey(obj *wafObject, str string) {
 	if len(str) == 0 {
 		return
 	}
 
-	allocator.stringRefs = append(allocator.stringRefs, str)
+	goArray := make([]byte, len(str))
+	copy(goArray, str)
+	allocator.stringRefs = append(allocator.stringRefs, goArray)
 
-	// Since a string is a struct of type StringHeader we have to cast it to get the pointer to the real data
-	obj.parameterName = (*reflect.StringHeader)(unsafe.Pointer(&str)).Data
-	obj.parameterNameLength = uint64((*reflect.StringHeader)(unsafe.Pointer(&str)).Len)
+	obj.parameterName = uintptr(unsafe.Pointer(&goArray[0]))
+	obj.parameterNameLength = uint64(len(goArray))
 }
