@@ -10,9 +10,11 @@ package waf
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"sync"
+
 	empty_free "github.com/DataDog/go-libddwaf/internal/empty-free"
 	"go.uber.org/atomic"
-	"sync"
 )
 
 // Handle represents an instance of the WAF for a given ruleset.
@@ -33,6 +35,10 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 
 	if err := InitWaf(); err != nil {
 		return nil, err
+	}
+
+	if reflect.ValueOf(rules).Type() == reflect.TypeOf([]byte(nil)) {
+		return nil, errors.New("Cannot encode byte array as top-level rules object")
 	}
 
 	encoder := newMaxEncoder()

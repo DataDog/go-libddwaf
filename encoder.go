@@ -40,8 +40,10 @@ func newMaxEncoder() *encoder {
 }
 
 func (encoder *encoder) Encode(data any) (*wafObject, error) {
+	value := reflect.ValueOf(data)
 	wo := &wafObject{}
-	if err := encoder.encode(reflect.ValueOf(data), wo, encoder.objectMaxDepth); err != nil {
+
+	if err := encoder.encode(value, wo, encoder.objectMaxDepth); err != nil {
 		return nil, err
 	}
 
