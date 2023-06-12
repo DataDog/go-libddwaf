@@ -8,20 +8,11 @@
 package waf
 
 import (
-	"errors"
 	"math"
 	"reflect"
 	"strconv"
 	"strings"
 	"unicode"
-)
-
-var (
-	errMaxDepth         = errors.New("max depth reached")
-	errUnsupportedValue = errors.New("unsupported Go value")
-	errOutOfMemory      = errors.New("out of memory")
-	errInvalidMapKey    = errors.New("invalid WAF object map key")
-	errNilObjectPtr     = errors.New("nil WAF object pointer")
 )
 
 type encoder struct {
@@ -210,12 +201,12 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject) error 
 	kind := value.Kind()
 	for ; kind == reflect.Pointer || kind == reflect.Interface; value, kind = value.Elem(), value.Elem().Kind() {
 		if value.IsNil() {
-			return errUnsupportedValue
+			return errInvalidMapKey
 		}
 	}
 
 	if kind != reflect.String && value.Type() != reflect.TypeOf([]byte(nil)) {
-		return errUnsupportedValue
+		return errInvalidMapKey
 	}
 
 	if value.Type() == reflect.TypeOf([]byte(nil)) {

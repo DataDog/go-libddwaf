@@ -14,14 +14,18 @@ import "sync"
 // when we do a second dlopen on the same file
 var wafLib *wafDl
 var wafErr error
+var wafVersion string
 var openWafOnce sync.Once
 
 func InitWaf() error {
-	if wafLib == nil {
-		openWafOnce.Do(func() {
-			wafLib, wafErr = newWafDl()
-		})
-	}
+	openWafOnce.Do(func() {
+		wafLib, wafErr = newWafDl()
+		if wafErr != nil {
+			return
+		}
+
+		wafVersion = wafLib.wafGetVersion()
+	})
 
 	return wafErr
 }
@@ -38,5 +42,5 @@ func Health() error {
 }
 
 func Version() string {
-	return wafLib.wafGetVersion()
+	return wafVersion
 }

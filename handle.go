@@ -13,7 +13,7 @@ import (
 	"reflect"
 	"sync"
 
-	empty_free "github.com/DataDog/go-libddwaf/internal/empty-free"
+	emptyfree "github.com/DataDog/go-libddwaf/internal/empty-free"
 	"go.uber.org/atomic"
 )
 
@@ -38,7 +38,7 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	}
 
 	if reflect.ValueOf(rules).Type() == reflect.TypeOf([]byte(nil)) {
-		return nil, errors.New("Cannot encode byte array as top-level rules object")
+		return nil, errors.New("cannot encode byte array as top-level rules object")
 	}
 
 	encoder := newMaxEncoder()
@@ -76,6 +76,9 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	}, nil
 }
 
+// NewContext a new WAF context and increase the number of references to the WAF
+// handle. A nil value is returned when the WAF handle can no longer be used
+// or the WAF context couldn't be created.
 func (handle *Handle) NewContext() *Context {
 	// Handle has been released
 	if handle.contextCounter.Load() == 0 {
@@ -91,10 +94,12 @@ func (handle *Handle) NewContext() *Context {
 	return &Context{handle: handle, cContext: cContext}
 }
 
+// RulesetInfo returns the rules initialization metrics for the current WAF handle
 func (handle *Handle) RulesetInfo() RulesetInfo {
 	return handle.rulesetInfo
 }
 
+// Addresses returns the list of addresses the WAF rule is expecting.
 func (handle *Handle) Addresses() []string {
 	return wafLib.wafRequiredAddresses(handle.cHandle)
 }
@@ -109,9 +114,12 @@ func (handle *Handle) CloseContext(context *Context) {
 
 // Close put the handle in termination state, when all the contexts are close the handle will be destroyed
 func (handle *Handle) Close() {
-	if handle.contextCounter.Dec() == 0 {
-		wafLib.wafDestroy(handle.cHandle)
+	// There is still Contexts that are not closed
+	if handle.contextCounter.Dec() > 0 {
+		return
 	}
+
+	wafLib.wafDestroy(handle.cHandle)
 }
 
 func newConfig(allocator *allocator, keyObfuscatorRegex string, valueObfuscatorRegex string) *wafConfig {
@@ -126,7 +134,7 @@ func newConfig(allocator *allocator, keyObfuscatorRegex string, valueObfuscatorR
 			keyRegex:   allocator.AllocRawString(keyObfuscatorRegex),
 			valueRegex: allocator.AllocRawString(valueObfuscatorRegex),
 		},
-		freeFn: empty_free.EmptyFreeFn,
+		freeFn: emptyfree.EmptyFreeFn,
 	}
 	return config
 }

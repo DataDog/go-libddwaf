@@ -23,7 +23,6 @@ type wafDl struct {
 
 	Ddwaf_ruleset_info_free  uintptr `dlsym:"ddwaf_ruleset_info_free"`
 	Ddwaf_init               uintptr `dlsym:"ddwaf_init"`
-	Ddwaf_object_free        uintptr `dlsym:"ddwaf_object_free"`
 	Ddwaf_destroy            uintptr `dlsym:"ddwaf_destroy"`
 	Ddwaf_required_addresses uintptr `dlsym:"ddwaf_required_addresses"`
 	Ddwaf_get_version        uintptr `dlsym:"ddwaf_get_version"`
@@ -47,15 +46,15 @@ func dumpWafLibrary() (*os.File, error) {
 }
 
 // newWafDl loads the waf shared library and loads all the needed symbols
-func newWafDl() (*wafDl, error) {
+func newWafDl() (_ *wafDl, err error) {
 	file, err := dumpWafLibrary()
 	if err != nil {
 		return nil, err
 	}
 
 	defer func() {
-		file.Close()
-		os.Remove(file.Name())
+		err = file.Close()
+		err = os.Remove(file.Name())
 	}()
 
 	var waf wafDl
@@ -94,15 +93,11 @@ func (waf *wafDl) wafRulesetInfoFree(info *wafRulesetInfo) {
 	waf.syscall(waf.Ddwaf_ruleset_info_free, uintptr(unsafe.Pointer(info)))
 }
 
-func (waf *wafDl) wafObjectFree(obj *wafObject) {
-	waf.syscall(waf.Ddwaf_object_free, uintptr(unsafe.Pointer(obj)))
-}
-
 func (waf *wafDl) wafDestroy(handle wafHandle) {
 	waf.syscall(waf.Ddwaf_destroy, uintptr(handle))
 }
 
-// wafRequiredAddresses returns statis strings so we do not need to free them
+// wafRequiredAddresses returns static strings so we do not need to free them
 func (waf *wafDl) wafRequiredAddresses(handle wafHandle) []string {
 	var nbAddresses uint32
 	arrayVoidC := waf.syscall(waf.Ddwaf_required_addresses, uintptr(handle), uintptr(unsafe.Pointer(&nbAddresses)))

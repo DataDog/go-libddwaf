@@ -8,13 +8,20 @@
 package waf
 
 import (
-	"go.uber.org/atomic"
 	"runtime"
 	"sync"
 	"time"
+
+	"go.uber.org/atomic"
 )
 
 // Context is a WAF execution context.
+// It's a wrapper over the void * the WAF returns with ddwaf_context_init()
+// We store in there:
+// * A mutex to order calls to ddwaf_run()
+// * The handle it was created with
+// * The allocator to keep references to the go waf objects we sent
+// * A number of metrics
 type Context struct {
 	handle    *Handle
 	cContext  wafContext
@@ -30,6 +37,14 @@ type Context struct {
 	timeoutCount atomic.Uint64
 }
 
+// Run encode the input data to send it to the WAF and returns the return values of ddwaf_run()
+// The parameters are the following:
+// * addressesToData: a map of key WAF addresses to the user input. The user input can be any go type.
+// * timeout: a timeout value to run the waf. If the threshold is exceeded, ddwaf_run will return without completing everything
+// The return values are the following:
+// * matches: A json string directly sent by the WAF containing all the data necessary for the backend
+// * actions: A array of string referencing which _blocking_ rules have been triggered
+// * err: a RunError error from the error codes the WAF returns
 func (context *Context) Run(addressesToData map[string]any, timeout time.Duration) (matches []byte, actions []string, err error) {
 	if len(addressesToData) == 0 {
 		return
@@ -107,10 +122,9 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []byte, acti
 	return matches, actions, err
 }
 
-// Close calls handle.CloseContext which calls ddwaf_context_destroy
+// Close calls handle.CloseContext which calls ddwaf_context_destroy and maybe also close the handle if it in termination state.
 func (context *Context) Close() {
-	// Needed to make sure the garbage collector does not throw the values send to the WAF
-	// earlier than necessary
+	// Needed to make sure the garbage collector does not throw the values send to the WAF earlier than necessary
 	context.allocator.KeepAlive()
 	context.handle.CloseContext(context)
 }

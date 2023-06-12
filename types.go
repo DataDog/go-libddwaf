@@ -6,6 +6,7 @@
 package waf
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -21,6 +22,15 @@ type RulesetInfo struct {
 	// Ruleset version
 	Version string
 }
+
+// Encoder/Decoder errors
+var (
+	errMaxDepth          = errors.New("max depth reached")
+	errUnsupportedValue  = errors.New("unsupported Go value")
+	errInvalidMapKey     = errors.New("invalid WAF object map key")
+	errNilObjectPtr      = errors.New("nil WAF object pointer")
+	errInvalidObjectType = errors.New("Invalid type encountered when decoding")
+)
 
 // RunError the WAF can return when running it.
 type RunError int
