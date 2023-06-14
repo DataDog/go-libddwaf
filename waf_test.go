@@ -1074,12 +1074,6 @@ func TestEncoder(t *testing.T) {
 
 // This test needs a working encoder to function properly, as it first encodes the objects before decoding them
 func TestDecoder(t *testing.T) {
-	/*e := newMaxEncoder()
-	objBuilder := func(value any) *wafObject {
-		encoded, err := e.Encode(value)
-		require.NoError(t, err, "Encoding object failed")
-		return encoded
-	} */
 
 	t.Run("Actions/one", func(t *testing.T) {
 		input := []string{"one\u0000"}
@@ -1140,138 +1134,51 @@ func TestDecoder(t *testing.T) {
 		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint32(len(actual))))
 	})
 
-	/*t.Run("Valid", func(t *testing.T) {
+	t.Run("Errors", func(t *testing.T) {
+		e := newMaxEncoder()
+		objBuilder := func(value any) *wafObject {
+			encoded, err := e.Encode(value)
+			require.NoError(t, err, "Encoding object failed")
+			return encoded
+		}
+
 		for _, tc := range []struct {
 			Name          string
-			Object        *wafObject
-			ExpectedValue interface{}
+			ExpectedValue map[string][]string
 		}{
 			{
-				Name:          "string",
-				ExpectedValue: "string",
-				Object:        objBuilder("string"),
+				Name:          "empty",
+				ExpectedValue: map[string][]string{},
 			},
 			{
-				Name:          "empty-string",
-				ExpectedValue: "",
-				Object:        objBuilder(""),
+				Name: "one-empty-entry",
+				ExpectedValue: map[string][]string{
+					"afasdfafs": nil,
+				},
 			},
 			{
-				Name:          "uint64",
-				ExpectedValue: uint64(42),
-				Object:        objBuilder(uint64(42)),
+				Name: "one-filled-entry",
+				ExpectedValue: map[string][]string{
+					"afasdfafs": {"rule1", "rule2"},
+				},
 			},
 			{
-				Name:          "int64",
-				ExpectedValue: int64(42),
-				Object:        objBuilder(int64(42)),
-			},
-			{
-				Name:          "array",
-				ExpectedValue: []interface{}{"str1", "str2", "str3", "str4"},
-				Object:        objBuilder([]string{"str1", "str2", "str3", "str4"}),
-			},
-			{
-				Name:          "empty-array",
-				ExpectedValue: []interface{}{},
-				Object:        objBuilder([]interface{}{}),
-			},
-			{
-				Name:          "struct",
-				ExpectedValue: map[string]interface{}{"Str": "string"},
-				Object: objBuilder(struct {
-					Str string
-				}{Str: "string"}),
-			},
-			{
-				Name:          "empty-struct",
-				ExpectedValue: map[string]interface{}{},
-				Object:        objBuilder(struct{}{}),
-			},
-			{
-				Name:          "map",
-				ExpectedValue: map[string]interface{}{"foo": "bar", "bar": "baz", "baz": "foo"},
-				Object:        objBuilder(map[string]interface{}{"foo": "bar", "bar": "baz", "baz": "foo"}),
-			},
-			{
-				Name:          "empty-map",
-				ExpectedValue: map[string]interface{}{},
-				Object:        objBuilder(map[string]interface{}{}),
-			},
-			{
-				Name:          "nested",
-				ExpectedValue: []interface{}{"1", "2", map[string]interface{}{"foo": "bar", "bar": "baz", "baz": "foo"}, []interface{}{"1", "2", "3"}},
-				Object:        objBuilder([]interface{}{1, "2", map[string]string{"foo": "bar", "bar": "baz", "baz": "foo"}, []int{1, 2, 3}}),
+				Name: "multiple-entries",
+				ExpectedValue: map[string][]string{
+					"afasdfafs": {"rule1", "rule2"},
+					"sfdsafdsa": {"rule3", "rule4"},
+				},
 			},
 		} {
-			tc := tc
 			t.Run(tc.Name, func(t *testing.T) {
-				val, err := decodeObject(tc.Object)
+				val, err := decodeErrors(objBuilder(tc.ExpectedValue))
 				require.NoErrorf(t, err, "Error decoding the object: %v", err)
-				require.Equal(t, reflect.TypeOf(tc.ExpectedValue), reflect.TypeOf(val))
 				require.Equal(t, tc.ExpectedValue, val)
 			})
 		}
+
+		e.allocator.KeepAlive()
 	})
-
-	t.Run("Invalid", func(t *testing.T) {
-		for _, tc := range []struct {
-			Name          string
-			Object        *wafObject
-			Modifier      func(object *wafObject)
-			ExpectedError error
-		}{
-			{
-				Name:          "WAF-object",
-				Object:        nil,
-				ExpectedError: errNilObjectPtr,
-			},
-			{
-				Name:          "type",
-				Object:        objBuilder("obj"),
-				Modifier:      func(object *wafObject) { object._type = 5 },
-				ExpectedError: errUnsupportedValue,
-			},
-			{
-				Name:          "map-key-1",
-				Object:        objBuilder(map[string]interface{}{"baz": "foo"}),
-				Modifier:      func(object *wafObject) { object.index(0).setMapKey(nil, 0) },
-				ExpectedError: errInvalidMapKey,
-			},
-			{
-				Name:          "map-key-2",
-				Object:        objBuilder(map[string]interface{}{"baz": "foo"}),
-				Modifier:      func(object *wafObject) { object.index(0).setMapKey(nil, 10) },
-				ExpectedError: errInvalidMapKey,
-			},
-			{
-				Name:          "array-ptr",
-				Object:        objBuilder([]interface{}{"foo"}),
-				Modifier:      func(object *wafObject) { *object.arrayValuePtr() = nil },
-				ExpectedError: errNilObjectPtr,
-			},
-			{
-				Name:          "map-ptr",
-				Object:        objBuilder(map[string]interface{}{"baz": "foo"}),
-				Modifier:      func(object *wafObject) { *object.arrayValuePtr() = nil },
-				ExpectedError: errNilObjectPtr,
-			},
-		} {
-			tc := tc
-			t.Run(tc.Name, func(t *testing.T) {
-				if tc.Modifier != nil {
-					tc.Modifier(tc.Object)
-				}
-				_, err := decodeObject(tc.Object)
-				if tc.ExpectedError != nil {
-					require.Equal(t, tc.ExpectedError, err)
-				} else {
-					require.Error(t, err)
-				}
-
-			})
-		}
-	})*/
 }
 
 func TestObfuscatorConfig(t *testing.T) {
