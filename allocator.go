@@ -13,7 +13,16 @@ import (
 	"unsafe"
 )
 
-// TODO document all this
+// allocator is a way to make sure we can safely send go allocated data on the C side of the WAF
+// The main issue is the following: the wafObject uses a C union to store the tree structure of the full object,
+// union equivalent in go are interfaces and they are not compatible with C unions. The only way to be 100% sure
+// that the Go wafObject struct have the same layout as the C one is to only use primitive types. So the only way to
+// store a raw pointer is to use the uintptr type. But since uintptr do not have pointer semantics (and are just
+// basically integers), we need another structure to store the value as Go pointer because the GC is lurking. That's
+// where the allocator object comes into play: All new wafObject elements are created via this API whose especially
+// built to make sure there is no gap for the Garbage Collector to exploit. From there, since underlying values of the
+// wafObject are either arrays (for maps, structs and arrays) or string (for all ints, booleans and strings),
+// we can store 2 slices of arrays and use runtime.KeepAlive in each code path to protect them from the GC.
 type allocator struct {
 	stringRefs [][]byte
 	arrayRefs  [][]wafObject
@@ -30,7 +39,7 @@ func (allocator *allocator) KeepAlive() {
 	runtime.KeepAlive(allocator.stringRefs)
 }
 
-func (allocator *allocator) AllocRawString(str string) uintptr {
+func (allocator *allocator) AllocCString(str string) uintptr {
 	goArray := make([]byte, len(str)+1)
 	copy(goArray, str)
 	allocator.stringRefs = append(allocator.stringRefs, goArray)
@@ -39,7 +48,7 @@ func (allocator *allocator) AllocRawString(str string) uintptr {
 	return uintptr(unsafe.Pointer(&goArray[0]))
 }
 
-func (allocator *allocator) AllocString(obj *wafObject, typ wafObjectType, str string) {
+func (allocator *allocator) AllocWafString(obj *wafObject, typ wafObjectType, str string) {
 	if typ != wafIntType && typ != wafStringType && typ != wafUintType {
 		panic("Cannot allocate this waf object data type from a string: " + strconv.Itoa(int(typ)))
 	}
@@ -62,7 +71,7 @@ func (allocator *allocator) AllocString(obj *wafObject, typ wafObjectType, str s
 	obj.nbEntries = uint64(len(goArray))
 }
 
-func (allocator *allocator) AllocArray(obj *wafObject, typ wafObjectType, size uint64) []wafObject {
+func (allocator *allocator) AllocWafArray(obj *wafObject, typ wafObjectType, size uint64) []wafObject {
 	if typ != wafMapType && typ != wafArrayType {
 		panic("Cannot allocate this waf object data type as an array: " + strconv.Itoa(int(typ)))
 	}
@@ -84,7 +93,7 @@ func (allocator *allocator) AllocArray(obj *wafObject, typ wafObjectType, size u
 	return goArray
 }
 
-func (allocator *allocator) AllocMapKey(obj *wafObject, str string) {
+func (allocator *allocator) AllocWafMapKey(obj *wafObject, str string) {
 	if len(str) == 0 {
 		return
 	}

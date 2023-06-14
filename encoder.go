@@ -87,7 +87,7 @@ func (encoder *encoder) encodeString(str string, typ wafObjectType, obj *wafObje
 		str = str[:encoder.stringMaxSize]
 	}
 
-	encoder.allocator.AllocString(obj, typ, str)
+	encoder.allocator.AllocWafString(obj, typ, str)
 	return nil
 }
 
@@ -130,7 +130,7 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *wafObject, depth 
 		capacity = encoder.containerMaxSize
 	}
 
-	objArray := encoder.allocator.AllocArray(obj, wafMapType, uint64(capacity))
+	objArray := encoder.allocator.AllocWafArray(obj, wafMapType, uint64(capacity))
 	for i := 0; length < capacity && i < nbFields; i++ {
 		fieldType := typ.Field(i)
 		fieldName, usable := getFieldNameFromType(fieldType)
@@ -170,7 +170,7 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int
 		capacity = encoder.containerMaxSize
 	}
 
-	objArray := encoder.allocator.AllocArray(obj, wafMapType, uint64(capacity))
+	objArray := encoder.allocator.AllocWafArray(obj, wafMapType, uint64(capacity))
 	for iter := value.MapRange(); iter.Next(); {
 		if length == capacity {
 			break
@@ -194,7 +194,7 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int
 }
 
 // encodeMapKey takes a reflect.Value and a wafObject and returns a wafObject ready to be considered a map key
-// We use the function allocator.AllocMapKey to set store the key in the wafObject. But first we need
+// We use the function allocator.AllocWafMapKey to set store the key in the wafObject. But first we need
 // To grab the real underlying value by recursing through the pointer and interface values.
 func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject) error {
 
@@ -210,11 +210,11 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject) error 
 	}
 
 	if value.Type() == reflect.TypeOf([]byte(nil)) {
-		encoder.allocator.AllocMapKey(obj, string(value.Bytes()))
+		encoder.allocator.AllocWafMapKey(obj, string(value.Bytes()))
 	}
 
 	if reflect.String == kind {
-		encoder.allocator.AllocMapKey(obj, value.String())
+		encoder.allocator.AllocWafMapKey(obj, value.String())
 	}
 
 	return nil
@@ -236,7 +236,7 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *wafObject, depth i
 	}
 
 	currIndex := 0
-	objArray := encoder.allocator.AllocArray(obj, wafArrayType, uint64(capacity))
+	objArray := encoder.allocator.AllocWafArray(obj, wafArrayType, uint64(capacity))
 	for i := 0; currIndex < capacity && i < length; i++ {
 
 		objElem := &objArray[currIndex]

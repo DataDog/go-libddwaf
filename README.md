@@ -78,6 +78,19 @@ flowchart LR
     classDef hidden display: none;
 ```
 
+### Allocator
+
+the `allocator` go type is a way to make sure we can safely send go allocated data on the C side of the WAF
+The main issue is the following: the `wafObject` uses a C union to store the tree structure of the full object,
+union equivalent in go are interfaces and they are not compatible with C unions. The only way to be 100% sure
+that the Go `wafObject` struct have the same layout as the C one is to only use primitive types. So the only way to
+store a raw pointer is to use the `uintptr` type. But since `uintptr` do not have pointer semantics (and are just
+basically integers), we need another structure to store the value as Go pointer because the GC is lurking. That's
+where the `allocator` object comes into play: All new `wafObject` elements are created via this API whose especially
+built to make sure there is no gap for the Garbage Collector to exploit. From there, since underlying values of the
+`wafObject` are either arrays (for maps, structs and arrays) or string (for all ints, booleans and strings),
+we can store 2 slices of arrays and use `runtime.KeepAlive` in each code path to protect them from the GC.
+
 ### Typical call to Run()
 
 Here is an example of the flow of operations on a simple call to Run():

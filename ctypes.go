@@ -133,6 +133,6 @@ func cstring(name string) *byte {
 	return &b[0]
 }
 
-func toWafobject(ptr uintptr) *wafObject {
+func toWafObject(ptr uintptr) *wafObject {
 	return (*wafObject)(unsafe.Pointer(ptr))
 }

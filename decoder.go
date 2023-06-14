@@ -24,7 +24,7 @@ func decodeErrors(obj *wafObject) (map[string][]string, error) {
 
 	wafErrors := map[string][]string{}
 	for i := uint64(0); i < obj.nbEntries; i++ {
-		objElem := toWafobject(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{}))
+		objElem := toWafObject(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{}))
 		if objElem._type != wafArrayType {
 			return nil, errInvalidObjectType
 		}
@@ -52,7 +52,7 @@ func decodeRuleIdArray(obj *wafObject) ([]string, error) {
 
 	var ruleIds []string
 	for i := uint64(0); i < obj.nbEntries; i++ {
-		objElem := toWafobject(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{}))
+		objElem := toWafObject(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{}))
 		if objElem._type != wafStringType {
 			return nil, errInvalidObjectType
 		}
@@ -70,6 +70,8 @@ func decodeActions(cActions uintptr, size uint32) []string {
 
 	actions := make([]string, size)
 	for i := 0; i < int(size); i++ {
+		// This line does the following operation without casts:
+		// gostring(*(cActions + i * sizeof(ptr)))
 		actions[i] = gostring(uintptr(unsafe.Pointer(*(**byte)(unsafe.Pointer(cActions + unsafe.Sizeof((*byte)(nil))*uintptr(i))))))
 	}
 

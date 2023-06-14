@@ -131,8 +131,8 @@ func newConfig(allocator *allocator, keyObfuscatorRegex string, valueObfuscatorR
 			maxStringLength:   wafMaxStringLength,
 		},
 		obfuscator: wafConfigObfuscator{
-			keyRegex:   allocator.AllocRawString(keyObfuscatorRegex),
-			valueRegex: allocator.AllocRawString(valueObfuscatorRegex),
+			keyRegex:   allocator.AllocCString(keyObfuscatorRegex),
+			valueRegex: allocator.AllocCString(valueObfuscatorRegex),
 		},
 		freeFn: emptyfree.EmptyFreeFn,
 	}
