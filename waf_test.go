@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"sync"
 	"testing"
 	"text/template"
@@ -1071,29 +1072,75 @@ func TestEncoder(t *testing.T) {
 	}
 }
 
-/* This test needs a working encoder to function properly, as it first encodes the objects before decoding them
+// This test needs a working encoder to function properly, as it first encodes the objects before decoding them
 func TestDecoder(t *testing.T) {
-	e := newMaxEncoder()
-	objBuilder := func(v interface{}) *wafObject {
-		var err error
-		obj := &wafObject{}
-		// Right now the encoder encodes integer values as strings to match the WAF representation.
-		// We circumvent this here by manually encoding so that we can test with WAF objects that hold real integers,
-		// not string representations of integers. See https://github.com/DataDog/libddwaf/issues/41.
-		if v, ok := v.(int64); ok {
-			obj.setInt64(toCInt64(int(v)))
-			return obj
-		}
-		if v, ok := v.(uint64); ok {
-			obj.setUint64(toCUint64(uint(v)))
-			return obj
-		}
-		obj, err = e.encode(v)
+	/*e := newMaxEncoder()
+	objBuilder := func(value any) *wafObject {
+		encoded, err := e.Encode(value)
 		require.NoError(t, err, "Encoding object failed")
-		return obj
-	}
+		return encoded
+	} */
 
-	t.Run("Valid", func(t *testing.T) {
+	t.Run("Actions/one", func(t *testing.T) {
+		input := []string{"one\u0000"}
+		var actual []uintptr
+		var expected []string
+		for _, str := range input {
+			actual = append(actual, (*reflect.StringHeader)(unsafe.Pointer(&str)).Data)
+			expected = append(expected, str[:len(str)-1])
+		}
+
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint32(len(actual))))
+	})
+
+	t.Run("Actions/empty-array", func(t *testing.T) {
+		require.Equal(t, []string(nil), decodeActions(0, 0))
+	})
+
+	t.Run("Actions/empty-string", func(t *testing.T) {
+		input := []string{"\u0000"}
+		var actual []uintptr
+		var expected []string
+		for _, str := range input {
+			actual = append(actual, (*reflect.StringHeader)(unsafe.Pointer(&str)).Data)
+			expected = append(expected, str[:len(str)-1])
+		}
+
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint32(len(actual))))
+	})
+
+	t.Run("Actions/five", func(t *testing.T) {
+		input := []string{"one\u0000", "one\u0000", "one\u0000", "one\u0000", "one\u0000"}
+		var actual []uintptr
+		var expected []string
+		for _, str := range input {
+			actual = append(actual, (*reflect.StringHeader)(unsafe.Pointer(&str)).Data)
+			expected = append(expected, str[:len(str)-1])
+		}
+
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint32(len(actual))))
+	})
+
+	t.Run("Actions/big-string", func(t *testing.T) {
+		p := ""
+		for i := 0; i < 100; i++ {
+			p += "it's more "
+		}
+
+		p += "\u0000"
+
+		input := []string{p}
+		var actual []uintptr
+		var expected []string
+		for _, str := range input {
+			actual = append(actual, (*reflect.StringHeader)(unsafe.Pointer(&str)).Data)
+			expected = append(expected, str[:len(str)-1])
+		}
+
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint32(len(actual))))
+	})
+
+	/*t.Run("Valid", func(t *testing.T) {
 		for _, tc := range []struct {
 			Name          string
 			Object        *wafObject
@@ -1224,8 +1271,8 @@ func TestDecoder(t *testing.T) {
 
 			})
 		}
-	})
-}*/
+	})*/
+}
 
 func TestObfuscatorConfig(t *testing.T) {
 	rule := newArachniTestRule([]ruleInput{{Address: "my.addr", KeyPath: []string{"key"}}}, nil)

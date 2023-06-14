@@ -64,6 +64,10 @@ func decodeRuleIdArray(obj *wafObject) ([]string, error) {
 }
 
 func decodeActions(cActions uintptr, size uint32) []string {
+	if size == 0 {
+		return nil
+	}
+
 	actions := make([]string, size)
 	for i := 0; i < int(size); i++ {
 		actions[i] = gostring(uintptr(unsafe.Pointer(*(**byte)(unsafe.Pointer(cActions + unsafe.Sizeof((*byte)(nil))*uintptr(i))))))
