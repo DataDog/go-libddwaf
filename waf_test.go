@@ -13,6 +13,7 @@ import (
 	"github.com/ebitengine/purego"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"sync"
 	"testing"
 	"text/template"
@@ -1371,7 +1372,8 @@ func BenchmarkBindingsPuregoWithCGO(b *testing.B) {
 	b.Run("purego-with-CGO", func(b *testing.B) {
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
-			purego.SyscallN(get_version_sym)
+			r1, _, _ := purego.SyscallN(get_version_sym)
+			runtime.KeepAlive(r1)
 		}
 	})
 }
@@ -1382,7 +1384,54 @@ func BenchmarkBindingsCGO(b *testing.B) {
 	b.Run("CGO", func(b *testing.B) {
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
-			getWAFVersionBench()
+			runtime.KeepAlive(getWAFVersionBench())
 		}
 	})
+}
+
+func BenchmarkOverall(b *testing.B) {
+
+	rnd := rand.New(rand.NewSource(42))
+	buf := make([]byte, 4096)
+	n, err := rnd.Read(buf)
+	fullstr := string(buf)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	var matches []byte
+	var actions []string
+
+	for _, l := range []int{16, 64, 128, 256, 512, 1024, 2048, 4096} {
+		b.Run(fmt.Sprintf("%d", l), func(b *testing.B) {
+			b.ReportAllocs()
+			handle, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "input1"}, {Address: "input2"}, {Address: "input3"}, {Address: "input4"}}, nil))
+			str := fullstr[:l]
+			slice := []string{str, str, str, str, str, str, str, str, str, str}
+			data := map[string]interface{}{
+				"input1": slice,
+				"input2": slice,
+				"input3": slice,
+				"input4": slice,
+			}
+			if err != nil || n != len(buf) {
+				b.Fatal(err)
+			}
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				context := NewContext(handle)
+				matches, actions, err = context.Run(data, time.Hour)
+				if err != nil {
+					b.Fatal(err)
+				}
+
+				context.Close()
+			}
+
+			b.StopTimer()
+			handle.Close()
+			runtime.KeepAlive(matches)
+			runtime.KeepAlive(actions)
+		})
+	}
 }
