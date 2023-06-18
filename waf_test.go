@@ -258,8 +258,8 @@ func TestAddresses(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
-	// Start 800 goroutines that will use the WAF 500 times each
-	nbUsers := 50
+	// Start 200 goroutines that will use the WAF 500 times each
+	nbUsers := 200
 	nbRun := 500
 
 	t.Run("concurrent-waf-context-usage", func(t *testing.T) {
@@ -383,6 +383,57 @@ func TestConcurrency(t *testing.T) {
 		// that should be latter.
 		startBarrier.Done() // Unblock the user goroutines
 		stopBarrier.Wait()  // Wait for the user goroutines to be done
+	})
+
+	t.Run("concurrent-waf-handle-close", func(t *testing.T) {
+		// Test that the reference counter of a WAF handle is properly
+		// implemented by running many WAF context creations/deletion
+		// concurrently with their WAF handle closing.
+		// This test's execution order is not deterministic and simply tries to
+		// maximize the chances to highlight ref-counter problems, in particular
+		// the special ref-counter case where the WAF handle gets completely
+		// released when it reaches 0.
+
+		waf, err := newDefaultHandle(testArachniRule)
+		require.NoError(t, err)
+
+		var startBarrier, stopBarrier sync.WaitGroup
+		// Create a start barrier to synchronize every goroutine's launch and
+		// increase the chances of parallel accesses
+		startBarrier.Add(1)
+		// Create a stopBarrier to signal when all user goroutines are done.
+		stopBarrier.Add(nbUsers + 1) // +1 is the goroutine closing the WAF handle
+
+		// Goroutines concurrently creating and destroying WAF contexts so that
+		// the WAF handle ref-counter gets stressed out.
+		for n := 0; n < nbUsers; n++ {
+			go func() {
+				startBarrier.Wait()      // Sync the starts of the goroutines
+				defer stopBarrier.Done() // Signal we are done when returning
+
+				wafCtx := waf.NewContext()
+				if wafCtx == nil {
+					return
+				}
+				wafCtx.Close()
+			}()
+		}
+
+		// Single goroutine closing the WAF handle
+		go func() {
+			startBarrier.Wait()      // Sync the starts of the goroutines
+			defer stopBarrier.Done() // Signal we are done when returning
+			time.Sleep(time.Microsecond)
+			waf.Close()
+		}()
+
+		// Save the test start time to compare it to the first metrics store's
+		// that should be latter.
+		startBarrier.Done() // Unblock the user goroutines
+		stopBarrier.Wait()  // Wait for the user goroutines to be done
+
+		// The test mustn't crash and ref-counter must be 0
+		require.Zero(t, waf.contextCounter.Load())
 	})
 }
 
