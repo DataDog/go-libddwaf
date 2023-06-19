@@ -31,7 +31,7 @@ type Handle struct {
 	// time with their own set of rules. This choice was done to be able to
 	// efficiently update the security rules concurrently, without having to
 	// block the request handlers for the time of the security rules update.
-	refCounter *atomic.Uint32
+	refCounter *atomic.Int32
 
 	// RWMutex protecting the R/W accesses to the internal rules data (stored
 	// in the handle).
@@ -82,7 +82,7 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 
 	return &Handle{
 		cHandle:    cHandle,
-		refCounter: atomic.NewUint32(1), // We count the handle itself in the counter
+		refCounter: atomic.NewInt32(1), // We count the handle itself in the counter
 		rulesetInfo: RulesetInfo{
 			Loaded:  cRulesetInfo.loaded,
 			Failed:  cRulesetInfo.failed,
@@ -97,7 +97,7 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 // or the WAF context couldn't be created.
 func NewContext(handle *Handle) *Context {
 	// Handle has been released
-	if handle.incrementRefCounter() == 0 {
+	if handle.addRefCounter(1) == 0 {
 		return nil
 	}
 
@@ -122,7 +122,7 @@ func (handle *Handle) Addresses() []string {
 // CloseContext calls ddwaf_context_destroy and eventually ddwaf_destroy on the handle
 func (handle *Handle) CloseContext(context *Context) {
 	wafLib.wafContextDestroy(context.cContext)
-	if handle.refCounter.Dec() == 0 {
+	if handle.addRefCounter(-1) == 0 {
 		wafLib.wafDestroy(handle.cHandle)
 	}
 }
@@ -130,25 +130,25 @@ func (handle *Handle) CloseContext(context *Context) {
 // Close puts the handle in termination state, when all the contexts are closed the handle will be destroyed
 func (handle *Handle) Close() {
 	// There are still Contexts that are not closed
-	if handle.refCounter.Dec() > 0 {
+	if handle.addRefCounter(-1) > 0 {
 		return
 	}
 
 	wafLib.wafDestroy(handle.cHandle)
 }
 
-// incrementRefCounter add 1 to Handle.refCounter.
+// addRefCounter add x to Handle.refCounter.
 // It relies on a CAS spin-loop implementation in order to avoid changing the
 // counter when 0 has been reached.
-func (handle *Handle) incrementRefCounter() uint32 {
+func (handle *Handle) addRefCounter(x int32) int32 {
 	for {
 		current := handle.refCounter.Load()
 		if current == 0 {
 			// The object was released
 			return 0
 		}
-		if swapped := handle.refCounter.CompareAndSwap(current, current+1); swapped {
-			return current + 1
+		if swapped := handle.refCounter.CompareAndSwap(current, current+x); swapped {
+			return current + x
 		}
 	}
 }

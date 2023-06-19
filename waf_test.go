@@ -393,7 +393,6 @@ func TestConcurrency(t *testing.T) {
 		// maximize the chances to highlight ref-counter problems, in particular
 		// the special ref-counter case where the WAF handle gets completely
 		// released when it reaches 0.
-
 		waf, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 
