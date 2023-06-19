@@ -80,7 +80,7 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 // NewContext a new WAF context and increase the number of references to the WAF
 // handle. A nil value is returned when the WAF handle can no longer be used
 // or the WAF context couldn't be created.
-func (handle *Handle) NewContext() *Context {
+func NewContext(handle *Handle) *Context {
 	// Handle has been released
 	if handle.incrementRefCounter() == 0 {
 		return nil
