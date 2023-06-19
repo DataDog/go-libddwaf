@@ -10,19 +10,34 @@ package waf
 import (
 	"errors"
 	"fmt"
-	"reflect"
-	"sync"
-
 	emptyfree "github.com/DataDog/go-libddwaf/internal/empty-free"
 	"go.uber.org/atomic"
+	"reflect"
+	"sync"
 )
 
 // Handle represents an instance of the WAF for a given ruleset.
 type Handle struct {
+	// Instance of the WAF
 	cHandle wafHandle
-	mutex   sync.RWMutex
 
-	refCounter  *atomic.Uint32
+	// Lock-less reference counter avoiding blocking calls to the Close() method
+	// while WAF contexts are still using the WAF handle. Instead, we let the
+	// release actually happen only when the reference counter reaches 0.
+	// This can happen either from a request handler calling its WAF context's
+	// Close() method, or either from the appsec instance calling the WAF
+	// handle's Close() method when creating a new WAF handle with new rules.
+	// Note that this means several instances of the WAF can exist at the same
+	// time with their own set of rules. This choice was done to be able to
+	// efficiently update the security rules concurrently, without having to
+	// block the request handlers for the time of the security rules update.
+	refCounter *atomic.Uint32
+
+	// RWMutex protecting the R/W accesses to the internal rules data (stored
+	// in the handle).
+	mutex sync.RWMutex
+
+	// rulesetInfo holds information about rules initialization
 	rulesetInfo RulesetInfo
 }
 

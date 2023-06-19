@@ -23,9 +23,12 @@ import (
 // * cgoRefs to keep references to the go waf objects we sent
 // * A number of metrics
 type Context struct {
+	// Instance of the WAF
 	handle   *Handle
 	cContext wafContext
-	mutex    sync.Mutex
+
+	// Mutex protecting the use of context which is not thread-safe.
+	mutex sync.Mutex
 
 	// cgoRefs is used to retain go references to WafObjects until the context is destroyed.
 	// As per libddwaf documentation, WAF Objects must be alive during all the context lifetime

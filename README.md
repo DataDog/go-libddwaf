@@ -12,32 +12,32 @@ import waf "github.com/DataDog/go-libddwaf"
 var ruleset []byte
 
 func main() {
-	var parsedRuleset any
+    var parsedRuleset any
 
-	if err := json.Unmarshal(ruleset, &parsedRuleset); err != nil {
+    if err := json.Unmarshal(ruleset, &parsedRuleset); err != nil {
         return 1
     }
 
-	wafHandle, err := waf.NewHandle(parsedRuleset, "", "")
+    wafHandle, err := waf.NewHandle(parsedRuleset, "", "")
     if err != nil {
         return 1
     }
 
-	defer wafHandle.Close()
+    defer wafHandle.Close()
 
     wafCtx := wafHandle.NewContext()
     defer wafCtx.Close()
 
-	matches, actions := wafCtx.Run(map[string]any{
-		"server.request.path_params": "/rfiinc.txt",
-	}, time.Minute)
+    matches, actions := wafCtx.Run(map[string]any{
+        "server.request.path_params": "/rfiinc.txt",
+    }, time.Minute)
 }
 ```
 
 The API documentation details can be found on [pkg.go.dev](https://pkg.go.dev/github.com/DataDog/go-libddwaf).
 
 Originally this project was only here to provide CGO Wrappers to the calls to libddwaf.
-But with the API evolution of the Waf, the appearance of Waf Objects used be able to create more easily bindings in a variety of languages,
+But with the appearance of `ddwaf_object` tree like structure,
 but also with the intention to build CGO-less bindings, this project size has grown to be a fully integrated brick in the DataDog tracer structure.
 Which in turn made it necessary to document the project, to maintain it in an orderly fashion.
 
@@ -83,7 +83,7 @@ The cgoRefPool is a pure Go cgoRefPool of `ddwaf_object` C values on the Go memo
 the `cgoRefPool` go type is a way to make sure we can safely send go allocated data to the C side of the WAF
 The main issue is the following: the `wafObject` uses a C union to store the tree structure of the full object,
 union equivalent in go are interfaces and they are not compatible with C unions. The only way to be 100% sure
-that the Go `wafObject` struct have the same layout as the C one is to only use primitive types. So the only way to
+that the Go `wafObject` struct has the same layout as the C one is to only use primitive types. So the only way to
 store a raw pointer is to use the `uintptr` type. But since `uintptr` do not have pointer semantics (and are just
 basically integers), we need another structure to store the value as Go pointer because the GC is lurking. That's
 where the `cgoRefPool` object comes into play: all new `wafObject` elements are created via this API whose especially
@@ -104,7 +104,7 @@ Here is an example of the flow of operations on a simple call to Run():
 
 The main component used to build C bindings without using CGO is called [purego](https://github.com/ebitengine/purego). The flow of execution on our side is to embed the C shared library using `go:embed`. Then to dump it into a file, load it using `dlopen` and to load the symbols using `dlsym`. And finally to call them.
 
-⚠️ Keep in mind that __purego only works on linux/darwin for amd64/arm64 and so does go-libddwaf.__
+⚠️ Keep in mind that **purego only works on linux/darwin for amd64/arm64 and so does go-libddwaf.**
 
 Another requirement of `libddwaf` is to have a FHS filesystem on your machine and, for linux, to provide `libc.so.6`, `libpthread.so.0` and `libm.so.6`, `libdl.so.2` as dynamic libraries.
 
