@@ -48,12 +48,8 @@ func (refPool *cgoRefPool) AllocCString(str string) uintptr {
 	return uintptr(unsafe.Pointer(&goArray[0]))
 }
 
-func (refPool *cgoRefPool) AllocWafString(obj *wafObject, typ wafObjectType, str string) {
-	if typ != wafIntType && typ != wafStringType && typ != wafUintType {
-		panic("Cannot allocate this waf object data type from a string: " + strconv.Itoa(int(typ)))
-	}
-
-	obj._type = typ
+func (refPool *cgoRefPool) AllocWafString(obj *wafObject, str string) {
+	obj._type = wafStringType
 
 	if len(str) == 0 {
 		obj.nbEntries = 0

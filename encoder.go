@@ -88,7 +88,7 @@ func (encoder *encoder) encodeString(str string, typ wafObjectType, obj *wafObje
 		str = str[:encoder.stringMaxSize]
 	}
 
-	encoder.cgoRefs.AllocWafString(obj, typ, str)
+	encoder.cgoRefs.AllocWafString(obj, str)
 	return nil
 }
 
