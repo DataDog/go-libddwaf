@@ -433,7 +433,7 @@ func TestConcurrency(t *testing.T) {
 		stopBarrier.Wait()  // Wait for the user goroutines to be done
 
 		// The test mustn't crash and ref-counter must be 0
-		require.Zero(t, waf.contextCounter.Load())
+		require.Zero(t, waf.refCounter.Load())
 	})
 }
 
