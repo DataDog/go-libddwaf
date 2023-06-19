@@ -48,9 +48,9 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 		return nil, fmt.Errorf("could not encode the WAF ruleset into a WAF object: %w", err)
 	}
 
-	defer encoder.allocator.KeepAlive()
+	defer encoder.cgoRefs.KeepAlive()
 
-	config := newConfig(&encoder.allocator, keyObfuscatorRegex, valueObfuscatorRegex)
+	config := newConfig(&encoder.cgoRefs, keyObfuscatorRegex, valueObfuscatorRegex)
 	cRulesetInfo := new(wafRulesetInfo)
 
 	cHandle := wafLib.wafInit(obj, config, cRulesetInfo)
@@ -138,7 +138,7 @@ func (handle *Handle) incrementRefCounter() uint32 {
 	}
 }
 
-func newConfig(allocator *allocator, keyObfuscatorRegex string, valueObfuscatorRegex string) *wafConfig {
+func newConfig(cgoRefs *cgoRefPool, keyObfuscatorRegex string, valueObfuscatorRegex string) *wafConfig {
 	config := new(wafConfig)
 	*config = wafConfig{
 		limits: wafConfigLimits{
@@ -147,8 +147,8 @@ func newConfig(allocator *allocator, keyObfuscatorRegex string, valueObfuscatorR
 			maxStringLength:   wafMaxStringLength,
 		},
 		obfuscator: wafConfigObfuscator{
-			keyRegex:   allocator.AllocCString(keyObfuscatorRegex),
-			valueRegex: allocator.AllocCString(valueObfuscatorRegex),
+			keyRegex:   cgoRefs.AllocCString(keyObfuscatorRegex),
+			valueRegex: cgoRefs.AllocCString(valueObfuscatorRegex),
 		},
 		freeFn: emptyfree.EmptyFreeFn,
 	}

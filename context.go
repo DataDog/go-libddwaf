@@ -20,13 +20,16 @@ import (
 // We store in there:
 // * A mutex to order calls to ddwaf_run()
 // * The handle it was created with
-// * The allocator to keep references to the go waf objects we sent
+// * cgoRefs to keep references to the go waf objects we sent
 // * A number of metrics
 type Context struct {
-	handle    *Handle
-	cContext  wafContext
-	mutex     sync.Mutex
-	allocator allocator
+	handle   *Handle
+	cContext wafContext
+	mutex    sync.Mutex
+
+	// cgoRefs is used to retain go references to WafObjects until the context is destroyed.
+	// As per libddwaf documentation, WAF Objects must be alive during all the context lifetime
+	cgoRefs cgoRefPool
 
 	// Stats
 	// Cumulated internal WAF run time - in nanoseconds - for this context.
@@ -69,12 +72,12 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 	// ddwaf_run cannot run concurrently and the next append write on the context state so we need a mutex
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
-	defer context.allocator.append(encoder.allocator)
+	defer context.cgoRefs.append(encoder.cgoRefs)
 
-	return context.run(obj, timeout, &encoder.allocator)
+	return context.run(obj, timeout, &encoder.cgoRefs)
 }
 
-func (context *Context) run(obj *wafObject, timeout time.Duration, allocator *allocator) ([]byte, []string, error) {
+func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) ([]byte, []string, error) {
 	// RLock the handle to safely get read access to the WAF handle and prevent concurrent changes of it
 	// such as a rules-data update.
 	context.handle.mutex.RLock()
@@ -85,7 +88,7 @@ func (context *Context) run(obj *wafObject, timeout time.Duration, allocator *al
 
 	ret := wafLib.wafRun(context.cContext, obj, result, uint64(timeout/time.Microsecond))
 	// Needed to prevent the GC
-	allocator.KeepAlive()
+	cgoRefs.KeepAlive()
 	runtime.KeepAlive(obj)
 
 	context.totalRuntimeNs.Add(result.total_runtime)
@@ -124,7 +127,7 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []byte, acti
 // Close calls handle.CloseContext which calls ddwaf_context_destroy and maybe also close the handle if it in termination state.
 func (context *Context) Close() {
 	// Needed to make sure the garbage collector does not throw the values send to the WAF earlier than necessary
-	context.allocator.KeepAlive()
+	context.cgoRefs.KeepAlive()
 	context.handle.CloseContext(context)
 }
 
