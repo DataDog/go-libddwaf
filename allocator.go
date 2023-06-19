@@ -65,8 +65,6 @@ func (allocator *allocator) AllocWafString(obj *wafObject, typ wafObjectType, st
 	copy(goArray, str)
 	allocator.stringRefs = append(allocator.stringRefs, goArray)
 
-	// This line firstly gets the value from the stringRef array. Then manage to get a *byte from the string.
-	// Then cast it into unsafe.Pointer then into uintptr
 	obj.value = uintptr(unsafe.Pointer(&goArray[0]))
 	obj.nbEntries = uint64(len(goArray))
 }
@@ -88,7 +86,6 @@ func (allocator *allocator) AllocWafArray(obj *wafObject, typ wafObjectType, siz
 	goArray := make([]wafObject, size)
 	allocator.arrayRefs = append(allocator.arrayRefs, goArray)
 
-	//Here we transform the go array into a go pointer then we cast it into unsafe.Pointer then into uintptr
 	obj.value = uintptr(unsafe.Pointer(&goArray[0]))
 	return goArray
 }

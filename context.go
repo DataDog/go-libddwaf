@@ -37,13 +37,13 @@ type Context struct {
 	timeoutCount atomic.Uint64
 }
 
-// Run encode the input data to send it to the WAF and returns the return values of ddwaf_run()
+// Run encodes the input data to send it to the WAF and returns the return values of ddwaf_run()
 // The parameters are the following:
 // * addressesToData: a map of key WAF addresses to the user input. The user input can be any go type.
 // * timeout: a timeout value to run the waf. If the threshold is exceeded, ddwaf_run will return without completing everything
 // The return values are the following:
 // * matches: A json string directly sent by the WAF containing all the data necessary for the backend
-// * actions: A array of string referencing which _blocking_ rules have been triggered
+// * actions: A array of string referencing actions from triggered rules (`on_match` rule field)
 // * err: a RunError error from the error codes the WAF returns
 func (context *Context) Run(addressesToData map[string]any, timeout time.Duration) (matches []byte, actions []string, err error) {
 	if len(addressesToData) == 0 {
@@ -68,7 +68,6 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 
 	// ddwaf_run cannot run concurrently and the next append write on the context state so we need a mutex
 	context.mutex.Lock()
-
 	defer context.mutex.Unlock()
 	defer context.allocator.append(encoder.allocator)
 

@@ -112,7 +112,7 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 	return fieldName, true
 }
 
-// encodeStruct takes a reflect.Value and a wafObject pointer and iterate on the struct field to build
+// encodeStruct takes a reflect.Value and a wafObject pointer and iterates on the struct field to build
 // a wafObject map of type wafMapType. The specificities are the following:
 // - It will only take the first encoder.containerMaxSize elements of the struct
 // - If the field has a json tag it will become the field name
@@ -150,12 +150,12 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *wafObject, depth 
 		length++
 	}
 
-	// Fix the size because we skipped fields
+	// Set the length to the final number of successfully encoded elements
 	obj.nbEntries = uint64(length)
 	return nil
 }
 
-// encodeMap takes a reflect.Value and a wafObject pointer and iterate on the map elements and returns
+// encodeMap takes a reflect.Value and a wafObject pointer and iterates on the map elements and returns
 // a wafObject map of type wafMapType. The specificities are the following:
 // - It will only take the first encoder.containerMaxSize elements of the map
 // - Values and keys producing an error at encoding will be skipped
@@ -194,10 +194,9 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int
 }
 
 // encodeMapKey takes a reflect.Value and a wafObject and returns a wafObject ready to be considered a map key
-// We use the function allocator.AllocWafMapKey to set store the key in the wafObject. But first we need
-// To grab the real underlying value by recursing through the pointer and interface values.
+// We use the function allocator.AllocWafMapKey to store the key in the wafObject. But first we need
+// to grab the real underlying value by recursing through the pointer and interface values.
 func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject) error {
-
 	kind := value.Kind()
 	for ; kind == reflect.Pointer || kind == reflect.Interface; value, kind = value.Elem(), value.Elem().Kind() {
 		if value.IsNil() {
@@ -220,7 +219,7 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject) error 
 	return nil
 }
 
-// encodeArray takes a reflect.Value and a wafObject pointer and iterate on the elements and returns
+// encodeArray takes a reflect.Value and a wafObject pointer and iterates on the elements and returns
 // a wafObject array of type wafArrayType. The specificities are the following:
 // - It will only take the first encoder.containerMaxSize elements of the array
 // - Values producing an error at encoding will be skipped
@@ -238,7 +237,6 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *wafObject, depth i
 	currIndex := 0
 	objArray := encoder.allocator.AllocWafArray(obj, wafArrayType, uint64(capacity))
 	for i := 0; currIndex < capacity && i < length; i++ {
-
 		objElem := &objArray[currIndex]
 		if encoder.encode(value.Index(i), objElem, depth-1) != nil {
 			continue

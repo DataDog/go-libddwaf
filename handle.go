@@ -21,13 +21,14 @@ import (
 type Handle struct {
 	cHandle        wafHandle
 	mutex          sync.RWMutex
+
 	contextCounter *atomic.Uint32
 	rulesetInfo    RulesetInfo
 }
 
-// NewHandle takes rules and the obfuscator config and return a new WAF to work with. The order of action is the following:
+// NewHandle takes rules and the obfuscator config and returns a new WAF to work with. The order of action is the following:
 // - Open the WAF library libddwaf.so using dlopen
-// - Encode the rule free form object as a ddwaf_object so send them to the WAF
+// - Encode the rule free form object as a ddwaf_object to send them to the WAF
 // - Create a ddwaf_config object and fill the values
 // - Run ddwaf_init to get a handle from the waf
 // - Check for errors and streamline the ddwaf_ruleset_info returned
@@ -104,7 +105,7 @@ func (handle *Handle) Addresses() []string {
 	return wafLib.wafRequiredAddresses(handle.cHandle)
 }
 
-// CloseContext call ddwaf_context_destroy and eventually ddwaf_destroy on the handle
+// CloseContext calls ddwaf_context_destroy and eventually ddwaf_destroy on the handle
 func (handle *Handle) CloseContext(context *Context) {
 	wafLib.wafContextDestroy(context.cContext)
 	if handle.contextCounter.Dec() == 0 {
@@ -112,9 +113,9 @@ func (handle *Handle) CloseContext(context *Context) {
 	}
 }
 
-// Close put the handle in termination state, when all the contexts are close the handle will be destroyed
+// Close puts the handle in termination state, when all the contexts are closed the handle will be destroyed
 func (handle *Handle) Close() {
-	// There is still Contexts that are not closed
+	// There are still Contexts that are not closed
 	if handle.contextCounter.Dec() > 0 {
 		return
 	}
