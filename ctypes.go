@@ -136,3 +136,26 @@ func cstring(name string) *byte {
 func toWafObject(ptr uintptr) *wafObject {
 	return (*wafObject)(unsafe.Pointer(ptr))
 }
+
+//go:linkname cgoUse runtime.cgoUse
+func cgoUse(any)
+
+//go:linkname cgoFalse runtime.cgoAlwaysFalse
+var cgoFalse bool
+
+// keepAlive is a copy of runtime.KeepAlive
+// keepAlive has 2 usages:
+// It forces the deallocation of the memory to take place later than expected (just like runtime.KeepAlive), and
+// it forces the memory to be on the heap by calling a variadic parameter function which calls to go:linkname function.
+// Of course the if is always true and the function always returns but the compiler does not know this
+//
+//go:noinline
+func keepAlive(args ...any) {
+	if !cgoFalse {
+		return
+	}
+
+	for _, arg := range args {
+		cgoUse(arg)
+	}
+}

@@ -8,7 +8,6 @@
 package waf
 
 import (
-	"runtime"
 	"sync"
 	"time"
 
@@ -86,16 +85,19 @@ func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoR
 	context.handle.mutex.RLock()
 	defer context.handle.mutex.RUnlock()
 
-	result := new(wafResult)
-	defer wafLib.wafResultFree(result)
+	var result wafResult
+	defer func() {
+		wafLib.wafResultFree(&result)
 
-	ret := wafLib.wafRun(context.cContext, obj, result, uint64(timeout/time.Microsecond))
-	// Needed to prevent the GC
-	cgoRefs.KeepAlive()
-	runtime.KeepAlive(obj)
+		// Force everything on the heap and prevent and early GC during C calls
+		keepAlive(obj, &result)
+		cgoRefs.KeepAlive()
+	}()
+
+	ret := wafLib.wafRun(context.cContext, obj, &result, uint64(timeout/time.Microsecond))
 
 	context.totalRuntimeNs.Add(result.total_runtime)
-	matches, actions, err := unwrapWafResult(ret, result)
+	matches, actions, err := unwrapWafResult(ret, &result)
 	if err == ErrTimeout {
 		context.timeoutCount.Inc()
 	}

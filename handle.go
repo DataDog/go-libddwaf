@@ -66,14 +66,20 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	defer encoder.cgoRefs.KeepAlive()
 
 	config := newConfig(&encoder.cgoRefs, keyObfuscatorRegex, valueObfuscatorRegex)
-	cRulesetInfo := new(wafRulesetInfo)
+	var cRulesetInfo wafRulesetInfo
 
-	cHandle := wafLib.wafInit(obj, config, cRulesetInfo)
+	cHandle := wafLib.wafInit(obj, config, &cRulesetInfo)
 	if cHandle == 0 {
 		return nil, errors.New("could not instanciate the WAF")
 	}
 
-	defer wafLib.wafRulesetInfoFree(cRulesetInfo)
+	defer func() {
+		wafLib.wafRulesetInfoFree(&cRulesetInfo)
+
+		// Prevent and early GC during C calls
+		keepAlive(obj, cRulesetInfo)
+		encoder.cgoRefs.KeepAlive()
+	}()
 
 	errorsMap, err := decodeErrors(&cRulesetInfo.errors)
 	if err != nil { // Something is very wrong
