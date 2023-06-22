@@ -52,8 +52,9 @@ func newWafDl() (_ *wafDl, err error) {
 	}
 
 	defer func() {
-		err = file.Close()
-		err = os.Remove(file.Name())
+		// TODO(eliott.bouhana): find a way to send to the tracer some non-fatal errors while opening the waf libg
+		file.Close()
+		os.Remove(file.Name())
 	}()
 
 	var waf wafDl

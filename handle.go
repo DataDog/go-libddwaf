@@ -10,7 +10,7 @@ package waf
 import (
 	"errors"
 	"fmt"
-	emptyfree "github.com/DataDog/go-libddwaf/internal/empty-free"
+	"github.com/DataDog/go-libddwaf/internal/noopfree"
 	"go.uber.org/atomic"
 	"reflect"
 	"sync"
@@ -171,7 +171,8 @@ func newConfig(cgoRefs *cgoRefPool, keyObfuscatorRegex string, valueObfuscatorRe
 			keyRegex:   cgoRefs.AllocCString(keyObfuscatorRegex),
 			valueRegex: cgoRefs.AllocCString(valueObfuscatorRegex),
 		},
-		freeFn: emptyfree.EmptyFreeFn,
+		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
+		freeFn: noopfree.NoopFreeFn,
 	}
 	return config
 }

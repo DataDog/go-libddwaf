@@ -10,12 +10,16 @@ package waf
 
 import "sync"
 
-// For now we have to do dlopen on a global level because MacOS WAF behaves stangely
-// when we do a second dlopen on the same file
-var wafLib *wafDl
-var wafErr error
+// Globally dlopen() libddwaf only once because several dlopens (eg. during tests) aren't
+// supported on macOS.
+var (
+	// libddwaf's dynamic library handle and entrypoints
+	wafLib *wafDl
+	// libddwaf's dlopen error if any
+	wafErr      error
+	openWafOnce sync.Once
+)
 var wafVersion string
-var openWafOnce sync.Once
 
 func InitWaf() error {
 	openWafOnce.Do(func() {

@@ -3,10 +3,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-package empty_free
+package noopfree
 
 import "unsafe"
 
-//go:linkname _empty_free _empty_free
-var _empty_free byte
-var EmptyFreeFn uintptr = uintptr(unsafe.Pointer(&_empty_free))
+//go:linkname _noop_free _noop_free
+var _noop_free byte
+var NoopFreeFn uintptr = uintptr(unsafe.Pointer(&_noop_free))
