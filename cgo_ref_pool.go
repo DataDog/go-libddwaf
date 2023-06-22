@@ -9,7 +9,6 @@ package waf
 
 import (
 	"strconv"
-	"unsafe"
 )
 
 // cgoRefPool is a way to make sure we can safely send go allocated data on the C side of the WAF
@@ -43,7 +42,7 @@ func (refPool *cgoRefPool) AllocCString(str string) uintptr {
 	refPool.stringRefs = append(refPool.stringRefs, goArray)
 	goArray[len(str)] = 0 // Null termination byte for C strings
 
-	return uintptr(unsafe.Pointer(&goArray[0]))
+	return sliceToUintptr(goArray)
 }
 
 func (refPool *cgoRefPool) AllocWafString(obj *wafObject, str string) {
@@ -59,7 +58,7 @@ func (refPool *cgoRefPool) AllocWafString(obj *wafObject, str string) {
 	copy(goArray, str)
 	refPool.stringRefs = append(refPool.stringRefs, goArray)
 
-	obj.value = uintptr(unsafe.Pointer(&goArray[0]))
+	obj.value = sliceToUintptr(goArray)
 	obj.nbEntries = uint64(len(goArray))
 }
 
@@ -80,7 +79,7 @@ func (refPool *cgoRefPool) AllocWafArray(obj *wafObject, typ wafObjectType, size
 	goArray := make([]wafObject, size)
 	refPool.arrayRefs = append(refPool.arrayRefs, goArray)
 
-	obj.value = uintptr(unsafe.Pointer(&goArray[0]))
+	obj.value = sliceToUintptr(goArray)
 	return goArray
 }
 
@@ -93,6 +92,6 @@ func (refPool *cgoRefPool) AllocWafMapKey(obj *wafObject, str string) {
 	copy(goArray, str)
 	refPool.stringRefs = append(refPool.stringRefs, goArray)
 
-	obj.parameterName = uintptr(unsafe.Pointer(&goArray[0]))
+	obj.parameterName = sliceToUintptr(goArray)
 	obj.parameterNameLength = uint64(len(goArray))
 }

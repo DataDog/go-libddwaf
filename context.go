@@ -119,21 +119,21 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []byte, acti
 	}
 
 	if result.data != 0 {
-		matches = []byte(gostring(result.data))
+		matches = []byte(gostring(cast[byte](result.data)))
 	}
 
 	if size := result.actions.size; size > 0 {
-		actions = decodeActions(result.actions.array, size)
+		actions = decodeActions(result.actions.array, uint64(size))
 	}
 
 	return matches, actions, err
 }
 
-// Close calls handle.CloseContext which calls ddwaf_context_destroy and maybe also close the handle if it in termination state.
+// Close calls handle.closeContext which calls ddwaf_context_destroy and maybe also close the handle if it in termination state.
 func (context *Context) Close() {
 	// Needed to make sure the garbage collector does not throw the values send to the WAF earlier than necessary
 	context.cgoRefs.KeepAlive()
-	context.handle.CloseContext(context)
+	context.handle.closeContext(context)
 }
 
 // TotalRuntime returns the cumulated WAF runtime across various run calls within the same WAF context.

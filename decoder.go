@@ -7,10 +7,6 @@
 
 package waf
 
-import (
-	"unsafe"
-)
-
 // decodeErrors tranforms the wafObject received by the wafRulesetInfo after the call to wafDl.wafInit to a map where
 // keys are the error message and the value is a array of all the rule ids which triggered this specific error
 func decodeErrors(obj *wafObject) (map[string][]string, error) {
@@ -24,12 +20,12 @@ func decodeErrors(obj *wafObject) (map[string][]string, error) {
 
 	wafErrors := map[string][]string{}
 	for i := uint64(0); i < obj.nbEntries; i++ {
-		objElem := toWafObject(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{}))
+		objElem := castWithOffset[wafObject](obj.value, i)
 		if objElem._type != wafArrayType {
 			return nil, errInvalidObjectType
 		}
 
-		errorMessage := gostringSized(objElem.parameterName, objElem.parameterNameLength)
+		errorMessage := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
 		ruleIds, err := decodeRuleIdArray(objElem)
 		if err != nil {
 			return nil, err
@@ -52,27 +48,27 @@ func decodeRuleIdArray(obj *wafObject) ([]string, error) {
 
 	var ruleIds []string
 	for i := uint64(0); i < obj.nbEntries; i++ {
-		objElem := toWafObject(obj.value + uintptr(i)*unsafe.Sizeof(wafObject{}))
+		objElem := castWithOffset[wafObject](obj.value, i)
 		if objElem._type != wafStringType {
 			return nil, errInvalidObjectType
 		}
 
-		ruleIds = append(ruleIds, gostringSized(objElem.value, objElem.nbEntries))
+		ruleIds = append(ruleIds, gostringSized(cast[byte](objElem.value), objElem.nbEntries))
 	}
 
 	return ruleIds, nil
 }
 
-func decodeActions(cActions uintptr, size uint32) []string {
+func decodeActions(cActions uintptr, size uint64) []string {
 	if size == 0 {
 		return nil
 	}
 
 	actions := make([]string, size)
-	for i := 0; i < int(size); i++ {
+	for i := uint64(0); i < size; i++ {
 		// This line does the following operation without casts:
 		// gostring(*(cActions + i * sizeof(ptr)))
-		actions[i] = gostring(uintptr(unsafe.Pointer(*(**byte)(unsafe.Pointer(cActions + unsafe.Sizeof((*byte)(nil))*uintptr(i))))))
+		actions[i] = gostring(*castWithOffset[*byte](cActions, i))
 	}
 
 	return actions

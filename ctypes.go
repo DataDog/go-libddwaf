@@ -8,7 +8,10 @@
 
 package waf
 
-import "unsafe"
+import (
+	"reflect"
+	"unsafe"
+)
 
 const (
 	wafMaxStringLength   = 4096
@@ -101,29 +104,26 @@ type wafHandle uintptr
 type wafContext uintptr
 
 // gostring copies a char* to a Go string.
-func gostring(c uintptr) string {
-	// We take the address and then dereference it to trick go vet from creating a possible misuse of unsafe.Pointer
-	ptr := *(*unsafe.Pointer)(unsafe.Pointer(&c))
+func gostring(ptr *byte) string {
 	if ptr == nil {
 		return ""
 	}
 	var length int
 	for {
-		if *(*byte)(unsafe.Add(ptr, uintptr(length))) == '\x00' {
+		if *(*byte)(unsafe.Add(unsafe.Pointer(ptr), uintptr(length))) == '\x00' {
 			break
 		}
 		length++
 	}
 	//string builtin copies the slice
-	return string(unsafe.Slice((*byte)(ptr), length))
+	return string(unsafe.Slice(ptr, length))
 }
 
-func gostringSized(c uintptr, size uint64) string {
-	ptr := *(*unsafe.Pointer)(unsafe.Pointer(&c))
+func gostringSized(ptr *byte, size uint64) string {
 	if ptr == nil {
 		return ""
 	}
-	return string(unsafe.Slice((*byte)(ptr), size))
+	return string(unsafe.Slice(ptr, size))
 }
 
 // cstring converts a go string to *byte that can be passed to C code.
@@ -133,8 +133,29 @@ func cstring(name string) *byte {
 	return &b[0]
 }
 
-func toWafObject(ptr uintptr) *wafObject {
-	return (*wafObject)(unsafe.Pointer(ptr))
+// cast is used to centralized unsafe use C allocated pointer.
+// We take the address and then dereference it to trick go vet from creating a possible misuse of unsafe.Pointer
+func cast[T any](ptr uintptr) *T {
+	return (*T)(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)))
+}
+
+// castWithOffset is the same as cast but adding an offset to the pointer by a multiple of the size
+// of the type pointed.
+func castWithOffset[T any](ptr uintptr, offset uint64) *T {
+	return (*T)(unsafe.Add(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)), offset*uint64(unsafe.Sizeof(*new(T)))))
+}
+
+// ptrToUintptr is a helper to centralize of usage of unsafe.Pointer
+func ptrToUintptr[T any](arg *T) uintptr {
+	return uintptr(unsafe.Pointer(arg))
+}
+
+func sliceToUintptr[T any](arg []T) uintptr {
+	return (*reflect.SliceHeader)(unsafe.Pointer(&arg)).Data
+}
+
+func stringToUintptr[T any](arg string) uintptr {
+	return (*reflect.StringHeader)(unsafe.Pointer(&arg)).Data
 }
 
 //go:linkname cgoUse runtime.cgoUse

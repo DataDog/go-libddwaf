@@ -1134,7 +1134,7 @@ func TestDecoder(t *testing.T) {
 			expected = append(expected, str[:len(str)-1])
 		}
 
-		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint32(len(actual))))
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint64(len(actual))))
 	})
 
 	t.Run("Actions/empty-array", func(t *testing.T) {
@@ -1150,7 +1150,7 @@ func TestDecoder(t *testing.T) {
 			expected = append(expected, str[:len(str)-1])
 		}
 
-		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint32(len(actual))))
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint64(len(actual))))
 	})
 
 	t.Run("Actions/five", func(t *testing.T) {
@@ -1162,7 +1162,7 @@ func TestDecoder(t *testing.T) {
 			expected = append(expected, str[:len(str)-1])
 		}
 
-		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint32(len(actual))))
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint64(len(actual))))
 	})
 
 	t.Run("Actions/big-string", func(t *testing.T) {
@@ -1181,7 +1181,7 @@ func TestDecoder(t *testing.T) {
 			expected = append(expected, str[:len(str)-1])
 		}
 
-		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint32(len(actual))))
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint64(len(actual))))
 	})
 
 	t.Run("Errors", func(t *testing.T) {

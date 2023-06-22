@@ -30,13 +30,6 @@ func InitWaf() error {
 	return wafErr
 }
 
-func CloseWaf() error {
-	err := wafLib.Close()
-	wafLib = nil
-	wafErr = nil
-	return err
-}
-
 func Health() error {
 	return InitWaf()
 }

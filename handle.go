@@ -93,7 +93,7 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 			Loaded:  cRulesetInfo.loaded,
 			Failed:  cRulesetInfo.failed,
 			Errors:  errorsMap,
-			Version: gostring(cRulesetInfo.version),
+			Version: gostring(cast[byte](cRulesetInfo.version)),
 		},
 	}, nil
 }
@@ -125,8 +125,8 @@ func (handle *Handle) Addresses() []string {
 	return wafLib.wafRequiredAddresses(handle.cHandle)
 }
 
-// CloseContext calls ddwaf_context_destroy and eventually ddwaf_destroy on the handle
-func (handle *Handle) CloseContext(context *Context) {
+// closeContext calls ddwaf_context_destroy and eventually ddwaf_destroy on the handle
+func (handle *Handle) closeContext(context *Context) {
 	wafLib.wafContextDestroy(context.cContext)
 	if handle.addRefCounter(-1) == 0 {
 		wafLib.wafDestroy(handle.cHandle)

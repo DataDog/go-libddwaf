@@ -72,7 +72,7 @@ func TestWafObject(t *testing.T) {
 		var actual wafObject
 		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), uintptr(unsafe.Pointer(&actual)), uintptr(unsafe.Pointer(cstring("toto"))))
 		require.NotEqualValues(t, 0, r1)
-		require.Equal(t, "toto", gostring(actual.value))
+		require.Equal(t, "toto", gostring(cast[byte](actual.value)))
 		require.EqualValues(t, wafStringType, actual._type)
 	})
 
@@ -80,15 +80,15 @@ func TestWafObject(t *testing.T) {
 		var actual [3]wafObject
 		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), uintptr(unsafe.Pointer(&actual[0])), uintptr(unsafe.Pointer(cstring("toto1"))))
 		require.NotEqualValues(t, 0, r1)
-		require.Equal(t, "toto1", gostring(actual[0].value))
+		require.Equal(t, "toto1", gostring(cast[byte](actual[0].value)))
 		require.EqualValues(t, wafStringType, actual[0]._type)
 		r1, _, _ = purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), uintptr(unsafe.Pointer(&actual[1])), uintptr(unsafe.Pointer(cstring("toto2"))))
 		require.NotEqualValues(t, 0, r1)
-		require.Equal(t, "toto2", gostring(actual[1].value))
+		require.Equal(t, "toto2", gostring(cast[byte](actual[1].value)))
 		require.EqualValues(t, wafStringType, actual[1]._type)
 		r1, _, _ = purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), uintptr(unsafe.Pointer(&actual[2])), uintptr(unsafe.Pointer(cstring("toto3"))))
 		require.NotEqualValues(t, 0, r1)
-		require.Equal(t, "toto3", gostring(actual[2].value))
+		require.Equal(t, "toto3", gostring(cast[byte](actual[2].value)))
 		require.EqualValues(t, wafStringType, actual[2]._type)
 	})
 
