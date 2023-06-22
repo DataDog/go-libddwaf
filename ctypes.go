@@ -146,6 +146,7 @@ func castWithOffset[T any](ptr uintptr, offset uint64) *T {
 }
 
 // ptrToUintptr is a helper to centralize of usage of unsafe.Pointer
+// do not use this function to cast interfaces
 func ptrToUintptr[T any](arg *T) uintptr {
 	return uintptr(unsafe.Pointer(arg))
 }
@@ -154,15 +155,12 @@ func sliceToUintptr[T any](arg []T) uintptr {
 	return (*reflect.SliceHeader)(unsafe.Pointer(&arg)).Data
 }
 
-func stringToUintptr[T any](arg string) uintptr {
+func stringToUintptr(arg string) uintptr {
 	return (*reflect.StringHeader)(unsafe.Pointer(&arg)).Data
 }
 
-//go:linkname cgoUse runtime.cgoUse
-func cgoUse(any)
-
-//go:linkname cgoFalse runtime.cgoAlwaysFalse
-var cgoFalse bool
+var alwaysFalse bool
+var escapeSink any
 
 // keepAlive is a copy of runtime.KeepAlive
 // keepAlive has 2 usages:
@@ -171,12 +169,9 @@ var cgoFalse bool
 // Of course the if is always true and the function always returns but the compiler does not know this
 //
 //go:noinline
-func keepAlive(args ...any) {
-	if !cgoFalse {
-		return
+func keepAlive[T any](x T) T {
+	if alwaysFalse {
+		escapeSink = x
 	}
-
-	for _, arg := range args {
-		cgoUse(arg)
-	}
+	return x
 }

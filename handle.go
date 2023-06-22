@@ -76,8 +76,9 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	defer func() {
 		wafLib.wafRulesetInfoFree(&cRulesetInfo)
 
-		// Prevent and early GC during C calls
-		keepAlive(obj, cRulesetInfo)
+		// Prevent early GC during C calls and force heap allocation
+		keepAlive(obj)
+		keepAlive(&cRulesetInfo)
 		encoder.cgoRefs.KeepAlive()
 	}()
 

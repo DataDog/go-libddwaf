@@ -90,7 +90,8 @@ func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoR
 		wafLib.wafResultFree(&result)
 
 		// Force everything on the heap and prevent and early GC during C calls
-		keepAlive(obj, &result)
+		keepAlive(obj)
+		keepAlive(&result)
 		cgoRefs.KeepAlive()
 	}()
 

@@ -33,7 +33,8 @@ func (refPool *cgoRefPool) append(newRefs cgoRefPool) {
 
 // KeepAlive is needed at the end of the context life cycle to keep the GC from making a terrible mistake
 func (refPool *cgoRefPool) KeepAlive() {
-	keepAlive(refPool.arrayRefs, refPool.stringRefs)
+	keepAlive(refPool.arrayRefs)
+	keepAlive(refPool.stringRefs)
 }
 
 func (refPool *cgoRefPool) AllocCString(str string) uintptr {
