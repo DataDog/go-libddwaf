@@ -169,9 +169,8 @@ var escapeSink any
 // Of course the if is always true and the function always returns but the compiler does not know this
 //
 //go:noinline
-func keepAlive[T any](x T) T {
+func keepAlive[T any](x T) {
 	if alwaysFalse {
 		escapeSink = x
 	}
-	return x
 }

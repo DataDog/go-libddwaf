@@ -85,20 +85,13 @@ func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoR
 	context.handle.mutex.RLock()
 	defer context.handle.mutex.RUnlock()
 
-	var result wafResult
-	defer func() {
-		wafLib.wafResultFree(&result)
+	result := new(wafResult)
+	defer wafLib.wafResultFree(result)
 
-		// Force everything on the heap and prevent and early GC during C calls
-		keepAlive(obj)
-		keepAlive(&result)
-		cgoRefs.KeepAlive()
-	}()
-
-	ret := wafLib.wafRun(context.cContext, obj, &result, uint64(timeout/time.Microsecond))
+	ret := wafLib.wafRun(context.cContext, obj, result, uint64(timeout/time.Microsecond))
 
 	context.totalRuntimeNs.Add(result.total_runtime)
-	matches, actions, err := unwrapWafResult(ret, &result)
+	matches, actions, err := unwrapWafResult(ret, result)
 	if err == ErrTimeout {
 		context.timeoutCount.Inc()
 	}
@@ -133,7 +126,8 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []byte, acti
 // Close calls handle.closeContext which calls ddwaf_context_destroy and maybe also close the handle if it in termination state.
 func (context *Context) Close() {
 	// Needed to make sure the garbage collector does not throw the values send to the WAF earlier than necessary
-	context.cgoRefs.KeepAlive()
+	keepAlive(context.cgoRefs.stringRefs)
+	keepAlive(context.cgoRefs.arrayRefs)
 	context.handle.closeContext(context)
 }
 

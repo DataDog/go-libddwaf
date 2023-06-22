@@ -1227,7 +1227,8 @@ func TestDecoder(t *testing.T) {
 			})
 		}
 
-		e.cgoRefs.KeepAlive()
+		keepAlive(e.cgoRefs.arrayRefs)
+		keepAlive(e.cgoRefs.stringRefs)
 	})
 }
 

@@ -86,21 +86,26 @@ func (waf *wafDl) wafGetVersion() string {
 }
 
 func (waf *wafDl) wafInit(obj *wafObject, config *wafConfig, info *wafRulesetInfo) wafHandle {
-	return wafHandle(waf.syscall(waf.Ddwaf_init, ptrToUintptr(obj), ptrToUintptr(config), ptrToUintptr(info)))
+	handle := wafHandle(waf.syscall(waf.Ddwaf_init, ptrToUintptr(obj), ptrToUintptr(config), ptrToUintptr(info)))
+	keepAlive(obj)
+	keepAlive(config)
+	keepAlive(info)
+	return handle
 }
 
 func (waf *wafDl) wafRulesetInfoFree(info *wafRulesetInfo) {
 	waf.syscall(waf.Ddwaf_ruleset_info_free, ptrToUintptr(info))
+	keepAlive(info)
 }
 
 func (waf *wafDl) wafDestroy(handle wafHandle) {
 	waf.syscall(waf.Ddwaf_destroy, uintptr(handle))
+	keepAlive(handle)
 }
 
 // wafRequiredAddresses returns static strings so we do not need to free them
 func (waf *wafDl) wafRequiredAddresses(handle wafHandle) []string {
 	var nbAddresses uint32
-	defer keepAlive(&nbAddresses)
 
 	arrayVoidC := waf.syscall(waf.Ddwaf_required_addresses, uintptr(handle), ptrToUintptr(&nbAddresses))
 	if arrayVoidC == 0 {
@@ -112,21 +117,33 @@ func (waf *wafDl) wafRequiredAddresses(handle wafHandle) []string {
 		addresses[i] = gostring(*castWithOffset[*byte](arrayVoidC, uint64(i)))
 	}
 
+	keepAlive(&nbAddresses)
+	keepAlive(handle)
+
 	return addresses
 }
 
 func (waf *wafDl) wafContextInit(handle wafHandle) wafContext {
-	return wafContext(waf.syscall(waf.Ddwaf_context_init, uintptr(handle)))
+	ctx := wafContext(waf.syscall(waf.Ddwaf_context_init, uintptr(handle)))
+	keepAlive(handle)
+	return ctx
 }
 
 func (waf *wafDl) wafContextDestroy(context wafContext) {
 	waf.syscall(waf.Ddwaf_context_destroy, uintptr(context))
+	keepAlive(context)
 }
 
 func (waf *wafDl) wafResultFree(result *wafResult) {
 	waf.syscall(waf.Ddwaf_result_free, ptrToUintptr(result))
+	keepAlive(result)
 }
 
 func (waf *wafDl) wafRun(context wafContext, obj *wafObject, result *wafResult, timeout uint64) wafReturnCode {
-	return wafReturnCode(waf.syscall(waf.Ddwaf_run, uintptr(context), ptrToUintptr(obj), ptrToUintptr(result), uintptr(timeout)))
+	rc := wafReturnCode(waf.syscall(waf.Ddwaf_run, uintptr(context), ptrToUintptr(obj), ptrToUintptr(result), uintptr(timeout)))
+	keepAlive(context)
+	keepAlive(obj)
+	keepAlive(result)
+	keepAlive(timeout)
+	return rc
 }

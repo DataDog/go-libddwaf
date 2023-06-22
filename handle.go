@@ -63,24 +63,15 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 		return nil, fmt.Errorf("could not encode the WAF ruleset into a WAF object: %w", err)
 	}
 
-	defer encoder.cgoRefs.KeepAlive()
-
 	config := newConfig(&encoder.cgoRefs, keyObfuscatorRegex, valueObfuscatorRegex)
-	var cRulesetInfo wafRulesetInfo
+	cRulesetInfo := new(wafRulesetInfo)
 
-	cHandle := wafLib.wafInit(obj, config, &cRulesetInfo)
+	cHandle := wafLib.wafInit(obj, config, cRulesetInfo)
 	if cHandle == 0 {
 		return nil, errors.New("could not instanciate the WAF")
 	}
 
-	defer func() {
-		wafLib.wafRulesetInfoFree(&cRulesetInfo)
-
-		// Prevent early GC during C calls and force heap allocation
-		keepAlive(obj)
-		keepAlive(&cRulesetInfo)
-		encoder.cgoRefs.KeepAlive()
-	}()
+	defer wafLib.wafRulesetInfoFree(cRulesetInfo)
 
 	errorsMap, err := decodeErrors(&cRulesetInfo.errors)
 	if err != nil { // Something is very wrong
