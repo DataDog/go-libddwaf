@@ -14,24 +14,18 @@ import (
 	"go.uber.org/atomic"
 )
 
-// Context is a WAF execution context.
-// It's a wrapper over the void * the WAF returns with ddwaf_context_init()
-// We store in there:
-// * A mutex to order calls to ddwaf_run()
-// * The handle it was created with
-// * cgoRefs to keep references to the go waf objects we sent
-// * A number of metrics
+// Context is a WAF execution context. It allows running the WAF incrementally
+// when calling it multiple times to run its rules every time new addresses
+// become available. Each request must have its own Context.
 type Context struct {
 	// Instance of the WAF
 	handle   *Handle
 	cContext wafContext
-
-	// Mutex protecting the use of context which is not thread-safe.
-	mutex sync.Mutex
-
 	// cgoRefs is used to retain go references to WafObjects until the context is destroyed.
 	// As per libddwaf documentation, WAF Objects must be alive during all the context lifetime
 	cgoRefs cgoRefPool
+	// Mutex protecting the use of cContext which is not thread-safe and cgoRefs.
+	mutex sync.Mutex
 
 	// Stats
 	// Cumulated internal WAF run time - in nanoseconds - for this context.
@@ -42,14 +36,10 @@ type Context struct {
 	timeoutCount atomic.Uint64
 }
 
-// Run encodes the input data to send it to the WAF and returns the return values of ddwaf_run()
-// The parameters are the following:
-// * addressesToData: a map of key WAF addresses to the user input. The user input can be any go type.
-// * timeout: a timeout value to run the waf. If the threshold is exceeded, ddwaf_run will return without completing everything
-// The return values are the following:
-// * matches: A json string directly sent by the WAF containing all the data necessary for the backend
-// * actions: A array of string referencing actions from triggered rules (`on_match` rule field)
-// * err: a RunError error from the error codes the WAF returns
+// Run encodes the given addressesToData values and runs them against the WAF rules within the given
+// timeout value. It returns the matches as a JSON string (usually opaquely used) along with the corresponding
+// actions in any. In case of an error, matches and actions can still be returned, for instance in the case of a
+// timeout error. Errors can be tested against the RunError type.
 func (context *Context) Run(addressesToData map[string]any, timeout time.Duration) (matches []byte, actions []string, err error) {
 	if len(addressesToData) == 0 {
 		return

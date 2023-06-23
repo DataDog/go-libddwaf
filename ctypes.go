@@ -159,14 +159,17 @@ func stringToUintptr(arg string) uintptr {
 	return (*reflect.StringHeader)(unsafe.Pointer(&arg)).Data
 }
 
-var alwaysFalse bool
-var escapeSink any
+// keepAlive() globals
+var (
+	alwaysFalse bool
+	escapeSink any
+)
 
 // keepAlive is a copy of runtime.KeepAlive
 // keepAlive has 2 usages:
-// It forces the deallocation of the memory to take place later than expected (just like runtime.KeepAlive), and
-// it forces the memory to be on the heap by calling a variadic parameter function which calls to go:linkname function.
-// Of course the if is always true and the function always returns but the compiler does not know this
+// - It forces the deallocation of the memory to take place later than expected (just like runtime.KeepAlive)
+// - It forces the given argument x to be escaped on the heap by saving it into a global value (Go doesn't provide a standard way to do it as of today)
+// It is implemented so that the compiler cannot optimize it.
 //
 //go:noinline
 func keepAlive[T any](x T) {
