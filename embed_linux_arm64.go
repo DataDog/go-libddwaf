@@ -9,5 +9,5 @@ package waf
 
 import _ "embed" // Needed for go:embed
 
-//go:embed lib/linux-arm64/_libddwaf.so
+//go:embed lib/linux-arm64/libddwaf.so
 var libddwaf []byte
