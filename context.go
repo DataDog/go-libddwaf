@@ -64,6 +64,9 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 	// ddwaf_run cannot run concurrently and the next append write on the context state so we need a mutex
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
+
+	// Save the Go pointer references to addressesToData that were referenced by the encoder
+	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the ddwaf_context.
 	defer context.cgoRefs.append(encoder.cgoRefs)
 
 	return context.run(obj, timeout, &encoder.cgoRefs)

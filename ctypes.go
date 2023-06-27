@@ -133,7 +133,7 @@ func cstring(name string) *byte {
 	return &b[0]
 }
 
-// cast is used to centralized unsafe use C allocated pointer.
+// cast is used to centralize unsafe use C of allocated pointer.
 // We take the address and then dereference it to trick go vet from creating a possible misuse of unsafe.Pointer
 func cast[T any](ptr uintptr) *T {
 	return (*T)(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)))
