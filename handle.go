@@ -41,20 +41,18 @@ type Handle struct {
 	rulesetInfo RulesetInfo
 }
 
-// NewHandle takes rules and the obfuscator config and returns a new WAF to work with. The order of action is the following:
-// - Open the WAF library libddwaf.so using dlopen
-// - Encode the rule free form object as a ddwaf_object to send them to the WAF
-// - Create a ddwaf_config object and fill the values
-// - Run ddwaf_init to get a handle from the waf
-// - Check for errors and streamline the ddwaf_ruleset_info returned
+// NewHandle creates and returns a new instance of the WAF with the given security rules and configuration
+// of the sensitive data obfuscator. The returned handle is nil in case of an error.
+// Rules-related metrics, including errors, are accessible with the `RulesetInfo()` method. 
 func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string) (*Handle, error) {
-
+// The order of action is the following:
+// - Open the ddwaf C library
+// - Encode the security rules as a ddwaf_object
+// - Create a ddwaf_config object and fill the values
+// - Run ddwaf_init to create a new handle based on the given rules and config
+// - Check for errors and streamline the ddwaf_ruleset_info returned
 	if err := InitWaf(); err != nil {
 		return nil, err
-	}
-
-	if reflect.ValueOf(rules).Type() == reflect.TypeOf([]byte(nil)) {
-		return nil, errors.New("cannot encode byte array as top-level rules object")
 	}
 
 	encoder := newMaxEncoder()
@@ -67,8 +65,11 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	cRulesetInfo := new(wafRulesetInfo)
 
 	cHandle := wafLib.wafInit(obj, config, cRulesetInfo)
+	keepAlive(encoder.cgoRefs)
+	// Note that the encoded obj was copied by libddwaf, so we don't need to keep them alive
+	// for the lifetime of the handle (ddwaf API guarantee). 
 	if cHandle == 0 {
-		return nil, errors.New("could not instanciate the WAF")
+		return nil, errors.New("could not instantiate the WAF")
 	}
 
 	defer wafLib.wafRulesetInfoFree(cRulesetInfo)
@@ -90,7 +91,9 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	}, nil
 }
 
-// NewContext a new WAF context and increase the number of references to the WAF
+// NewContext returns a new WAF context of to the given WAF handle.
+// A nil value is returned when the WAF handle was released or when the
+// WAF context couldn't be created.
 // handle. A nil value is returned when the WAF handle can no longer be used
 // or the WAF context couldn't be created.
 func NewContext(handle *Handle) *Context {
@@ -101,6 +104,7 @@ func NewContext(handle *Handle) *Context {
 
 	cContext := wafLib.wafContextInit(handle.cHandle)
 	if cContext == 0 {
+		handle.addRefCounter(-1)
 		return nil
 	}
 
@@ -127,8 +131,8 @@ func (handle *Handle) closeContext(context *Context) {
 
 // Close puts the handle in termination state, when all the contexts are closed the handle will be destroyed
 func (handle *Handle) Close() {
-	// There are still Contexts that are not closed
 	if handle.addRefCounter(-1) > 0 {
+	// There are still Contexts that are not closed
 		return
 	}
 

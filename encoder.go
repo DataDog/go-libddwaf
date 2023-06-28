@@ -15,7 +15,13 @@ import (
 	"unicode"
 )
 
-// encoder
+// Encode Go values into wafObjects. Only the subset of Go types representable into wafObjects
+// will be encoded while ignoring the rest of it.
+// The encoder allocates the memory required for new wafObjects into the Go memory, which must be kept
+// referenced for their lifetime in the C world. This lifetime depends on the ddwaf function being used with.
+// the encoded result. The Go references of the allocated wafObjects, along with every Go pointer they may
+// reference now or in the future, are stored and referenced in the `cgoRefs` field. The user MUST leverage
+// `keepAlive()` with it according to its ddwaf use-case.
 type encoder struct {
 	containerMaxSize int
 	stringMaxSize    int

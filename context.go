@@ -118,10 +118,11 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []byte, acti
 
 // Close calls handle.closeContext which calls ddwaf_context_destroy and maybe also close the handle if it in termination state.
 func (context *Context) Close() {
-	// Needed to make sure the garbage collector does not throw the values send to the WAF earlier than necessary
-	keepAlive(context.cgoRefs.stringRefs)
-	keepAlive(context.cgoRefs.arrayRefs)
-	context.handle.closeContext(context)
+	defer context.handle.closeContext(context)
+	// Keep the Go pointer references until the end of the context
+	keepAlive(context.cgoRefs)
+	// The context is no longer used so we can try releasing the Go pointer references asap by nulling them
+	context.cgoRefs = cgoRefPool{}
 }
 
 // TotalRuntime returns the cumulated WAF runtime across various run calls within the same WAF context.
