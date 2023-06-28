@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"github.com/DataDog/go-libddwaf/internal/noopfree"
 	"go.uber.org/atomic"
-	"reflect"
 	"sync"
 )
 
@@ -89,26 +88,6 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 			Version: gostring(cast[byte](cRulesetInfo.version)),
 		},
 	}, nil
-}
-
-// NewContext returns a new WAF context of to the given WAF handle.
-// A nil value is returned when the WAF handle was released or when the
-// WAF context couldn't be created.
-// handle. A nil value is returned when the WAF handle can no longer be used
-// or the WAF context couldn't be created.
-func NewContext(handle *Handle) *Context {
-	// Handle has been released
-	if handle.addRefCounter(1) == 0 {
-		return nil
-	}
-
-	cContext := wafLib.wafContextInit(handle.cHandle)
-	if cContext == 0 {
-		handle.addRefCounter(-1)
-		return nil
-	}
-
-	return &Context{handle: handle, cContext: cContext}
 }
 
 // RulesetInfo returns the rules initialization metrics for the current WAF handle

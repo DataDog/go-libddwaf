@@ -36,6 +36,27 @@ type Context struct {
 	timeoutCount atomic.Uint64
 }
 
+// NewContext returns a new WAF context of to the given WAF handle.
+// A nil value is returned when the WAF handle was released or when the
+// WAF context couldn't be created.
+// handle. A nil value is returned when the WAF handle can no longer be used
+// or the WAF context couldn't be created.
+func NewContext(handle *Handle) *Context {
+	// Handle has been released
+	if handle.addRefCounter(1) == 0 {
+		return nil
+	}
+
+	cContext := wafLib.wafContextInit(handle.cHandle)
+	if cContext == 0 {
+		handle.addRefCounter(-1)
+		return nil
+	}
+
+	return &Context{handle: handle, cContext: cContext}
+}
+
+
 // Run encodes the given addressesToData values and runs them against the WAF rules within the given
 // timeout value. It returns the matches as a JSON string (usually opaquely used) along with the corresponding
 // actions in any. In case of an error, matches and actions can still be returned, for instance in the case of a
