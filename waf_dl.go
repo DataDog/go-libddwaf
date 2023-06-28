@@ -4,14 +4,13 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Purego only works on linux/macOS with amd64 and arm64 from now
-//go:build (linux || darwin) && (amd64 || arm64) && !cgo
+//go:build (linux || darwin) && (amd64 || arm64)
 
 package waf
 
 import (
 	"fmt"
 	"os"
-	"unsafe"
 )
 
 // wafDl is the type wrapper for all C calls to the waf
@@ -23,7 +22,6 @@ type wafDl struct {
 
 	Ddwaf_ruleset_info_free  uintptr `dlsym:"ddwaf_ruleset_info_free"`
 	Ddwaf_init               uintptr `dlsym:"ddwaf_init"`
-	Ddwaf_object_free        uintptr `dlsym:"ddwaf_object_free"`
 	Ddwaf_destroy            uintptr `dlsym:"ddwaf_destroy"`
 	Ddwaf_required_addresses uintptr `dlsym:"ddwaf_required_addresses"`
 	Ddwaf_get_version        uintptr `dlsym:"ddwaf_get_version"`
@@ -47,18 +45,20 @@ func dumpWafLibrary() (*os.File, error) {
 }
 
 // newWafDl loads the waf shared library and loads all the needed symbols
-func newWafDl() (*wafDl, error) {
+func newWafDl() (_ *wafDl, err error) {
 	file, err := dumpWafLibrary()
 	if err != nil {
 		return nil, err
 	}
 
 	defer func() {
+		// TODO(eliott.bouhana): find a way to send to the tracer some non-fatal errors while opening the waf libg
 		file.Close()
 		os.Remove(file.Name())
 	}()
 
 	var waf wafDl
+
 	if err := dlOpen(file.Name(), &waf); err != nil {
 		return nil, fmt.Errorf("Error opening waf library: %w", err)
 	}
@@ -82,53 +82,68 @@ func (waf *wafDl) tryCall() (err any) {
 
 // wafGetVersion returned string is a static string so we do not need to free it
 func (waf *wafDl) wafGetVersion() string {
-	return gostring(waf.syscall(waf.Ddwaf_get_version))
+	return gostring(cast[byte](waf.syscall(waf.Ddwaf_get_version)))
 }
 
 func (waf *wafDl) wafInit(obj *wafObject, config *wafConfig, info *wafRulesetInfo) wafHandle {
-	return wafHandle(waf.syscall(waf.Ddwaf_init, uintptr(unsafe.Pointer(obj)), uintptr(unsafe.Pointer(config)), uintptr(unsafe.Pointer(info))))
+	handle := wafHandle(waf.syscall(waf.Ddwaf_init, ptrToUintptr(obj), ptrToUintptr(config), ptrToUintptr(info)))
+	keepAlive(obj)
+	keepAlive(config)
+	keepAlive(info)
+	return handle
 }
 
 func (waf *wafDl) wafRulesetInfoFree(info *wafRulesetInfo) {
-	waf.syscall(waf.Ddwaf_ruleset_info_free, uintptr(unsafe.Pointer(info)))
-}
-
-func (waf *wafDl) wafObjectFree(obj *wafObject) {
-	waf.syscall(waf.Ddwaf_object_free, uintptr(unsafe.Pointer(obj)))
+	waf.syscall(waf.Ddwaf_ruleset_info_free, ptrToUintptr(info))
+	keepAlive(info)
 }
 
 func (waf *wafDl) wafDestroy(handle wafHandle) {
 	waf.syscall(waf.Ddwaf_destroy, uintptr(handle))
+	keepAlive(handle)
 }
 
-// wafRequiredAddresses returns statis strings so we do not need to free them
+// wafRequiredAddresses returns static strings so we do not need to free them
 func (waf *wafDl) wafRequiredAddresses(handle wafHandle) []string {
 	var nbAddresses uint32
-	arrayVoidC := waf.syscall(waf.Ddwaf_required_addresses, uintptr(handle), uintptr(unsafe.Pointer(&nbAddresses)))
+
+	arrayVoidC := waf.syscall(waf.Ddwaf_required_addresses, uintptr(handle), ptrToUintptr(&nbAddresses))
 	if arrayVoidC == 0 {
 		return nil
 	}
 
 	addresses := make([]string, int(nbAddresses))
 	for i := 0; i < int(nbAddresses); i++ {
-		addresses[i] = gostring(uintptr(unsafe.Add(unsafe.Pointer(arrayVoidC), uintptr(i))))
+		addresses[i] = gostring(*castWithOffset[*byte](arrayVoidC, uint64(i)))
 	}
+
+	keepAlive(&nbAddresses)
+	keepAlive(handle)
 
 	return addresses
 }
 
 func (waf *wafDl) wafContextInit(handle wafHandle) wafContext {
-	return wafContext(waf.syscall(waf.Ddwaf_context_init, uintptr(handle)))
+	ctx := wafContext(waf.syscall(waf.Ddwaf_context_init, uintptr(handle)))
+	keepAlive(handle)
+	return ctx
 }
 
 func (waf *wafDl) wafContextDestroy(context wafContext) {
 	waf.syscall(waf.Ddwaf_context_destroy, uintptr(context))
+	keepAlive(context)
 }
 
 func (waf *wafDl) wafResultFree(result *wafResult) {
-	waf.syscall(waf.Ddwaf_result_free, uintptr(unsafe.Pointer(result)))
+	waf.syscall(waf.Ddwaf_result_free, ptrToUintptr(result))
+	keepAlive(result)
 }
 
 func (waf *wafDl) wafRun(context wafContext, obj *wafObject, result *wafResult, timeout uint64) wafReturnCode {
-	return wafReturnCode(waf.syscall(waf.Ddwaf_run, uintptr(context), uintptr(unsafe.Pointer(obj)), uintptr(unsafe.Pointer(result)), uintptr(timeout)))
+	rc := wafReturnCode(waf.syscall(waf.Ddwaf_run, uintptr(context), ptrToUintptr(obj), ptrToUintptr(result), uintptr(timeout)))
+	keepAlive(context)
+	keepAlive(obj)
+	keepAlive(result)
+	keepAlive(timeout)
+	return rc
 }

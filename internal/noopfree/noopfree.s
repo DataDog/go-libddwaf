@@ -3,11 +3,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build linux && amd64
+#include "textflag.h"
 
-package waf
+TEXT _noop_free(SB), NOSPLIT, $0-0
+	RET
 
-import _ "embed" // Needed for go:embed
-
-//go:embed lib/linux-amd64/libddwaf.so
-var libddwaf []byte

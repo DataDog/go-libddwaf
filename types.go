@@ -6,13 +6,9 @@
 package waf
 
 import (
+	"errors"
 	"fmt"
-
-	"go.uber.org/atomic"
 )
-
-// RunError the WAF can return when running it.
-type RunError int
 
 // RulesetInfo stores the information - provided by the WAF - about WAF rules initialization.
 type RulesetInfo struct {
@@ -22,10 +18,22 @@ type RulesetInfo struct {
 	Failed uint16
 	// Map from an error string to an array of all the rule ids for which
 	// that error was raised. {error: [rule_ids]}
-	Errors map[string]interface{}
+	Errors map[string][]string
 	// Ruleset version
 	Version string
 }
+
+// Encoder/Decoder errors
+var (
+	errMaxDepth          = errors.New("max depth reached")
+	errUnsupportedValue  = errors.New("unsupported Go value")
+	errInvalidMapKey     = errors.New("invalid WAF object map key")
+	errNilObjectPtr      = errors.New("nil WAF object pointer")
+	errInvalidObjectType = errors.New("Invalid type encountered when decoding")
+)
+
+// RunError the WAF can return when running it.
+type RunError int
 
 // Errors the WAF can return when running it.
 const (
@@ -56,6 +64,3 @@ func (e RunError) Error() string {
 		return fmt.Sprintf("unknown waf error %d", e)
 	}
 }
-
-// AtomicU64 can be used to perform atomic operations on an uint64 type
-type AtomicU64 = atomic.Uint64

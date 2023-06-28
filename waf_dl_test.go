@@ -4,7 +4,7 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Purego only works on linux/macOS with amd64 and arm64 from now
-//go:build (linux || darwin) && (amd64 || arm64) && !cgo
+//go:build (linux || darwin) && (amd64 || arm64)
 
 package waf
 
@@ -18,20 +18,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
-
-func TestWafOpen(t *testing.T) {
-	loader, err := newWafDl()
-	require.NoError(t, err)
-	defer loader.Close()
-}
-
-func TestWafGetVersion(t *testing.T) {
-	loader, err := newWafDl()
-	require.NoError(t, err)
-	defer loader.Close()
-
-	require.Regexp(t, `[0-9]+\.[0-9]+\.[0-9]+`, loader.wafGetVersion())
-}
 
 // TestVerifyELFHeader is here to ease the debug cases that will likely need
 // to dive in the linker to debug because the error handling is very poor
