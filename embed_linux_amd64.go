@@ -3,17 +3,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Build when the target OS or Arch are not supported
-//go:build (!linux && !darwin) || (!amd64 && !arm64)
+//go:build linux && amd64
 
 package waf
 
-import (
-	"testing"
+import _ "embed" // Needed for go:embed
 
-	"github.com/stretchr/testify/require"
-)
-
-func TestHealth(t *testing.T) {
-	require.Error(t, Health())
-}
+//go:embed lib/linux-amd64/libddwaf.so
+var libddwaf []byte

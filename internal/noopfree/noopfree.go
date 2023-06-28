@@ -3,9 +3,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Build when CGO is disabled
-//go:build !cgo
+package noopfree
 
-package waf
+import "unsafe"
 
-var disabledReason = "cgo was disabled during the compilation and should be enabled in order to compile with the waf"
+//go:linkname _noop_free _noop_free
+var _noop_free byte
+var NoopFreeFn uintptr = uintptr(unsafe.Pointer(&_noop_free))
