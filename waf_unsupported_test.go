@@ -11,15 +11,16 @@ package waf_test
 import (
 	"testing"
 
+	waf "github.com/DataDog/go-libddwaf"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLoad(t *testing.T) {
-	ok, err := Load()
+	ok, err := waf.oad()
 	require.True(t, ok)
 	require.Error(t, err)
 }
 
 func TestHealth(t *testing.T) {
-	require.Error(t, Health)
+	require.Error(t, waf.Health())
 }
