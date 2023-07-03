@@ -16,7 +16,7 @@ import (
 )
 
 func TestLoad(t *testing.T) {
-	ok, err := waf.oad()
+	ok, err := waf.Load()
 	require.True(t, ok)
 	require.Error(t, err)
 }
