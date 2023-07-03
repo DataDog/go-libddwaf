@@ -16,7 +16,7 @@ import (
 type wafDl struct{}
 
 func newWafDl() (dl *wafDl, err error) {
-	return nil, UnsupportedTargetError{fmt.Errorf("the target operating-system %s or architecture %s are not supported", runtime.GOOS, runtime.GOARCH)}
+	return nil, &UnsupportedTargetError{fmt.Errorf("the target operating-system %s or architecture %s are not supported", runtime.GOOS, runtime.GOARCH)}
 }
 
 func (waf *wafDl) wafGetVersion() string {

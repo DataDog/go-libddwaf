@@ -10,7 +10,6 @@ package waf
 import (
 	"fmt"
 	"os"
-	"runtime"
 )
 
 // wafDl is the type wrapper for all C calls to the waf
@@ -50,10 +49,6 @@ func dumpWafLibrary() (*os.File, error) {
 // happened in the last internal steps following the successful call to
 // dlopen().
 func newWafDl() (dl *wafDl, err error) {
-	if len(libddwaf) == 0 {
-		return nil, UnsupportedTargetError{fmt.Errorf("the target operating-system %s or architecture %s are not supported", runtime.GOOS, runtime.GOARCH)}
-	}
-
 	file, err := dumpWafLibrary()
 	if err != nil {
 		return nil, err

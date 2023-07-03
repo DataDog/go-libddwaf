@@ -9,6 +9,7 @@
 package waf_test
 
 import (
+	"errors"
 	"testing"
 
 	waf "github.com/DataDog/go-libddwaf"
@@ -19,6 +20,7 @@ func TestLoad(t *testing.T) {
 	ok, err := waf.Load()
 	require.False(t, ok)
 	require.Error(t, err)
+	require.True(t, errors.As(err, &waf.UnsupportedTargetError{}))
 }
 
 func TestHealth(t *testing.T) {
