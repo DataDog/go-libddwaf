@@ -20,7 +20,7 @@ func TestLoad(t *testing.T) {
 	ok, err := waf.Load()
 	require.False(t, ok)
 	require.Error(t, err)
-	require.True(t, errors.As(err, &waf.UnsupportedTargetError{}))
+	require.Truef(t, errors.As(err, &waf.UnsupportedTargetError{}), "unexpected error of type %[1]T: %[1]v", err)
 }
 
 func TestHealth(t *testing.T) {
