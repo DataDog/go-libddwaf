@@ -3,11 +3,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build (linux || darwin) && (amd64 || arm64)
-
 package waf
 
-// decodeErrors tranforms the wafObject received by the wafRulesetInfo after the call to wafDl.wafInit to a map where
+// decodeErrors transforms the wafObject received by the wafRulesetInfo after the call to wafDl.wafInit to a map where
 // keys are the error message and the value is a array of all the rule ids which triggered this specific error
 func decodeErrors(obj *wafObject) (map[string][]string, error) {
 	if obj._type != wafMapType {

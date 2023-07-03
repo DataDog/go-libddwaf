@@ -9,7 +9,7 @@ package waf
 
 // Adds a dynamic import for libm.so because libddwaf needs the ceilf symbol
 // This mechanic only works when CGO is not enabled
+//
 //go:cgo_import_dynamic purego_ceilf ceilf "libm.so.6"
 //go:cgo_import_dynamic _ _ "libm.so.6"
-
 var purego_ceilf uintptr

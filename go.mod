@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/ebitengine/purego v0.4.0-alpha.4.0.20230519103000-ee8dcecc618f
+	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.1
 	go.uber.org/atomic v1.10.0
 )

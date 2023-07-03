@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build (linux || darwin) && (amd64 || arm64)
-
 package waf
 
 import (
@@ -55,7 +53,6 @@ func NewContext(handle *Handle) *Context {
 
 	return &Context{handle: handle, cContext: cContext}
 }
-
 
 // Run encodes the given addressesToData values and runs them against the WAF rules within the given
 // timeout value. It returns the matches as a JSON string (usually opaquely used) along with the corresponding
