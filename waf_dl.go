@@ -56,11 +56,13 @@ func newWafDl() (dl *wafDl, err error) {
 	fName := file.Name()
 	defer func() {
 		rmErr := os.Remove(fName)
-		if err == nil {
-			err = rmErr
-		} else {
-			// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-			err = fmt.Errorf("%w; along with an error while removing %s: %v", err, fName, rmErr)
+		if rmErr != nil {
+			if err == nil {
+				err = rmErr
+			} else {
+				// TODO: rely on errors.Join() once go1.20 is our min supported Go version
+				err = fmt.Errorf("%w; along with an error while removing %s: %v", err, fName, rmErr)
+			}
 		}
 	}()
 
@@ -70,11 +72,13 @@ func newWafDl() (dl *wafDl, err error) {
 	}
 	defer func() {
 		closeErr := file.Close()
-		if err == nil {
-			err = closeErr
-		} else {
-			// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-			err = fmt.Errorf("%w; along with an error while closing the shared libddwaf library file: %v", err, closeErr)
+		if closeErr != nil {
+			if err == nil {
+				err = closeErr
+			} else {
+				// TODO: rely on errors.Join() once go1.20 is our min supported Go version
+				err = fmt.Errorf("%w; along with an error while closing the shared libddwaf library file: %v", err, closeErr)
+			}
 		}
 	}()
 
