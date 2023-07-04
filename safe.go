@@ -19,15 +19,15 @@ import (
 // error is unreliable and the caller must rather stop using the library.
 // Examples include safety checks errors.
 type PanicError struct {
-	// The function that was given to `Call()`.
-	In func() error
-	// The recovered panic value while executing `In()`.
+	// The function symbol name that was given to `tryCall()`.
+	in string
+	// The recovered panic error while executing the function `in`.
 	Err error
 }
 
 func newPanicError(in func() error, err error) *PanicError {
 	return &PanicError{
-		In:  in,
+		in:  runtime.FuncForPC(reflect.ValueOf(in).Pointer()).Name(),
 		Err: err,
 	}
 }
@@ -40,11 +40,7 @@ func (e *PanicError) Unwrap() error {
 
 // Error returns the error string representation.
 func (e *PanicError) Error() string {
-	return fmt.Sprintf("panic while executing %s: %#+v", e.inName(), e.Err)
-}
-
-func (e *PanicError) inName() string {
-	return runtime.FuncForPC(reflect.ValueOf(e.In).Pointer()).Name()
+	return fmt.Sprintf("panic while executing %s: %#+v", e.in, e.Err)
 }
 
 // tryCall calls function `f` and recovers from any panic occurring while it
