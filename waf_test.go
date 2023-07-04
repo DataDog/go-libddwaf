@@ -23,7 +23,9 @@ import (
 )
 
 func init() {
-	Load()
+	if ok, err := Load(); !ok {
+	    panic(err)
+	}
 }
 
 func TestLoad(t *testing.T) {
