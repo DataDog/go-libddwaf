@@ -126,7 +126,7 @@ var wafVersion string
 
 // Version returns the version returned by libddwaf.
 // It relies on the dynamic loading of the library, which can fail and return
-// an empty string.
+// an empty string or the previously loaded version, if any.
 func Version() string {
 	Load()
 	return wafVersion

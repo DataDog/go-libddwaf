@@ -78,7 +78,7 @@ func newWafDl() (dl *wafDl, err error) {
 		}
 	}()
 
-	// Try a call to the waf to make sure everything is fine
+	// Try calling the waf to make sure everything is fine
 	err = tryCall(func() error {
 		waf.wafGetVersion()
 		return nil
