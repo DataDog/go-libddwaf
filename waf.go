@@ -112,14 +112,11 @@ func Load() (ok bool, err error) {
 	return wafLib != nil, wafErr
 }
 
-// Health returns an error when this package is not in a usable state describing
-// the reason why.
-func Health() error {
-	ok, err := Load()
-	if !ok {
-		return err
-	}
-	return nil
+// SupportsTarget returns true and a nil error when the target host environment
+// is supported by this package and can be further used.
+// Otherwise, it returns false along with an error detailing why.
+func SupportsTarget() (bool, error) {
+	return supportsTarget()
 }
 
 var wafVersion string

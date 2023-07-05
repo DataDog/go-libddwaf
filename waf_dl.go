@@ -161,3 +161,8 @@ func (waf *wafDl) wafRun(context wafContext, obj *wafObject, result *wafResult, 
 	keepAlive(timeout)
 	return rc
 }
+
+// Implement SupportsTarget()
+func supportsTarget() (bool, error) {
+	return true, nil
+}

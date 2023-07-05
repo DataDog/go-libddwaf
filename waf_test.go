@@ -24,7 +24,7 @@ import (
 
 func init() {
 	if ok, err := Load(); !ok {
-	    panic(err)
+		panic(err)
 	}
 }
 
@@ -35,6 +35,12 @@ func TestLoad(t *testing.T) {
 
 	ok, err = Load()
 	require.True(t, ok)
+	require.NoError(t, err)
+}
+
+func TestSupportsTarget(t *testing.T) {
+	supported, err := SupportsTarget()
+	require.True(t, supported)
 	require.NoError(t, err)
 }
 
