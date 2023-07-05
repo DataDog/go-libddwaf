@@ -3,7 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Purego only works on linux/macOS with amd64 and arm64 from now
 //go:build (linux || darwin) && (amd64 || arm64)
 
 package waf
@@ -15,7 +14,7 @@ import (
 
 // wafDl is the type wrapper for all C calls to the waf
 // It uses `libwaf` to make C calls
-// All calls must go though this one liner to be type safe
+// All calls must go through this one-liner to be type safe
 // since purego calls are not type safe
 type wafDl struct {
 	libDl
@@ -44,40 +43,55 @@ func dumpWafLibrary() (*os.File, error) {
 	return file, nil
 }
 
-// newWafDl loads the waf shared library and loads all the needed symbols
-func newWafDl() (_ *wafDl, err error) {
+// newWafDl loads the libddwaf shared library along with all the needed symbols.
+// The returned dynamic library handle dl can be non-nil even with a returned
+// error, meaning that the dynamic library handle can be used but some errors
+// happened in the last internal steps following the successful call to
+// dlopen().
+func newWafDl() (dl *wafDl, err error) {
 	file, err := dumpWafLibrary()
 	if err != nil {
 		return nil, err
 	}
-
+	fName := file.Name()
 	defer func() {
-		// TODO(eliott.bouhana): find a way to send to the tracer some non-fatal errors while opening the waf libg
-		file.Close()
-		os.Remove(file.Name())
+		rmErr := os.Remove(fName)
+		if rmErr != nil {
+			if err == nil {
+				err = rmErr
+			} else {
+				// TODO: rely on errors.Join() once go1.20 is our min supported Go version
+				err = fmt.Errorf("%w; along with an error while removing %s: %v", err, fName, rmErr)
+			}
+		}
 	}()
 
 	var waf wafDl
-
-	if err := dlOpen(file.Name(), &waf); err != nil {
-		return nil, fmt.Errorf("Error opening waf library: %w", err)
+	if err := dlOpen(fName, &waf); err != nil {
+		return nil, fmt.Errorf("error while opening libddwaf library at %s: %w", fName, err)
 	}
+	defer func() {
+		closeErr := file.Close()
+		if closeErr != nil {
+			if err == nil {
+				err = closeErr
+			} else {
+				// TODO: rely on errors.Join() once go1.20 is our min supported Go version
+				err = fmt.Errorf("%w; along with an error while closing the shared libddwaf library file: %v", err, closeErr)
+			}
+		}
+	}()
 
-	// try a call to the waf to make sure everything is fine
-	if err := waf.tryCall(); err != nil {
-		return nil, fmt.Errorf("test call in the C world failed: cannot load %s shared object. Reason: %v", file.Name(), err)
+	// Try calling the waf to make sure everything is fine
+	err = tryCall(func() error {
+		waf.wafGetVersion()
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return &waf, nil
-}
-
-func (waf *wafDl) tryCall() (err any) {
-	defer func() {
-		err = recover()
-	}()
-
-	waf.wafGetVersion()
-	return nil
 }
 
 // wafGetVersion returned string is a static string so we do not need to free it

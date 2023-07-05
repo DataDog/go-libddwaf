@@ -39,7 +39,6 @@ func getSymbol(t *testing.T, lib uintptr, symbol string) uintptr {
 }
 
 func TestWafObject(t *testing.T) {
-
 	lib := getLibddwaf(t)
 
 	t.Run("invalid", func(t *testing.T) {

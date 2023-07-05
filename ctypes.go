@@ -3,9 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Purego only works on linux/macOS with amd64 and arm64 for now
-//go:build (linux || darwin) && (amd64 || arm64)
-
 package waf
 
 import (
@@ -162,7 +159,7 @@ func stringToUintptr(arg string) uintptr {
 // keepAlive() globals
 var (
 	alwaysFalse bool
-	escapeSink any
+	escapeSink  any
 )
 
 // keepAlive is a copy of runtime.KeepAlive

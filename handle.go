@@ -3,16 +3,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build (linux || darwin) && (amd64 || arm64)
-
 package waf
 
 import (
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/DataDog/go-libddwaf/internal/noopfree"
 	"go.uber.org/atomic"
-	"sync"
 )
 
 // Handle represents an instance of the WAF for a given ruleset.
@@ -42,16 +41,20 @@ type Handle struct {
 
 // NewHandle creates and returns a new instance of the WAF with the given security rules and configuration
 // of the sensitive data obfuscator. The returned handle is nil in case of an error.
-// Rules-related metrics, including errors, are accessible with the `RulesetInfo()` method. 
+// Rules-related metrics, including errors, are accessible with the `RulesetInfo()` method.
 func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string) (*Handle, error) {
-// The order of action is the following:
-// - Open the ddwaf C library
-// - Encode the security rules as a ddwaf_object
-// - Create a ddwaf_config object and fill the values
-// - Run ddwaf_init to create a new handle based on the given rules and config
-// - Check for errors and streamline the ddwaf_ruleset_info returned
-	if err := InitWaf(); err != nil {
+	// The order of action is the following:
+	// - Open the ddwaf C library
+	// - Encode the security rules as a ddwaf_object
+	// - Create a ddwaf_config object and fill the values
+	// - Run ddwaf_init to create a new handle based on the given rules and config
+	// - Check for errors and streamline the ddwaf_ruleset_info returned
+
+	if ok, err := Load(); !ok {
 		return nil, err
+		// The case where ok == true && err != nil is ignored on purpose, as
+		// this is out of the scope of NewHandle which only requires a properly
+		// loaded libddwaf in order to use it
 	}
 
 	encoder := newMaxEncoder()
@@ -66,7 +69,7 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	cHandle := wafLib.wafInit(obj, config, cRulesetInfo)
 	keepAlive(encoder.cgoRefs)
 	// Note that the encoded obj was copied by libddwaf, so we don't need to keep them alive
-	// for the lifetime of the handle (ddwaf API guarantee). 
+	// for the lifetime of the handle (ddwaf API guarantee).
 	if cHandle == 0 {
 		return nil, errors.New("could not instantiate the WAF")
 	}
@@ -111,7 +114,7 @@ func (handle *Handle) closeContext(context *Context) {
 // Close puts the handle in termination state, when all the contexts are closed the handle will be destroyed
 func (handle *Handle) Close() {
 	if handle.addRefCounter(-1) > 0 {
-	// There are still Contexts that are not closed
+		// There are still Contexts that are not closed
 		return
 	}
 

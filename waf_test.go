@@ -23,11 +23,19 @@ import (
 )
 
 func init() {
-	InitWaf()
+	if ok, err := Load(); !ok {
+	    panic(err)
+	}
 }
 
-func TestHealth(t *testing.T) {
-	require.NoError(t, Health())
+func TestLoad(t *testing.T) {
+	ok, err := Load()
+	require.True(t, ok)
+	require.NoError(t, err)
+
+	ok, err = Load()
+	require.True(t, ok)
+	require.NoError(t, err)
 }
 
 func TestVersion(t *testing.T) {

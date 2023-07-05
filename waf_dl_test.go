@@ -3,18 +3,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Purego only works on linux/macOS with amd64 and arm64 from now
 //go:build (linux || darwin) && (amd64 || arm64)
 
 package waf
 
 import (
+	"debug/elf"
+	"debug/macho"
 	"os"
 	"runtime"
 	"testing"
-
-	"debug/elf"
-	"debug/macho"
 
 	"github.com/stretchr/testify/require"
 )
