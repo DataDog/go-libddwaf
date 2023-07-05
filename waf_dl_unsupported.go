@@ -15,10 +15,10 @@ import (
 
 type wafDl struct{}
 
-var UnsupportedTargetErr = &UnsupportedTargetError{fmt.Errorf("the target operating-system %s or architecture %s are not supported", runtime.GOOS, runtime.GOARCH)}
+var unsupportedTargetErr = &UnsupportedTargetError{fmt.Errorf("the target operating-system %s or architecture %s are not supported", runtime.GOOS, runtime.GOARCH)}
 
 func newWafDl() (dl *wafDl, err error) {
-	return nil, UnsupportedTargetErr
+	return nil, unsupportedTargetErr
 }
 
 func (waf *wafDl) wafGetVersion() string {
@@ -57,5 +57,5 @@ func (waf *wafDl) wafRun(context wafContext, obj *wafObject, result *wafResult, 
 func supportsTarget() (bool, error) {
 	// TODO: provide finer-grained unsupported target error message giving the
 	//    exact reason why
-	return false, UnsupportedTargetErr
+	return false, unsupportedTargetErr
 }
