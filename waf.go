@@ -112,7 +112,7 @@ func Load() (ok bool, err error) {
 	return wafLib != nil, wafErr
 }
 
-// Health returns an error when this package is not usable state describing
+// Health returns an error when this package is not in a usable state describing
 // the reason why.
 func Health() error {
 	ok, err := Load()
