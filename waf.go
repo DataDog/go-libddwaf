@@ -113,7 +113,7 @@ func Load() (ok bool, err error) {
 }
 
 // SupportsTarget returns true and a nil error when the target host environment
-// is not supported, such as with a non-supported operating-system.
+// is supported by this package and can be further used.
 // Otherwise, it returns false along with an error detailing why.
 func SupportsTarget() (bool, error) {
 	return supportsTarget()
