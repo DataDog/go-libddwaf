@@ -21,6 +21,8 @@ jobs:
           - env:
               GOEXPERIMENT=cgocheck2
             go-version: go1.21-rc.1
+          - env:
+              GODEBUG=cgocheck=2
         exclude:
           - go-version: go1.21-rc.1
             env:
