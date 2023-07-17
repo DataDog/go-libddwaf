@@ -3,11 +3,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build darwin && arm64 && !go1.21
+// Supported OS/Arch but unsupported Go version
+//go:build (linux || darwin) && (amd64 || arm64) && go1.21
 
 package waf
 
-import _ "embed" // Needed for go:embed
+import (
+	"fmt"
+	"runtime"
+)
 
-//go:embed lib/darwin-arm64/_libddwaf.dylib
-var libddwaf []byte
+var unsupportedTargetErr = &UnsupportedTargetError{fmt.Errorf("the Go version %s is not supported", runtime.Version())}

@@ -4,18 +4,11 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Build when the target OS or architecture are not supported
-//go:build (!linux && !darwin) || (!amd64 && !arm64)
+//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.21
 
 package waf
 
-import (
-	"fmt"
-	"runtime"
-)
-
 type wafDl struct{}
-
-var unsupportedTargetErr = &UnsupportedTargetError{fmt.Errorf("the target operating-system %s or architecture %s are not supported", runtime.GOOS, runtime.GOARCH)}
 
 func newWafDl() (dl *wafDl, err error) {
 	return nil, unsupportedTargetErr
