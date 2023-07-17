@@ -57,7 +57,7 @@ jobs:
 
       # Install gcc and the libc headers on alpine images
       - if: ${{ matrix.distribution == 'alpine' }}
-        run: apk add gcc libc6-compat
+        run: apk add gcc musl-dev libc6-compat
 
       - name: Go modules cache
         uses: actions/cache@v3
