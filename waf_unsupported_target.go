@@ -4,7 +4,8 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Unsupported target OS or architecture on a supported Go version
-//go:build (!linux && !darwin) || (!amd64 && !arm64 && !go1.21)
+//            Unsupported OS        Unsupported Arch      Good Go Version
+//go:build ((!linux && !darwin) || (!amd64 && !arm64)) && !go1.21
 
 package waf
 
