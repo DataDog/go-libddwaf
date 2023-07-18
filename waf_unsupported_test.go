@@ -4,7 +4,7 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Build when the target OS or Arch are not supported
-//go:build (!linux && !darwin) || (!amd64 && !arm64)
+//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.21
 
 package waf_test
 
