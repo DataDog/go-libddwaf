@@ -9,28 +9,12 @@
 package waf
 
 import (
-	"os"
 	"testing"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
 	"github.com/stretchr/testify/require"
 )
-
-func getLibddwaf(t *testing.T) uintptr {
-	file, err := os.CreateTemp("", "libddwaf-*.so")
-	require.NoError(t, err)
-
-	defer os.Remove(file.Name())
-
-	err = os.WriteFile(file.Name(), libddwaf, 0400)
-	require.NoError(t, err)
-
-	lib, err := purego.Dlopen(file.Name(), purego.RTLD_GLOBAL|purego.RTLD_NOW)
-	require.NoError(t, err)
-
-	return lib
-}
 
 func getSymbol(t *testing.T, lib uintptr, symbol string) uintptr {
 	sym, err := purego.Dlsym(lib, symbol)
@@ -39,7 +23,10 @@ func getSymbol(t *testing.T, lib uintptr, symbol string) uintptr {
 }
 
 func TestWafObject(t *testing.T) {
-	lib := getLibddwaf(t)
+	_, err := Load()
+	require.NoError(t, err)
+
+	lib := wafLib.libDl.handle
 
 	t.Run("invalid", func(t *testing.T) {
 		var actual wafObject
@@ -90,6 +77,4 @@ func TestWafObject(t *testing.T) {
 		require.Equal(t, "toto3", gostring(cast[byte](actual[2].value)))
 		require.EqualValues(t, wafStringType, actual[2]._type)
 	})
-
-	require.NoError(t, purego.Dlclose(lib))
 }
