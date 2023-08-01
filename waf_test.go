@@ -89,6 +89,34 @@ var testArachniRuleTmpl = template.Must(template.New("").Parse(`
 }
 `))
 
+// Test with a valid JSON but invalid rule format (field "events" should be an array)
+const malformedRule = `
+{
+  "version": "2.1",
+  "events": [
+	{
+	  "id": "ua0-600-12x",
+	  "name": "Arachni",
+	  "tags": {
+		"type": "security_scanner"
+	  },
+	  "conditions": [
+		{
+		  "operation": "match_regex",
+		  "parameters": {
+			"inputs": [
+			  { "address": "server.request.headers.no_cookies" }
+			],
+			"regex": "^Arachni"
+		  }
+		}
+	  ],
+	  "transformers": []
+	}
+  ]
+}
+`
+
 type ruleInput struct {
 	Address string
 	KeyPath []string
@@ -124,40 +152,82 @@ func TestNewWAF(t *testing.T) {
 	})
 
 	t.Run("invalid-rule", func(t *testing.T) {
-		// Test with a valid JSON but invalid rule format (field events should be an array)
-		const rule = `
-{
-  "version": "2.1",
-  "events": [
-	{
-	  "id": "ua0-600-12x",
-	  "name": "Arachni",
-	  "tags": {
-		"type": "security_scanner"
-	  },
-	  "conditions": [
-		{
-		  "operation": "match_regex",
-		  "parameters": {
-			"inputs": [
-			  { "address": "server.request.headers.no_cookies" }
-			],
-			"regex": "^Arachni"
-		  }
-		}
-	  ],
-	  "transformers": []
-	}
-  ]
-}
-`
 		var parsed any
 
-		require.NoError(t, json.Unmarshal([]byte(rule), &parsed))
+		require.NoError(t, json.Unmarshal([]byte(malformedRule), &parsed))
 
 		waf, err := newDefaultHandle(parsed)
 		require.Error(t, err)
 		require.Nil(t, waf)
+	})
+}
+
+func TestUpdateWAF(t *testing.T) {
+
+	t.Run("valid-rule", func(t *testing.T) {
+		waf, err := newDefaultHandle(testArachniRule)
+		require.NoError(t, err)
+		require.NotNil(t, waf)
+		defer waf.Close()
+
+		waf2, err := waf.Update(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+		require.NoError(t, err)
+		require.NotNil(t, waf2)
+		defer waf2.Close()
+	})
+
+	t.Run("changes", func(t *testing.T) {
+		waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+		require.NoError(t, err)
+		require.NotNil(t, waf)
+		defer waf.Close()
+
+		wafCtx := NewContext(waf)
+		defer wafCtx.Close()
+
+		// Matches
+		values := map[string]interface{}{
+			"my.input": "Arachni",
+		}
+		matches, actions, err := wafCtx.Run(values, time.Second)
+		require.NoError(t, err)
+		require.NotEmpty(t, matches)
+		require.Nil(t, actions)
+
+		// Update
+		waf2, err := waf.Update(newArachniTestRule([]ruleInput{{Address: "my.input"}}, []string{"block"}))
+		require.NoError(t, err)
+		require.NotNil(t, waf2)
+		defer waf2.Close()
+
+		wafCtx2 := NewContext(waf2)
+		defer wafCtx2.Close()
+
+		// Matches & Block
+		values = map[string]interface{}{
+			"my.input": "Arachni",
+		}
+		matches, actions, err = wafCtx2.Run(values, time.Second)
+		require.NoError(t, err)
+		require.NotEmpty(t, matches)
+		require.NotEmpty(t, actions)
+
+	})
+
+	t.Run("invalid-rule", func(t *testing.T) {
+
+		waf, err := newDefaultHandle(testArachniRule)
+		require.NoError(t, err)
+		require.NotNil(t, waf)
+		defer waf.Close()
+
+		var parsed any
+
+		require.NoError(t, json.Unmarshal([]byte(malformedRule), &parsed))
+
+		waf2, err := waf.Update(parsed)
+		require.Error(t, err)
+		require.Nil(t, waf2)
 	})
 }
 
