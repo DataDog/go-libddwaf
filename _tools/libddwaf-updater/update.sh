@@ -51,7 +51,6 @@ run_strip() {
 echo Updating libddwaf for darwin/arm64
 curl -L https://github.com/DataDog/libddwaf/releases/download/$version/libddwaf-$version-darwin-arm64.tar.gz | tar -xz -C$tmpdir
 echo Copying the darwin/arm64 library
-cp -v $tmpdir/libddwaf-$version-darwin-arm64/lib/libddwaf.a.stripped $bindings_dir/lib/darwin-arm64/libddwaf.a
 cp -v "$tmpdir/libddwaf-$version-darwin-arm64/lib/libddwaf.dylib" "$bindings_dir/lib/darwin-arm64/_libddwaf.dylib"
 
 #
@@ -61,7 +60,6 @@ cp -v "$tmpdir/libddwaf-$version-darwin-arm64/lib/libddwaf.dylib" "$bindings_dir
 echo Updating libddwaf for darwin/amd64yes
 curl -L https://github.com/DataDog/libddwaf/releases/download/$version/libddwaf-$version-darwin-x86_64.tar.gz | tar -xz -C$tmpdir
 echo Copying the darwin/amd64 library
-cp -v $tmpdir/libddwaf-$version-darwin-x86_64/lib/libddwaf.a.stripped $bindings_dir/lib/darwin-amd64/libddwaf.a
 cp -v "$tmpdir/libddwaf-$version-darwin-x86_64/lib/libddwaf.dylib" "$bindings_dir/lib/darwin-amd64/_libddwaf.dylib"
 
 #
@@ -75,16 +73,9 @@ curl -L https://github.com/DataDog/libddwaf/releases/download/$version/libddwaf-
 libcxx_dir=$tmpdir/libc++-x86_64-linux
 mkdir $libcxx_dir
 curl -L https://github.com/DataDog/libddwaf/releases/download/$version/libc++-static-x86_64-linux.tar.gz | tar -xz -C$libcxx_dir
-# 3. Combine libddwaf.a + libc++.a + libc++abi.a + libunwind.a in a single
-#  object file by using ld -r
-run_binutils x86_64-linux-gnu-ld \
-   -r -o $bindings_dir/lib/linux-amd64/libddwaf.a \
-   $LD_REQUIRED_DEFINED \
-   $tmpdir/libddwaf-$version-linux-x86_64/lib/libddwaf.a $libcxx_dir/libc++.a $libcxx_dir/libc++abi.a $libcxx_dir/libunwind.a
-# 4. Strip
-run_strip x86_64-linux-gnu $bindings_dir/lib/linux-amd64/libddwaf.a
-cp -v "$tmpdir/libddwaf-$version-linux-x86_64/lib/libddwaf.so" "$bindings_dir/lib/linux-amd64/_libddwaf.so"
-run_strip x86_64-linux-gnu "$bindings_dir/lib/linux-amd64/_libddwaf.so"
+# 4. Copy & Strip
+cp -v "$tmpdir/libddwaf-$version-linux-x86_64/lib/libddwaf.so" "$bindings_dir/lib/linux-amd64/libddwaf.so"
+run_strip x86_64-linux-gnu "$bindings_dir/lib/linux-amd64/libddwaf.so"
 
 #
 # linux/arm64
@@ -97,16 +88,9 @@ curl -L https://github.com/DataDog/libddwaf/releases/download/$version/libddwaf-
 libcxx_dir=$tmpdir/libc++-aarch64-linux
 mkdir $libcxx_dir
 curl -L https://github.com/DataDog/libddwaf/releases/download/$version/libc++-static-aarch64-linux.tar.gz | tar -xz -C$libcxx_dir
-# 3. Combine libddwaf.a + libc++.a + libc++abi.a + libunwind.a in a single
-#  object file by using ld -r
-run_binutils aarch64-linux-gnu-ld \
-   -r -o $bindings_dir/lib/linux-arm64/libddwaf.a \
-   $LD_REQUIRED_DEFINED \
-   $tmpdir/libddwaf-$version-linux-aarch64/lib/libddwaf.a $libcxx_dir/libc++.a $libcxx_dir/libc++abi.a $libcxx_dir/libunwind.a
-# 4. Strip
-run_strip aarch64-linux-gnu $bindings_dir/lib/linux-arm64/libddwaf.a
-cp -v "$tmpdir/libddwaf-$version-linux-aarch64/lib/libddwaf.so" "$bindings_dir/lib/linux-arm64/_libddwaf.so"
-run_strip aarch64-linux-gnu "$bindings_dir/lib/linux-arm64/_libddwaf.so"
+# 4. Copy & Strip
+cp -v "$tmpdir/libddwaf-$version-linux-aarch64/lib/libddwaf.so" "$bindings_dir/lib/linux-arm64/libddwaf.so"
+run_strip aarch64-linux-gnu "$bindings_dir/lib/linux-arm64/libddwaf.so"
 
 #
 # ddwaf.h
