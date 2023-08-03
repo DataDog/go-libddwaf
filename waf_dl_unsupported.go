@@ -22,6 +22,10 @@ func (waf *wafDl) wafInit(obj *wafObject, config *wafConfig, info *wafRulesetInf
 	return 0
 }
 
+func (waf *wafDl) wafUpdate(handle wafHandle, ruleset *wafObject, info *wafRulesetInfo) wafHandle {
+	return 0
+}
+
 func (waf *wafDl) wafRulesetInfoFree(info *wafRulesetInfo) {
 }
 
