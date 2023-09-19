@@ -42,7 +42,7 @@ type Handle struct {
 // NewHandle creates and returns a new instance of the WAF with the given security rules and configuration
 // of the sensitive data obfuscator. The returned handle is nil in case of an error.
 // Rules-related metrics, including errors, are accessible with the `RulesetInfo()` method.
-func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string) (*Handle, error) {
+func NewHandle(rules map[string]any, keyObfuscatorRegex string, valueObfuscatorRegex string) (*Handle, error) {
 	// The order of action is the following:
 	// - Open the ddwaf C library
 	// - Encode the security rules as a ddwaf_object
