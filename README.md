@@ -99,7 +99,7 @@ All these objects stored in the reference pool need to live throughout the use o
 
 Here is an example of the flow of operations on a simple call to Run():
 
-- Encode input data into Waf Objects and store references in the temporary pool
+- Encode input data into WAF Objects and store references in the temporary pool
 - Lock the context mutex until the end of the call
 - Store references from the temporary pool into the context level pool
 - Call `ddwaf_run`
@@ -107,11 +107,11 @@ Here is an example of the flow of operations on a simple call to Run():
 
 ### CGO-less C Bindings
 
-The main component used to build C bindings without using CGO is called [purego](https://github.com/ebitengine/purego). The flow of execution on our side
+This library uses [purego](https://github.com/ebitengine/purego) to implement C bindings without requiring use of CGO at compilation time. The high-level workflow
 is to embed the C shared library using `go:embed`, dump it into a file, open the library using `dlopen`, load the
 symbols using `dlsym`, and finally call them.
 
-⚠️ Keep in mind that **purego only works on linux/darwin for amd64/arm64 and so does go-libddwaf.**
+> :warning: Keep in mind that **purego only works on linux/darwin for amd64/arm64 and so does go-libddwaf.**
 
 Another requirement of `libddwaf` is to have a FHS filesystem on your machine and, for linux, to provide `libc.so.6`,
 `libpthread.so.0`, `libm.so.6` and `libdl.so.2` as dynamic libraries.
