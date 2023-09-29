@@ -48,7 +48,7 @@ The WAF bindings have multiple moving parts that are necessary to understand:
 - Handle: a object wrapper over the pointer to the C WAF Handle
 - Context: a object wrapper over a pointer to the C WAF Context
 - Encoder: whose goal is to construct a tree of Waf Objects to send to the WAF
-- CGORefPol: Does all allocation operations for the construction of Waf Objects and keep track of the equivalent go pointers
+- CGORefPool: Does all allocation operations for the construction of Waf Objects and keeps track of the equivalent go pointers
 - Decoder: Transforms Waf Objects returned from the WAF to usual go objects (e.g. maps, arrays, ...)
 - Library: The low-level API of bindings with the C world, made to provide Go type checking to it
 
@@ -86,14 +86,14 @@ union equivalent in go are interfaces and they are not compatible with C unions.
 that the Go `wafObject` struct has the same layout as the C one is to only use primitive types. So the only way to
 store a raw pointer is to use the `uintptr` type. But since `uintptr` do not have pointer semantics (and are just
 basically integers), we need another method to store the value as Go pointer because the GC will delete our data if it
-not reference bu Go pointers.
+is not referenced by Go pointers.
 
-That's where the `cgoRefPool` object comes into play: all new `wafObject` elements are created via this API whose especially
+That's where the `cgoRefPool` object comes into play: all new `wafObject` elements are created via this API which is especially
 built to make sure there is no gap for the Garbage Collector to exploit. From there, since underlying values of the
 `wafObject` are either arrays of wafObjects (for maps, structs and arrays) or string (for all ints, booleans and strings),
 we can store 2 slices of arrays and use `runtime.KeepAlive` in each code path to protect them from the GC.
 
-All these objects stored in the reference pool need to live throughout the use of the Waf Context associated.
+All these objects stored in the reference pool need to live throughout the use of the associated Waf Context.
 
 ### Typical call to Run()
 
@@ -101,30 +101,30 @@ Here is an example of the flow of operations on a simple call to Run():
 
 - Encode input data into Waf Objects and store references in the temporary pool
 - Lock the context mutex until the end of the call
-- store references from the temporary pool into the context level pool
+- Store references from the temporary pool into the context level pool
 - Call `ddwaf_run`
 - Decode the matches and actions
 
 ### CGO-less C Bindings
 
 The main component used to build C bindings without using CGO is called [purego](https://github.com/ebitengine/purego). The flow of execution on our side
-is to embed the C shared library using `go:embed`. Then to dump it into a file, load it using `dlopen` and to load the
-symbols using `dlsym`. And finally to call them.
+is to embed the C shared library using `go:embed`, dump it into a file, open the library using `dlopen`, load the
+symbols using `dlsym`, and finally call them.
 
 ⚠️ Keep in mind that **purego only works on linux/darwin for amd64/arm64 and so does go-libddwaf.**
 
 Another requirement of `libddwaf` is to have a FHS filesystem on your machine and, for linux, to provide `libc.so.6`,
-`libpthread.so.0` and `libm.so.6`, `libdl.so.2` as dynamic libraries.
+`libpthread.so.0`, `libm.so.6` and `libdl.so.2` as dynamic libraries.
 
 ## Contributing pitfalls
 
 - Cannot dlopen twice in the app lifetime on OSX. It messes with Thread Local Storage and usually finishes with a `std::bad_alloc()`
 - `keepAlive()` calls are here to prevent the GC from destroying objects too early
-- Since there is a stack switch between the go code and the C code, usually the only C stacktrace you will ever get is from GDB
+- Since there is a stack switch between the Go code and the C code, usually the only C stacktrace you will ever get is from GDB
 - If a segfault happens during a call to the C code, the goroutine stacktrace which has done the call is the one annotated with `[syscall]`
 - [GoLand](https://www.jetbrains.com/go/) does not support `CGO_ENABLED=0` (as of June 2023)
-- Keep in mind that we fully escape the type system. If you send the wrong data it will segfaults in the best cases but not always !
-- The structs in `ctypes.go` are here to reproduce the memory layout of the structs in `include/ddwaf.h` because pointer to these structs will be passed directly
+- Keep in mind that we fully escape the type system. If you send the wrong data it will segfault in the best cases but not always !
+- The structs in `ctypes.go` are here to reproduce the memory layout of the structs in `include/ddwaf.h` because pointers to these structs will be passed directly
 - Do not use `uintptr` as function arguments or results types, coming from `unsafe.Pointer` casts of Go values, because they escape the pointer analysis which can create wrongly optimized code and crash. Pointer arithmetic is of course necessary in such a library but must be kept in the same function scope.
 - GDB is available on arm64 but is not officially supported so it usually crashes pretty fast
-- No pointer from variables on the stack shall be sent to the C code because Go stacks can be moved during the C call. More on this [here](https://medium.com/@trinad536/escape-analysis-in-golang-fc81b78f3550)
+- No pointer to variables on the stack shall be sent to the C code because Go stacks can be moved during the C call. More on this [here](https://medium.com/@trinad536/escape-analysis-in-golang-fc81b78f3550)
