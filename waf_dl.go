@@ -24,7 +24,6 @@ type wafDl struct {
 }
 
 type wafSymbols struct {
-	rulesetInfoFree   uintptr
 	init              uintptr
 	update            uintptr
 	destroy           uintptr
@@ -32,6 +31,7 @@ type wafSymbols struct {
 	getVersion        uintptr
 	contextInit       uintptr
 	contextDestroy    uintptr
+	objectFree        uintptr
 	resultFree        uintptr
 	run               uintptr
 }
@@ -98,7 +98,7 @@ func (waf *wafDl) wafGetVersion() string {
 	return gostring(cast[byte](waf.syscall(waf.getVersion)))
 }
 
-func (waf *wafDl) wafInit(ruleset *wafObject, config *wafConfig, info *wafRulesetInfo) wafHandle {
+func (waf *wafDl) wafInit(ruleset *wafObject, config *wafConfig, info *wafObject) wafHandle {
 	handle := wafHandle(waf.syscall(waf.init, ptrToUintptr(ruleset), ptrToUintptr(config), ptrToUintptr(info)))
 	keepAlive(ruleset)
 	keepAlive(config)
@@ -106,16 +106,11 @@ func (waf *wafDl) wafInit(ruleset *wafObject, config *wafConfig, info *wafRulese
 	return handle
 }
 
-func (waf *wafDl) wafUpdate(handle wafHandle, ruleset *wafObject, info *wafRulesetInfo) wafHandle {
+func (waf *wafDl) wafUpdate(handle wafHandle, ruleset *wafObject, info *wafObject) wafHandle {
 	newHandle := wafHandle(waf.syscall(waf.update, uintptr(handle), ptrToUintptr(ruleset), ptrToUintptr(info)))
 	keepAlive(ruleset)
 	keepAlive(info)
 	return newHandle
-}
-
-func (waf *wafDl) wafRulesetInfoFree(info *wafRulesetInfo) {
-	waf.syscall(waf.rulesetInfoFree, ptrToUintptr(info))
-	keepAlive(info)
 }
 
 func (waf *wafDl) wafDestroy(handle wafHandle) {
@@ -159,6 +154,10 @@ func (waf *wafDl) wafResultFree(result *wafResult) {
 	keepAlive(result)
 }
 
+func (waf *wafDl) wafObjectFree(obj *wafObject) {
+	waf.syscall(waf.objectFree, ptrToUintptr(obj))
+}
+
 func (waf *wafDl) wafRun(context wafContext, obj *wafObject, result *wafResult, timeout uint64) wafReturnCode {
 	rc := wafReturnCode(waf.syscall(waf.run, uintptr(context), ptrToUintptr(obj), ptrToUintptr(result), uintptr(timeout)))
 	keepAlive(context)
@@ -183,9 +182,6 @@ func (waf *wafDl) syscall(fn uintptr, args ...uintptr) uintptr {
 // resolveWafSymbols resolves relevant symbols from the libddwaf shared library using the provided
 // purego.Dlopen handle.
 func resolveWafSymbols(handle uintptr) (symbols wafSymbols, err error) {
-	if symbols.rulesetInfoFree, err = purego.Dlsym(handle, "ddwaf_ruleset_info_free"); err != nil {
-		return
-	}
 	if symbols.init, err = purego.Dlsym(handle, "ddwaf_init"); err != nil {
 		return
 	}
@@ -208,6 +204,9 @@ func resolveWafSymbols(handle uintptr) (symbols wafSymbols, err error) {
 		return
 	}
 	if symbols.resultFree, err = purego.Dlsym(handle, "ddwaf_result_free"); err != nil {
+		return
+	}
+	if symbols.objectFree, err = purego.Dlsym(handle, "ddwaf_object_free"); err != nil {
 		return
 	}
 	if symbols.run, err = purego.Dlsym(handle, "ddwaf_run"); err != nil {

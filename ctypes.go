@@ -74,8 +74,8 @@ type wafConfigObfuscator struct {
 
 type wafResult struct {
 	timeout       byte
-	data          uintptr
-	actions       wafResultActions
+	events        wafObject
+	actions       wafObject
 	total_runtime uint64
 }
 

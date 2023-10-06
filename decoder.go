@@ -57,17 +57,53 @@ func decodeRuleIdArray(obj *wafObject) ([]string, error) {
 	return ruleIds, nil
 }
 
-func decodeActions(cActions uintptr, size uint64) []string {
-	if size == 0 {
-		return nil
+func decodeObject(obj *wafObject) (interface{}, error) {
+	switch obj._type {
+	case wafMapType:
+		return decodeMap(obj)
+	case wafArrayType:
+		return decodeArray(obj)
+	case wafStringType:
+		return gostringSized(cast[byte](obj.value), obj.nbEntries), nil
+	default:
+		return nil, errUnsupportedValue
+	}
+}
+
+func decodeArray(obj *wafObject) ([]interface{}, error) {
+	if obj._type != wafArrayType {
+		return nil, errInvalidObjectType
 	}
 
-	actions := make([]string, size)
-	for i := uint64(0); i < size; i++ {
-		// This line does the following operation without casts:
-		// gostring(*(cActions + i * sizeof(ptr)))
-		actions[i] = gostring(*castWithOffset[*byte](cActions, i))
+	var events []interface{}
+
+	for i := uint64(0); i < obj.nbEntries; i++ {
+		objElem := castWithOffset[wafObject](obj.value, i)
+		val, err := decodeObject(objElem)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, val)
 	}
 
-	return actions
+	return events, nil
+}
+
+func decodeMap(obj *wafObject) (map[string]interface{}, error) {
+	if obj._type != wafMapType {
+		return nil, errInvalidObjectType
+	}
+
+	result := map[string]interface{}{}
+	for i := uint64(0); i < obj.nbEntries; i++ {
+		objElem := castWithOffset[wafObject](obj.value, i)
+		key := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
+		val, err := decodeObject(objElem)
+		if err != nil {
+			return nil, err
+		}
+		result[key] = val
+	}
+
+	return result, nil
 }
