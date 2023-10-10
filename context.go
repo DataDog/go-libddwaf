@@ -130,8 +130,14 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []interface{
 	if size := result.actions.nbEntries; size > 0 {
 		// using ruleIdArray cause it decodes string array (I think)
 		actions, err = decodeRuleIdArray(&result.actions)
+		// TODO: use decode array, and eventually genericize the function
 	}
 
+	//TODO: decode derivatives here (map[string]interface{})
+	_, err = decodeMap(&result.derivatives)
+	if err != nil {
+		return nil, nil, err
+	}
 	return events, actions, err
 }
 

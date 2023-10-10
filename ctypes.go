@@ -38,6 +38,9 @@ const (
 	wafStringType                = 1 << 2
 	wafArrayType                 = 1 << 3
 	wafMapType                   = 1 << 4
+	wafBoolType                  = 1 << 5
+	wafFloatType                 = 1 << 6
+	wafNilType                   = 1 << 7
 )
 
 type wafObject struct {
@@ -76,13 +79,8 @@ type wafResult struct {
 	timeout       byte
 	events        wafObject
 	actions       wafObject
+	derivatives   wafObject
 	total_runtime uint64
-}
-
-type wafResultActions struct {
-	array uintptr // char **
-	size  uint32
-	_     [4]byte // Forced padding
 }
 
 type wafRulesetInfo struct {
