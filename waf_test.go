@@ -332,7 +332,7 @@ func TestActions(t *testing.T) {
 }
 
 func TestAddresses(t *testing.T) {
-	expectedAddresses := []string{"my.first.input", "my.second.input", "my.indexed.input", "my.third.input"}
+	expectedAddresses := []string{"my.indexed.input", "my.third.input", "my.second.input", "my.first.input"}
 	addresses := []ruleInput{{Address: "my.first.input"}, {Address: "my.second.input"}, {Address: "my.third.input"}, {Address: "my.indexed.input", KeyPath: []string{"indexed"}}}
 	waf, err := newDefaultHandle(newArachniTestRule(addresses, nil))
 	require.NoError(t, err)
