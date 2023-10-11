@@ -32,7 +32,14 @@ func dlOpen[T handleSetter](name string, lib T) error {
 		return fmt.Errorf("error opening shared library '%s'. Reason: %w", name, err)
 	}
 
-	return dlOpenFromHandle(handle, lib)
+	if err := dlOpenFromHandle(handle, lib); err != nil {
+		if cerr := purego.Dlclose(handle); cerr != nil {
+			return fmt.Errorf("%w\nsubsequently failed to close purego handle: %w", err, cerr)
+		}
+		return err
+
+	}
+	return nil
 }
 
 func dlOpenFromHandle[T handleSetter](handle uintptr, lib T) error {
