@@ -34,7 +34,7 @@ func dlOpen[T handleSetter](name string, lib T) error {
 
 	if err := dlOpenFromHandle(handle, lib); err != nil {
 		if cerr := purego.Dlclose(handle); cerr != nil {
-			return fmt.Errorf("%w\nsubsequently failed to close purego handle: %w", err, cerr)
+			return fmt.Errorf("%w\nsubsequently failed to close purego handle: %v", err, cerr)
 		}
 		return err
 
