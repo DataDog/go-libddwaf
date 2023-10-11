@@ -11,7 +11,6 @@ package waf
 import (
 	"fmt"
 	"reflect"
-	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -27,7 +26,7 @@ type libDl struct {
 // dlOpen will fill the object with symbols loaded from the library
 // the struct of type `loader` must have a field of type `LibLoader`
 // to be able to close the handle later
-func dlOpen(name string, lib any) error {
+func dlOpen[T handleSetter](name string, lib T) error {
 	handle, err := purego.Dlopen(name, purego.RTLD_GLOBAL|purego.RTLD_NOW)
 	if err != nil {
 		return fmt.Errorf("error opening shared library '%s'. Reason: %w", name, err)
@@ -36,12 +35,11 @@ func dlOpen(name string, lib any) error {
 	return dlOpenFromHandle(handle, lib)
 }
 
-func dlOpenFromHandle(handle uintptr, lib any) error {
-	foundHandle := false
+func dlOpenFromHandle[T handleSetter](handle uintptr, lib T) error {
+	lib.setHandle(handle)
 
 	libValue := reflect.ValueOf(lib).Elem()
-	libType := reflect.TypeOf(lib).Elem()
-	dl := libDl{handle: handle}
+	libType := libValue.Type()
 
 	for i := 0; i < libValue.NumField(); i++ {
 		fieldType := libType.Field(i)
@@ -56,16 +54,6 @@ func dlOpenFromHandle(handle uintptr, lib any) error {
 			libValue.Field(i).Set(reflect.ValueOf(symbol))
 			continue
 		}
-
-		if fieldType.Type == reflect.TypeOf(dl) {
-			// Bypass the fact the reflect package doesn't allow writing to private struct fields by directly writing to the field's memory address ourselves
-			reflect.NewAt(reflect.TypeOf(dl), unsafe.Pointer(libValue.Field(i).UnsafeAddr())).Elem().Set(reflect.ValueOf(dl))
-			foundHandle = true
-		}
-	}
-
-	if !foundHandle {
-		return fmt.Errorf("could not find `libLoader` embedding to set the library handle, cowardly refusing the handle to be lost")
 	}
 
 	return nil
@@ -85,4 +73,15 @@ func (lib *libDl) syscall(fn uintptr, args ...uintptr) uintptr {
 
 func (lib *libDl) Close() error {
 	return purego.Dlclose(lib.handle)
+}
+
+type handleSetter interface {
+	setHandle(uintptr)
+}
+
+func (lib *libDl) setHandle(handle uintptr) {
+	if lib.handle != 0 && lib.handle != handle {
+		panic("called setHandle twice on the same libDl value")
+	}
+	lib.handle = handle
 }
