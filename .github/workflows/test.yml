@@ -95,3 +95,15 @@ jobs:
         with:
           platforms: arm64
       - run: docker run --platform=linux/arm64 -v $PWD:$PWD -w $PWD -eCGO_ENABLED=${{ matrix.cgo_enabled }} -eDD_APPSEC_WAF_TIMEOUT=$DD_APPSEC_WAF_TIMEOUT golang go test -v -count=10 -shuffle=on ./...
+
+  # A simple join target to simplify setting up branch protection settings in GH.
+  done:
+    name: Done
+    runs-on: ubuntu-latest
+    needs:
+      - native
+      - golang-linux-container
+      - linux-arm64
+    steps:
+      - name: Done
+        run: echo "Done!"
