@@ -65,6 +65,10 @@ func decodeObject(obj *wafObject) (interface{}, error) {
 		return decodeArray(obj)
 	case wafStringType:
 		return gostringSized(cast[byte](obj.value), obj.nbEntries), nil
+	case wafIntType:
+		return int64(obj.value), nil
+	case wafUintType:
+		return uint64(obj.value), nil
 	default:
 		return nil, errUnsupportedValue
 	}
