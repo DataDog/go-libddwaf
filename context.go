@@ -58,7 +58,7 @@ func NewContext(handle *Handle) *Context {
 // timeout value. It returns the matches as a JSON string (usually opaquely used) along with the corresponding
 // actions in any. In case of an error, matches and actions can still be returned, for instance in the case of a
 // timeout error. Errors can be tested against the RunError type.
-func (context *Context) Run(addressesToData map[string]any, timeout time.Duration) (events []interface{}, actions []string, err error) {
+func (context *Context) Run(addressesToData map[string]any, timeout time.Duration) (events []interface{}, actions []string, derivatives map[string]interface{}, err error) {
 	if len(addressesToData) == 0 {
 		return
 	}
@@ -76,7 +76,7 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 	}
 	obj, err := encoder.Encode(addressesToData)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// ddwaf_run cannot run concurrently and the next append write on the context state so we need a mutex
@@ -90,7 +90,7 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 	return context.run(obj, timeout, &encoder.cgoRefs)
 }
 
-func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) ([]interface{}, []string, error) {
+func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) ([]interface{}, []string, map[string]interface{}, error) {
 	// RLock the handle to safely get read access to the WAF handle and prevent concurrent changes of it
 	// such as a rules-data update.
 	context.handle.mutex.RLock()
@@ -102,30 +102,30 @@ func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoR
 	ret := wafLib.wafRun(context.cContext, obj, result, uint64(timeout/time.Microsecond))
 
 	context.totalRuntimeNs.Add(result.total_runtime)
-	events, actions, err := unwrapWafResult(ret, result)
+	events, actions, derivatives, err := unwrapWafResult(ret, result)
 	if err == ErrTimeout {
 		context.timeoutCount.Inc()
 	}
 
-	return events, actions, err
+	return events, actions, derivatives, err
 }
 
-func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []interface{}, actions []string, err error) {
+func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []interface{}, actions []string, derivatives map[string]interface{}, err error) {
 	if result.timeout > 0 {
 		err = ErrTimeout
 	}
 
 	if ret == wafOK {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if ret != wafMatch {
-		return nil, nil, goRunError(ret)
+		return nil, nil, nil, goRunError(ret)
 	}
 
 	events, err := decodeArray(&result.events)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if size := result.actions.nbEntries; size > 0 {
 		// using ruleIdArray cause it decodes string array (I think)
@@ -134,11 +134,11 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []interface{
 	}
 
 	//TODO: decode derivatives here (map[string]interface{})
-	_, err = decodeMap(&result.derivatives)
+	derivatives, err = decodeMap(&result.derivatives)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return events, actions, err
+	return events, actions, derivatives, err
 }
 
 // Close calls handle.closeContext which calls ddwaf_context_destroy and maybe also close the handle if it in termination state.
