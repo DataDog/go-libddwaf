@@ -10,6 +10,8 @@ package waf
 import (
 	"fmt"
 	"os"
+
+	"github.com/ebitengine/purego"
 )
 
 // wafDl is the type wrapper for all C calls to the waf
@@ -17,91 +19,87 @@ import (
 // All calls must go through this one-liner to be type safe
 // since purego calls are not type safe
 type wafDl struct {
-	libDl
-
-	Ddwaf_ruleset_info_free  uintptr `dlsym:"ddwaf_ruleset_info_free"`
-	Ddwaf_init               uintptr `dlsym:"ddwaf_init"`
-	Ddwaf_update             uintptr `dlsym:"ddwaf_update"`
-	Ddwaf_destroy            uintptr `dlsym:"ddwaf_destroy"`
-	Ddwaf_required_addresses uintptr `dlsym:"ddwaf_required_addresses"`
-	Ddwaf_get_version        uintptr `dlsym:"ddwaf_get_version"`
-	Ddwaf_context_init       uintptr `dlsym:"ddwaf_context_init"`
-	Ddwaf_context_destroy    uintptr `dlsym:"ddwaf_context_destroy"`
-	Ddwaf_result_free        uintptr `dlsym:"ddwaf_result_free"`
-	Ddwaf_run                uintptr `dlsym:"ddwaf_run"`
+	wafSymbols
+	handle uintptr
 }
 
-func dumpWafLibrary() (*os.File, error) {
-	file, err := os.CreateTemp("", "libddwaf-*.so")
-	if err != nil {
-		return nil, fmt.Errorf("Error creating temp file: %w", err)
-	}
-
-	if err := os.WriteFile(file.Name(), libddwaf, 0400); err != nil {
-		return nil, fmt.Errorf("Error writing file: %w", err)
-	}
-
-	return file, nil
+type wafSymbols struct {
+	rulesetInfoFree   uintptr
+	init              uintptr
+	update            uintptr
+	destroy           uintptr
+	requiredAddresses uintptr
+	getVersion        uintptr
+	contextInit       uintptr
+	contextDestroy    uintptr
+	resultFree        uintptr
+	run               uintptr
 }
 
-// newWafDl loads the libddwaf shared library along with all the needed symbols.
-// The returned dynamic library handle dl can be non-nil even with a returned
-// error, meaning that the dynamic library handle can be used but some errors
-// happened in the last internal steps following the successful call to
-// dlopen().
+// newWafDl loads the libddwaf shared library and resolves all tge relevant symbols.
+// The caller is responsible for calling wafDl.Close on the returned object once they
+// are done with it so that associated resources can be released.
 func newWafDl() (dl *wafDl, err error) {
-	file, err := dumpWafLibrary()
+	var file string
+	file, err = dumpWafLibrary()
 	if err != nil {
-		return nil, err
+		return
 	}
-	fName := file.Name()
 	defer func() {
-		rmErr := os.Remove(fName)
+		rmErr := os.Remove(file)
 		if rmErr != nil {
 			if err == nil {
 				err = rmErr
 			} else {
 				// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-				err = fmt.Errorf("%w; along with an error while removing %s: %v", err, fName, rmErr)
+				err = fmt.Errorf("%w; along with an error while removing %s: %v", err, file, rmErr)
 			}
 		}
 	}()
 
-	var waf wafDl
-	if err := dlOpen(fName, &waf); err != nil {
-		return nil, fmt.Errorf("error while opening libddwaf library at %s: %w", fName, err)
+	var handle uintptr
+	if handle, err = purego.Dlopen(file, purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
+		return
 	}
-	defer func() {
-		closeErr := file.Close()
-		if closeErr != nil {
-			if err == nil {
-				err = closeErr
-			} else {
-				// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-				err = fmt.Errorf("%w; along with an error while closing the shared libddwaf library file: %v", err, closeErr)
-			}
+
+	var symbols wafSymbols
+	if symbols, err = resolveWafSymbols(handle); err != nil {
+		if closeErr := purego.Dlclose(handle); closeErr != nil {
+			// TODO: rely on errors.Join() once go1.20 is our min supported Go version
+			err = fmt.Errorf("%w; along with an error while releasing the shared libddwaf library: %v", err, closeErr)
 		}
-	}()
+		return
+	}
+
+	dl = &wafDl{symbols, handle}
 
 	// Try calling the waf to make sure everything is fine
 	err = tryCall(func() error {
-		waf.wafGetVersion()
+		dl.wafGetVersion()
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		if closeErr := purego.Dlclose(handle); closeErr != nil {
+			// TODO: rely on errors.Join() once go1.20 is our min supported Go version
+			err = fmt.Errorf("%w; along with an error while releasing the shared libddwaf library: %v", err, closeErr)
+		}
+		return
 	}
 
-	return &waf, nil
+	return
+}
+
+func (waf *wafDl) Close() error {
+	return purego.Dlclose(waf.handle)
 }
 
 // wafGetVersion returned string is a static string so we do not need to free it
 func (waf *wafDl) wafGetVersion() string {
-	return gostring(cast[byte](waf.syscall(waf.Ddwaf_get_version)))
+	return gostring(cast[byte](waf.syscall(waf.getVersion)))
 }
 
 func (waf *wafDl) wafInit(ruleset *wafObject, config *wafConfig, info *wafRulesetInfo) wafHandle {
-	handle := wafHandle(waf.syscall(waf.Ddwaf_init, ptrToUintptr(ruleset), ptrToUintptr(config), ptrToUintptr(info)))
+	handle := wafHandle(waf.syscall(waf.init, ptrToUintptr(ruleset), ptrToUintptr(config), ptrToUintptr(info)))
 	keepAlive(ruleset)
 	keepAlive(config)
 	keepAlive(info)
@@ -109,19 +107,19 @@ func (waf *wafDl) wafInit(ruleset *wafObject, config *wafConfig, info *wafRulese
 }
 
 func (waf *wafDl) wafUpdate(handle wafHandle, ruleset *wafObject, info *wafRulesetInfo) wafHandle {
-	newHandle := wafHandle(waf.syscall(waf.Ddwaf_update, uintptr(handle), ptrToUintptr(ruleset), ptrToUintptr(info)))
+	newHandle := wafHandle(waf.syscall(waf.update, uintptr(handle), ptrToUintptr(ruleset), ptrToUintptr(info)))
 	keepAlive(ruleset)
 	keepAlive(info)
 	return newHandle
 }
 
 func (waf *wafDl) wafRulesetInfoFree(info *wafRulesetInfo) {
-	waf.syscall(waf.Ddwaf_ruleset_info_free, ptrToUintptr(info))
+	waf.syscall(waf.rulesetInfoFree, ptrToUintptr(info))
 	keepAlive(info)
 }
 
 func (waf *wafDl) wafDestroy(handle wafHandle) {
-	waf.syscall(waf.Ddwaf_destroy, uintptr(handle))
+	waf.syscall(waf.destroy, uintptr(handle))
 	keepAlive(handle)
 }
 
@@ -129,7 +127,7 @@ func (waf *wafDl) wafDestroy(handle wafHandle) {
 func (waf *wafDl) wafRequiredAddresses(handle wafHandle) []string {
 	var nbAddresses uint32
 
-	arrayVoidC := waf.syscall(waf.Ddwaf_required_addresses, uintptr(handle), ptrToUintptr(&nbAddresses))
+	arrayVoidC := waf.syscall(waf.requiredAddresses, uintptr(handle), ptrToUintptr(&nbAddresses))
 	if arrayVoidC == 0 {
 		return nil
 	}
@@ -146,28 +144,77 @@ func (waf *wafDl) wafRequiredAddresses(handle wafHandle) []string {
 }
 
 func (waf *wafDl) wafContextInit(handle wafHandle) wafContext {
-	ctx := wafContext(waf.syscall(waf.Ddwaf_context_init, uintptr(handle)))
+	ctx := wafContext(waf.syscall(waf.contextInit, uintptr(handle)))
 	keepAlive(handle)
 	return ctx
 }
 
 func (waf *wafDl) wafContextDestroy(context wafContext) {
-	waf.syscall(waf.Ddwaf_context_destroy, uintptr(context))
+	waf.syscall(waf.contextDestroy, uintptr(context))
 	keepAlive(context)
 }
 
 func (waf *wafDl) wafResultFree(result *wafResult) {
-	waf.syscall(waf.Ddwaf_result_free, ptrToUintptr(result))
+	waf.syscall(waf.resultFree, ptrToUintptr(result))
 	keepAlive(result)
 }
 
 func (waf *wafDl) wafRun(context wafContext, obj *wafObject, result *wafResult, timeout uint64) wafReturnCode {
-	rc := wafReturnCode(waf.syscall(waf.Ddwaf_run, uintptr(context), ptrToUintptr(obj), ptrToUintptr(result), uintptr(timeout)))
+	rc := wafReturnCode(waf.syscall(waf.run, uintptr(context), ptrToUintptr(obj), ptrToUintptr(result), uintptr(timeout)))
 	keepAlive(context)
 	keepAlive(obj)
 	keepAlive(result)
 	keepAlive(timeout)
 	return rc
+}
+
+// syscall is the only way to make C calls with this interface.
+// purego implementation limits the number of arguments to 9, it will panic if more are provided
+// Note: `purego.SyscallN` has 3 return values: these are the following:
+//
+//	1st - The return value is a pointer or a int of any type
+//	2nd - The return value is a float
+//	3rd - The value of `errno` at the end of the call
+func (waf *wafDl) syscall(fn uintptr, args ...uintptr) uintptr {
+	ret, _, _ := purego.SyscallN(fn, args...)
+	return ret
+}
+
+// resolveWafSymbols resolves relevant symbols from the libddwaf shared library using the provided
+// purego.Dlopen handle.
+func resolveWafSymbols(handle uintptr) (symbols wafSymbols, err error) {
+	if symbols.rulesetInfoFree, err = purego.Dlsym(handle, "ddwaf_ruleset_info_free"); err != nil {
+		return
+	}
+	if symbols.init, err = purego.Dlsym(handle, "ddwaf_init"); err != nil {
+		return
+	}
+	if symbols.update, err = purego.Dlsym(handle, "ddwaf_update"); err != nil {
+		return
+	}
+	if symbols.destroy, err = purego.Dlsym(handle, "ddwaf_destroy"); err != nil {
+		return
+	}
+	if symbols.requiredAddresses, err = purego.Dlsym(handle, "ddwaf_required_addresses"); err != nil {
+		return
+	}
+	if symbols.getVersion, err = purego.Dlsym(handle, "ddwaf_get_version"); err != nil {
+		return
+	}
+	if symbols.contextInit, err = purego.Dlsym(handle, "ddwaf_context_init"); err != nil {
+		return
+	}
+	if symbols.contextDestroy, err = purego.Dlsym(handle, "ddwaf_context_destroy"); err != nil {
+		return
+	}
+	if symbols.resultFree, err = purego.Dlsym(handle, "ddwaf_result_free"); err != nil {
+		return
+	}
+	if symbols.run, err = purego.Dlsym(handle, "ddwaf_run"); err != nil {
+		return
+	}
+
+	return
 }
 
 // Implement SupportsTarget()

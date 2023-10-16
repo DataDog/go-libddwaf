@@ -26,7 +26,7 @@ func TestWafObject(t *testing.T) {
 	_, err := Load()
 	require.NoError(t, err)
 
-	lib := wafLib.libDl.handle
+	lib := wafLib.handle
 
 	t.Run("invalid", func(t *testing.T) {
 		var actual wafObject
