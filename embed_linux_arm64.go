@@ -11,3 +11,5 @@ import _ "embed" // Needed for go:embed
 
 //go:embed lib/linux-arm64/libddwaf.so
 var libddwaf []byte
+
+const embedNamePattern = "libddwaf-*.so"
