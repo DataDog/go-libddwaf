@@ -1,7 +1,7 @@
 # go-libddwaf
 
 This project's goal is to produce a higher level API for the go bindings to [libddwaf](https://github.com/DataDog/libddwaf): DataDog in-app WAF.
-It consists of 2 separate entities: the bindings for the calls to libddwaf, and the encoder whose job is to convert _any_ go value to its libddwaf object representation.
+It consists of 2 separate entities: the bindings for the calls to libddwaf, and the encoder which job is to convert _any_ go value to its libddwaf object representation.
 
 An example usage would be:
 
@@ -47,10 +47,10 @@ The WAF bindings have multiple moving parts that are necessary to understand:
 
 - Handle: a object wrapper over the pointer to the C WAF Handle
 - Context: a object wrapper over a pointer to the C WAF Context
-- Encoder: whose goal is to construct a tree of Waf Objects to send to the WAF
+- Encoder: its goal is to construct a tree of Waf Objects to send to the WAF
 - CGORefPool: Does all allocation operations for the construction of Waf Objects and keeps track of the equivalent go pointers
 - Decoder: Transforms Waf Objects returned from the WAF to usual go objects (e.g. maps, arrays, ...)
-- Library: The low-level API of bindings with the C world, made to provide Go type checking to it
+- Library: The low-level go bindings to the C library, providing improved typing
 
 ```mermaid
 flowchart LR
@@ -123,8 +123,8 @@ Another requirement of `libddwaf` is to have a FHS filesystem on your machine an
 - Since there is a stack switch between the Go code and the C code, usually the only C stacktrace you will ever get is from GDB
 - If a segfault happens during a call to the C code, the goroutine stacktrace which has done the call is the one annotated with `[syscall]`
 - [GoLand](https://www.jetbrains.com/go/) does not support `CGO_ENABLED=0` (as of June 2023)
-- Keep in mind that we fully escape the type system. If you send the wrong data it will segfault in the best cases but not always !
+- Keep in mind that we fully escape the type system. If you send the wrong data it will segfault in the best cases but not always!
 - The structs in `ctypes.go` are here to reproduce the memory layout of the structs in `include/ddwaf.h` because pointers to these structs will be passed directly
 - Do not use `uintptr` as function arguments or results types, coming from `unsafe.Pointer` casts of Go values, because they escape the pointer analysis which can create wrongly optimized code and crash. Pointer arithmetic is of course necessary in such a library but must be kept in the same function scope.
-- GDB is available on arm64 but is not officially supported so it usually crashes pretty fast
+- GDB is available on arm64 but is not officially supported so it usually crashes pretty fast (as of June 2023)
 - No pointer to variables on the stack shall be sent to the C code because Go stacks can be moved during the C call. More on this [here](https://medium.com/@trinad536/escape-analysis-in-golang-fc81b78f3550)
