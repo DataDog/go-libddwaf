@@ -37,6 +37,8 @@ type Handle struct {
 
 	// rulesetInfo holds information about rules initialization
 	rulesetInfo RulesetInfo
+	// diagnostics holds information about rules initialization
+	diagnostics Diagnostics
 }
 
 // NewHandle creates and returns a new instance of the WAF with the given security rules and configuration
@@ -74,6 +76,10 @@ func NewHandle(rules map[string]any, keyObfuscatorRegex string, valueObfuscatorR
 		return nil, errors.New("could not instantiate the WAF")
 	}
 
+	diags, err := decodeDiagnostics(diagnosticsWafObj)
+	if err != nil || diags == nil {
+	}
+
 	defer wafLib.wafObjectFree(diagnosticsWafObj)
 
 	//errorsMap, err := decodeErrors(&cRulesetInfo.errors)
@@ -82,14 +88,15 @@ func NewHandle(rules map[string]any, keyObfuscatorRegex string, valueObfuscatorR
 	//}
 
 	return &Handle{
-		cHandle:     cHandle,
-		refCounter:  atomic.NewInt32(1), // We count the handle itself in the counter
+		cHandle:    cHandle,
+		refCounter: atomic.NewInt32(1), // We count the handle itself in the counter
 		rulesetInfo: RulesetInfo{
 			//Loaded:  cRulesetInfo.loaded,
 			//Failed:  cRulesetInfo.failed,
 			//Errors:  errorsMap,
-			//Version: gostring(cast[byte](cRulesetInfo.version)),
+			Version: diags.version,
 		},
+		diagnostics: *diags,
 	}, nil
 }
 

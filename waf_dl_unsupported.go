@@ -18,15 +18,12 @@ func (waf *wafDl) wafGetVersion() string {
 	return ""
 }
 
-func (waf *wafDl) wafInit(obj *wafObject, config *wafConfig, info *wafRulesetInfo) wafHandle {
+func (waf *wafDl) wafInit(obj *wafObject, config *wafConfig, info *wafObject) wafHandle {
 	return 0
 }
 
-func (waf *wafDl) wafUpdate(handle wafHandle, ruleset *wafObject, info *wafRulesetInfo) wafHandle {
+func (waf *wafDl) wafUpdate(handle wafHandle, ruleset *wafObject, info *wafObject) wafHandle {
 	return 0
-}
-
-func (waf *wafDl) wafRulesetInfoFree(info *wafRulesetInfo) {
 }
 
 func (waf *wafDl) wafDestroy(handle wafHandle) {

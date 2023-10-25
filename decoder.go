@@ -35,6 +35,67 @@ func decodeErrors(obj *wafObject) (map[string][]string, error) {
 	return wafErrors, nil
 }
 
+func decodeDiagnostics(obj *wafObject) (*Diagnostics, error) {
+	if obj._type != wafMapType {
+		return nil, errInvalidObjectType
+	}
+	if obj.value == 0 && obj.nbEntries > 0 {
+		return nil, errNilObjectPtr
+	}
+
+	var diags Diagnostics
+	var err error
+	for i := uint64(0); i < obj.nbEntries; i++ {
+		objElem := castWithOffset[wafObject](obj.value, i)
+		key := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
+		switch key {
+		case "rules":
+			diags.rules, err = decodeDiagnosticsEntry(objElem)
+		case "ruleset_version":
+			diags.version = gostringSized(cast[byte](objElem.value), objElem.nbEntries)
+		default:
+			// ignore?
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &diags, nil
+}
+
+func decodeDiagnosticsEntry(obj *wafObject) (*DiagnosticEntry, error) {
+	if obj._type != wafMapType {
+		return nil, errInvalidObjectType
+	}
+	if obj.value == 0 && obj.nbEntries > 0 {
+		return nil, errNilObjectPtr
+	}
+	var entry DiagnosticEntry
+	var err error
+
+	for i := uint64(0); i < obj.nbEntries; i++ {
+		objElem := castWithOffset[wafObject](obj.value, i)
+		key := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
+		switch key {
+		case "loaded":
+			entry.loaded, err = decodeRuleIdArray(objElem)
+		case "failed":
+			entry.failed, err = decodeRuleIdArray(objElem)
+		case "errors":
+			entry.errors, err = decodeErrors(objElem)
+		default:
+			return nil, errUnsupportedValue
+		}
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &entry, nil
+}
+
 func decodeRuleIdArray(obj *wafObject) ([]string, error) {
 	if obj._type != wafArrayType {
 		return nil, errInvalidObjectType
@@ -69,6 +130,8 @@ func decodeObject(obj *wafObject) (interface{}, error) {
 		return int64(obj.value), nil
 	case wafUintType:
 		return uint64(obj.value), nil
+	case wafBoolType:
+		return obj.value != 0, nil
 	default:
 		return nil, errUnsupportedValue
 	}

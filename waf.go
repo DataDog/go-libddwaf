@@ -24,6 +24,22 @@ func (e *UnsupportedTargetError) Unwrap() error {
 }
 
 // RulesetInfo stores the information - provided by the WAF - about WAF rules initialization.
+type Diagnostics struct {
+	version        string
+	rules          *DiagnosticEntry
+	customRules    *DiagnosticEntry
+	exclusions     *DiagnosticEntry
+	rulesOverrides *DiagnosticEntry
+	rulesData      *DiagnosticEntry
+}
+
+type DiagnosticEntry struct {
+	loaded []string
+	failed []string
+	errors map[string][]string
+}
+
+// RulesetInfo stores the information - provided by the WAF - about WAF rules initialization.
 type RulesetInfo struct {
 	// Number of rules successfully loaded
 	Loaded uint16
