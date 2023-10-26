@@ -617,8 +617,16 @@ func TestMetrics(t *testing.T) {
 	waf, err := newDefaultHandle(parsed)
 	require.NoError(t, err)
 	defer waf.Close()
-	// TODO: WRITE THE TEST
 	t.Run("Diagnostics", func(t *testing.T) {
+		require.NotNil(t, waf.diagnostics.rules)
+		require.Len(t, waf.diagnostics.rules.failed, 3)
+		for _, id := range []string{"missing-tags-1", "missing-tags-2", "missing-name"} {
+			require.Contains(t, waf.diagnostics.rules.failed, id)
+		}
+		require.Len(t, waf.diagnostics.rules.loaded, 1)
+		require.Contains(t, waf.diagnostics.rules.loaded, "valid-rule")
+		require.Equal(t, waf.diagnostics.version, "1.2.7")
+		require.Len(t, waf.diagnostics.rules.errors, 1)
 	})
 
 	t.Run("RunDuration", func(t *testing.T) {
@@ -1284,7 +1292,6 @@ func TestDecoder(t *testing.T) {
 		keepAlive(e.cgoRefs.arrayRefs)
 		keepAlive(e.cgoRefs.stringRefs)
 	})
-
 	t.Run("Values", func(t *testing.T) {
 
 		for _, tc := range []struct {
@@ -1313,7 +1320,15 @@ func TestDecoder(t *testing.T) {
 			},
 			{
 				name: "string",
+				data: "",
+			},
+			{
+				name: "string",
 				data: "EliottAndFrancoisLoveDecoding",
+			},
+			{
+				name: "string",
+				data: "123",
 			},
 			{
 				name: "slice",
