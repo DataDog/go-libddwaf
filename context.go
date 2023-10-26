@@ -133,7 +133,7 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []interface{
 	}
 	if size := result.actions.nbEntries; size > 0 {
 		// using ruleIdArray cause it decodes string array (I think)
-		actions, err = decodeRuleIdArray(&result.actions)
+		actions, err = decodeStringArray(&result.actions)
 		// TODO: use decode array, and eventually genericize the function
 	}
 

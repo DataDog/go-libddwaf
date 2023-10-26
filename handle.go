@@ -75,15 +75,11 @@ func NewHandle(rules map[string]any, keyObfuscatorRegex string, valueObfuscatorR
 	}
 
 	diags, err := decodeDiagnostics(diagnosticsWafObj)
-	if err != nil || diags == nil {
+	if err != nil {
+		return nil, fmt.Errorf("could not decode the WAF diagnostics: %w", err)
 	}
 
 	defer wafLib.wafObjectFree(diagnosticsWafObj)
-
-	//errorsMap, err := decodeErrors(&cRulesetInfo.errors)
-	//if err != nil { // Something is very wrong
-	//	return nil, fmt.Errorf("could not decode the WAF ruleset errors: %w", err)
-	//}
 
 	return &Handle{
 		cHandle:     cHandle,
