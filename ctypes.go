@@ -134,10 +134,16 @@ func cast[T any](ptr uintptr) *T {
 	return (*T)(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)))
 }
 
-// floattoUint is a helper used by the encoder to populate wafObject values
-// with floating point values
-func floatToUint(x float64) uintptr {
+// nativeToUintptr is a helper used by populate wafObject values
+// with Go values
+func nativeToUintptr[T any](x T) uintptr {
 	return *(*uintptr)(unsafe.Pointer(&x))
+}
+
+// uintToNative is a helper used retrieve Go values from an uintptr encoded
+// value from a wafObject
+func uintptrToNative[T any](x uintptr) T {
+	return *(*T)(unsafe.Pointer(&x))
 }
 
 // castWithOffset is the same as cast but adding an offset to the pointer by a multiple of the size

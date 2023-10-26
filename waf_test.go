@@ -680,6 +680,7 @@ func TestEncoder(t *testing.T) {
 		ExpectedWafValueInt    int64
 		ExpectedWafValueUint   uint64
 		ExpectedWafValueFloat  float64
+		ExpectedWafValueBool   bool
 		MaxValueDepth          interface{}
 		MaxContainerLength     interface{}
 		MaxStringLength        interface{}
@@ -788,14 +789,14 @@ func TestEncoder(t *testing.T) {
 		{
 			Name:                 "bool",
 			Data:                 true,
-			ExpectedWAFValueType: wafStringType,
-			ExpectedWAFString:    "true",
+			ExpectedWAFValueType: wafBoolType,
+			ExpectedWafValueBool: true,
 		},
 		{
 			Name:                 "bool",
 			Data:                 false,
-			ExpectedWAFValueType: wafStringType,
-			ExpectedWAFString:    "false",
+			ExpectedWAFValueType: wafBoolType,
+			ExpectedWafValueBool: false,
 		},
 		{
 			Name:                  "float",
@@ -964,8 +965,8 @@ func TestEncoder(t *testing.T) {
 			Name:                 "scalar-values-max-depth-not-accounted",
 			MaxValueDepth:        0,
 			Data:                 false,
-			ExpectedWAFString:    "false",
-			ExpectedWAFValueType: wafStringType,
+			ExpectedWAFValueType: wafBoolType,
+			ExpectedWafValueBool: false,
 		},
 		{
 			Name:                   "array-max-length",
@@ -1208,7 +1209,9 @@ func TestEncoder(t *testing.T) {
 				require.Equal(t, tc.ExpectedWafValueUint, uint64(wo.value))
 				break
 			case wafFloatType:
-				require.Equal(t, tc.ExpectedWafValueFloat, *(*float64)(unsafe.Pointer(&wo.value)))
+				require.Equal(t, tc.ExpectedWafValueFloat, uintptrToNative[float64](wo.value))
+			case wafBoolType:
+				require.Equal(t, tc.ExpectedWafValueBool, uintptrToNative[bool](wo.value))
 
 				break
 			}

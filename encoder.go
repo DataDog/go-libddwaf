@@ -60,26 +60,22 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) e
 	// Terminal cases (leafs of the tree)
 	case kind == reflect.Invalid:
 		return errUnsupportedValue
-
 	// 		Booleans
-	case kind == reflect.Bool && value.Bool(): // true
-		return encoder.encodeString("true", wafStringType, obj)
-	case kind == reflect.Bool && !value.Bool(): // false
-		return encoder.encodeString("false", wafStringType, obj)
-
+	case kind == reflect.Bool:
+		return encodeNative(nativeToUintptr(value.Bool()), wafBoolType, obj)
 	// 		Numbers
 	case value.CanInt(): // any int type or alias
 		return encodeNative(value.Int(), wafIntType, obj)
 	case value.CanUint(): // any Uint type or alias
 		return encodeNative(value.Uint(), wafUintType, obj)
 	case value.CanFloat(): // any float type or alias
-		return encodeNative(floatToUint(value.Float()), wafFloatType, obj)
+		return encodeNative(nativeToUintptr(value.Float()), wafFloatType, obj)
 
 	//		Strings
 	case kind == reflect.String: // string type
-		return encoder.encodeString(value.String(), wafStringType, obj)
+		return encoder.encodeString(value.String(), obj)
 	case value.Type() == reflect.TypeOf([]byte(nil)): // byte array -> string
-		return encoder.encodeString(string(value.Bytes()), wafStringType, obj)
+		return encoder.encodeString(string(value.Bytes()), obj)
 
 	// Recursive cases (internal nodes of the tree)
 	case kind == reflect.Interface || kind == reflect.Pointer: // Pointer and interfaces are not taken into account
@@ -96,7 +92,7 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) e
 	}
 }
 
-func (encoder *encoder) encodeString(str string, typ wafObjectType, obj *wafObject) error {
+func (encoder *encoder) encodeString(str string, obj *wafObject) error {
 	if len(str) > encoder.stringMaxSize {
 		str = str[:encoder.stringMaxSize]
 	}

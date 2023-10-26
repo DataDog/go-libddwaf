@@ -130,8 +130,10 @@ func decodeObject(obj *wafObject) (interface{}, error) {
 		return int64(obj.value), nil
 	case wafUintType:
 		return uint64(obj.value), nil
+	case wafFloatType:
+		return uintptrToNative[float64](obj.value), nil
 	case wafBoolType:
-		return obj.value != 0, nil
+		return uintptrToNative[bool](obj.value), nil
 	default:
 		return nil, errUnsupportedValue
 	}
