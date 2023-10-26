@@ -8,7 +8,6 @@ package waf
 import (
 	"math"
 	"reflect"
-	"strconv"
 	"strings"
 	"unicode"
 )
@@ -25,6 +24,10 @@ type encoder struct {
 	stringMaxSize    int
 	objectMaxDepth   int
 	cgoRefs          cgoRefPool
+}
+
+type native interface {
+	int64 | uint64 | uintptr
 }
 
 func newMaxEncoder() *encoder {
@@ -46,6 +49,12 @@ func (encoder *encoder) Encode(data any) (*wafObject, error) {
 	return wo, nil
 }
 
+func encodeNative[T native](val T, t wafObjectType, obj *wafObject) error {
+	obj._type = t
+	obj.value = (uintptr)(val)
+	return nil
+}
+
 func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) error {
 	switch kind := value.Kind(); {
 	// Terminal cases (leafs of the tree)
@@ -60,11 +69,11 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) e
 
 	// 		Numbers
 	case value.CanInt(): // any int type or alias
-		return encoder.encodeString(strconv.FormatInt(value.Int(), 10), wafStringType, obj)
+		return encodeNative(value.Int(), wafIntType, obj)
 	case value.CanUint(): // any Uint type or alias
-		return encoder.encodeString(strconv.FormatUint(value.Uint(), 10), wafStringType, obj)
+		return encodeNative(value.Uint(), wafUintType, obj)
 	case value.CanFloat(): // any float type or alias
-		return encoder.encodeString(strconv.FormatInt(int64(math.Round(value.Float())), 10), wafStringType, obj)
+		return encodeNative(floatToUint(value.Float()), wafFloatType, obj)
 
 	//		Strings
 	case kind == reflect.String: // string type

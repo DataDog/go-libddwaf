@@ -134,6 +134,12 @@ func cast[T any](ptr uintptr) *T {
 	return (*T)(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)))
 }
 
+// floattoUint is a helper used by the encoder to populate wafObject values
+// with floating point values
+func floatToUint(x float64) uintptr {
+	return *(*uintptr)(unsafe.Pointer(&x))
+}
+
 // castWithOffset is the same as cast but adding an offset to the pointer by a multiple of the size
 // of the type pointed.
 func castWithOffset[T any](ptr uintptr, offset uint64) *T {

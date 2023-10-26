@@ -677,6 +677,9 @@ func TestEncoder(t *testing.T) {
 		ExpectedWAFValueType   int
 		ExpectedWAFValueLength int
 		ExpectedWAFString      string
+		ExpectedWafValueInt    int64
+		ExpectedWafValueUint   uint64
+		ExpectedWafValueFloat  float64
 		MaxValueDepth          interface{}
 		MaxContainerLength     interface{}
 		MaxStringLength        interface{}
@@ -687,9 +690,10 @@ func TestEncoder(t *testing.T) {
 			ExpectedError: errUnsupportedValue,
 		},
 		{
-			Name:              "string-hekki",
-			Data:              "hello, waf",
-			ExpectedWAFString: "hello, waf",
+			Name:                 "string-hekki",
+			Data:                 "hello, waf",
+			ExpectedWAFValueType: wafStringType,
+			ExpectedWAFString:    "hello, waf",
 		},
 		{
 			Name:                   "string-empty",
@@ -698,9 +702,10 @@ func TestEncoder(t *testing.T) {
 			ExpectedWAFValueLength: 0,
 		},
 		{
-			Name:              "byte-slice",
-			Data:              []byte("hello, waf"),
-			ExpectedWAFString: "hello, waf",
+			Name:                 "byte-slice",
+			Data:                 []byte("hello, waf"),
+			ExpectedWAFValueType: wafStringType,
+			ExpectedWAFString:    "hello, waf",
 		},
 		{
 			Name:                   "nil-byte-slice",
@@ -746,9 +751,10 @@ func TestEncoder(t *testing.T) {
 			ExpectedError: errUnsupportedValue,
 		},
 		{
-			Name:              "non-nil-pointer-value",
-			Data:              new(int),
-			ExpectedWAFString: "0",
+			Name:                 "non-nil-pointer-value",
+			Data:                 new(int),
+			ExpectedWAFValueType: wafIntType,
+			ExpectedWafValueInt:  0,
 		},
 		{
 			Name:                   "non-nil-pointer-value",
@@ -768,34 +774,40 @@ func TestEncoder(t *testing.T) {
 			ExpectedError: errUnsupportedValue,
 		},
 		{
-			Name:              "int",
-			Data:              int(1234),
-			ExpectedWAFString: "1234",
+			Name:                 "int",
+			Data:                 int(1234),
+			ExpectedWAFValueType: wafIntType,
+			ExpectedWafValueInt:  1234,
 		},
 		{
-			Name:              "uint",
-			Data:              uint(9876),
-			ExpectedWAFString: "9876",
+			Name:                 "uint",
+			Data:                 uint(9876),
+			ExpectedWAFValueType: wafUintType,
+			ExpectedWafValueUint: 9876,
 		},
 		{
-			Name:              "bool",
-			Data:              true,
-			ExpectedWAFString: "true",
+			Name:                 "bool",
+			Data:                 true,
+			ExpectedWAFValueType: wafStringType,
+			ExpectedWAFString:    "true",
 		},
 		{
-			Name:              "bool",
-			Data:              false,
-			ExpectedWAFString: "false",
+			Name:                 "bool",
+			Data:                 false,
+			ExpectedWAFValueType: wafStringType,
+			ExpectedWAFString:    "false",
 		},
 		{
-			Name:              "float",
-			Data:              33.12345,
-			ExpectedWAFString: "33",
+			Name:                  "float",
+			Data:                  33.12345,
+			ExpectedWAFValueType:  wafFloatType,
+			ExpectedWafValueFloat: 33.12345,
 		},
 		{
-			Name:              "float",
-			Data:              33.62345,
-			ExpectedWAFString: "34",
+			Name:                  "float",
+			Data:                  33.62345,
+			ExpectedWAFValueType:  wafFloatType,
+			ExpectedWafValueFloat: 33.62345,
 		},
 		{
 			Name:                   "slice",
@@ -935,22 +947,25 @@ func TestEncoder(t *testing.T) {
 			ExpectedWAFValueLength: 2,
 		},
 		{
-			Name:              "scalar-values-max-depth-not-accounted",
-			MaxValueDepth:     0,
-			Data:              -1234,
-			ExpectedWAFString: "-1234",
+			Name:                 "scalar-values-max-depth-not-accounted",
+			MaxValueDepth:        0,
+			Data:                 -1234,
+			ExpectedWafValueInt:  -1234,
+			ExpectedWAFValueType: wafIntType,
 		},
 		{
-			Name:              "scalar-values-max-depth-not-accounted",
-			MaxValueDepth:     0,
-			Data:              uint(1234),
-			ExpectedWAFString: "1234",
+			Name:                 "scalar-values-max-depth-not-accounted",
+			MaxValueDepth:        0,
+			Data:                 uint(1234),
+			ExpectedWafValueUint: 1234,
+			ExpectedWAFValueType: wafUintType,
 		},
 		{
-			Name:              "scalar-values-max-depth-not-accounted",
-			MaxValueDepth:     0,
-			Data:              false,
-			ExpectedWAFString: "false",
+			Name:                 "scalar-values-max-depth-not-accounted",
+			MaxValueDepth:        0,
+			Data:                 false,
+			ExpectedWAFString:    "false",
+			ExpectedWAFValueType: wafStringType,
 		},
 		{
 			Name:                   "array-max-length",
@@ -967,10 +982,11 @@ func TestEncoder(t *testing.T) {
 			ExpectedWAFValueLength: 3,
 		},
 		{
-			Name:              "string-max-length",
-			MaxStringLength:   3,
-			Data:              "123456789",
-			ExpectedWAFString: "123",
+			Name:                 "string-max-length",
+			MaxStringLength:      3,
+			Data:                 "123456789",
+			ExpectedWAFString:    "123",
+			ExpectedWAFValueType: wafStringType,
 		},
 		{
 			Name:                   "string-max-length-truncation-leading-to-same-map-keys",
@@ -1076,6 +1092,7 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 1,
+			ExpectedWAFValueType:   wafMapType,
 		},
 		{
 			Name: "unsupported-map-values",
@@ -1086,6 +1103,7 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 2,
+			ExpectedWAFValueType:   wafMapType,
 		},
 		{
 			Name: "unsupported-map-values",
@@ -1096,6 +1114,7 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     1,
 			ExpectedWAFValueLength: 1,
+			ExpectedWAFValueType:   wafMapType,
 		},
 		{
 			Name: "unsupported-struct-values",
@@ -1110,6 +1129,7 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 1,
+			ExpectedWAFValueType:   wafMapType,
 		},
 		{
 			Name: "unsupported-map-values",
@@ -1124,6 +1144,7 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 2,
+			ExpectedWAFValueType:   wafMapType,
 		},
 		{
 			Name: "unsupported-map-values",
@@ -1138,6 +1159,7 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     1,
 			ExpectedWAFValueLength: 1,
+			ExpectedWAFValueType:   wafMapType,
 		},
 	} {
 		tc := tc
@@ -1176,8 +1198,22 @@ func TestEncoder(t *testing.T) {
 			if tc.ExpectedWAFValueLength != 0 {
 				require.Equal(t, tc.ExpectedWAFValueLength, int(wo.nbEntries), "bad waf value length")
 			}
+			require.Equal(t, tc.ExpectedWAFValueType, int(wo._type), "bad waf string value type")
+
+			switch tc.ExpectedWAFValueType {
+			case wafIntType:
+				require.Equal(t, tc.ExpectedWafValueInt, int64(wo.value))
+				break
+			case wafUintType:
+				require.Equal(t, tc.ExpectedWafValueUint, uint64(wo.value))
+				break
+			case wafFloatType:
+				require.Equal(t, tc.ExpectedWafValueFloat, *(*float64)(unsafe.Pointer(&wo.value)))
+
+				break
+			}
+
 			if expectedStr := tc.ExpectedWAFString; expectedStr != "" {
-				require.Equal(t, wafStringType, int(wo._type), "bad waf string value type")
 				cbuf := wo.value
 				gobuf := []byte(expectedStr)
 				require.Equal(t, len(gobuf), int(wo.nbEntries), "bad waf value length")
