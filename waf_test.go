@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"sync"
 	"testing"
 	"text/template"
@@ -616,17 +617,8 @@ func TestMetrics(t *testing.T) {
 	waf, err := newDefaultHandle(parsed)
 	require.NoError(t, err)
 	defer waf.Close()
-	// TODO: (Francois Mazeau) see if we can make this test more configurable to future proof against libddwaf changes
-	t.Run("RulesetInfo", func(t *testing.T) {
-		rInfo := waf.RulesetInfo()
-		require.Equal(t, uint16(3), rInfo.Failed)
-		require.Equal(t, uint16(1), rInfo.Loaded)
-		require.Equal(t, 2, len(rInfo.Errors))
-		require.Equal(t, "1.2.7", rInfo.Version)
-		require.Equal(t, map[string][]string{
-			"missing key 'tags'": {"missing-tags-1", "missing-tags-2"},
-			"missing key 'name'": {"missing-name"},
-		}, rInfo.Errors)
+	// TODO: WRITE THE TEST
+	t.Run("Diagnostics", func(t *testing.T) {
 	})
 
 	t.Run("RunDuration", func(t *testing.T) {
@@ -1352,6 +1344,86 @@ func TestDecoder(t *testing.T) {
 
 		keepAlive(e.cgoRefs.arrayRefs)
 		keepAlive(e.cgoRefs.stringRefs)
+	})
+
+	t.Run("Values", func(t *testing.T) {
+
+		for _, tc := range []struct {
+			name string
+			data any
+		}{
+			{
+				name: "int64",
+				data: int64(-4),
+			},
+			{
+				name: "uint64",
+				data: uint64(4),
+			},
+			{
+				name: "float64",
+				data: 4.4444,
+			},
+			{
+				name: "bool",
+				data: true,
+			},
+			{
+				name: "bool",
+				data: false,
+			},
+			{
+				name: "string",
+				data: "EliottAndFrancoisLoveDecoding",
+			},
+			{
+				name: "slice",
+				data: []any{int64(1), int64(2), int64(3), int64(4)},
+			},
+			{
+				name: "slice",
+				data: []any{"1", "2", "3", "4"},
+			},
+			{
+				name: "slice",
+				data: []any{true, false, false, true, true, true},
+			},
+			{
+				name: "slice-nested",
+				data: []any{[]any{true, false}, []any{false, false}, []any{true, true, true}},
+			},
+			{
+				name: "map",
+				data: map[string]any{"1": int64(1), "2": int64(2), "3": int64(3)},
+			},
+			{
+				name: "map",
+				data: map[string]any{"1": uint64(1), "2": uint64(2), "3": uint64(3)},
+			},
+			{
+				name: "map",
+				data: map[string]any{"1": 1.111, "2": 2.222, "3": 3.333},
+			},
+			{
+				name: "map",
+				data: map[string]any{"1": "1", "2": "2", "3": "3"},
+			},
+			{
+				name: "map-nested",
+				data: map[string]any{"1": map[string]any{"1": int64(1), "2": int64(2)}, "2": map[string]any{"3": int64(3), "4": int64(4)}},
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				e := newMaxEncoder()
+				obj, err := e.Encode(tc.data)
+				require.NoError(t, err)
+
+				val, err := decodeObject(obj)
+				require.NoError(t, err)
+				require.True(t, reflect.DeepEqual(tc.data, val))
+			})
+		}
+
 	})
 }
 

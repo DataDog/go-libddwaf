@@ -35,8 +35,6 @@ type Handle struct {
 	// in the handle).
 	mutex sync.RWMutex
 
-	// rulesetInfo holds information about rules initialization
-	rulesetInfo RulesetInfo
 	// diagnostics holds information about rules initialization
 	diagnostics Diagnostics
 }
@@ -88,21 +86,15 @@ func NewHandle(rules map[string]any, keyObfuscatorRegex string, valueObfuscatorR
 	//}
 
 	return &Handle{
-		cHandle:    cHandle,
-		refCounter: atomic.NewInt32(1), // We count the handle itself in the counter
-		rulesetInfo: RulesetInfo{
-			//Loaded:  cRulesetInfo.loaded,
-			//Failed:  cRulesetInfo.failed,
-			//Errors:  errorsMap,
-			Version: diags.version,
-		},
+		cHandle:     cHandle,
+		refCounter:  atomic.NewInt32(1), // We count the handle itself in the counter
 		diagnostics: *diags,
 	}, nil
 }
 
-// RulesetInfo returns the rules initialization metrics for the current WAF handle
-func (handle *Handle) RulesetInfo() RulesetInfo {
-	return handle.rulesetInfo
+// Diagnostics returns the rules initialization metrics for the current WAF handle
+func (handle *Handle) Diagnostics() Diagnostics {
+	return handle.diagnostics
 }
 
 // Addresses returns the list of addresses the WAF rule is expecting.
@@ -135,14 +127,8 @@ func (handle *Handle) Update(newRules any) (*Handle, error) {
 	}
 
 	return &Handle{
-		cHandle:     cHandle,
-		refCounter:  atomic.NewInt32(1), // We count the handle itself in the counter
-		rulesetInfo: RulesetInfo{
-			//Loaded:  cRulesetInfo.loaded,
-			//Failed:  cRulesetInfo.failed,
-			//Errors:  errorsMap,
-			//Version: gostring(cast[byte](cRulesetInfo.version)),
-		},
+		cHandle:    cHandle,
+		refCounter: atomic.NewInt32(1), // We count the handle itself in the counter
 	}, nil
 }
 

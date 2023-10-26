@@ -23,7 +23,7 @@ func (e *UnsupportedTargetError) Unwrap() error {
 	return e.error
 }
 
-// RulesetInfo stores the information - provided by the WAF - about WAF rules initialization.
+// Diagnostics stores the information - provided by the WAF - about WAF rules initialization.
 type Diagnostics struct {
 	version        string
 	rules          *DiagnosticEntry
@@ -37,19 +37,6 @@ type DiagnosticEntry struct {
 	loaded []string
 	failed []string
 	errors map[string][]string
-}
-
-// RulesetInfo stores the information - provided by the WAF - about WAF rules initialization.
-type RulesetInfo struct {
-	// Number of rules successfully loaded
-	Loaded uint16
-	// Number of rules which failed to parse
-	Failed uint16
-	// Map from an error string to an array of all the rule ids for which
-	// that error was raised. {error: [rule_ids]}
-	Errors map[string][]string
-	// Ruleset version
-	Version string
 }
 
 // Result stores the multiple values returned by a call to ddwaf_run
