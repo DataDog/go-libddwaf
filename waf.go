@@ -52,6 +52,13 @@ type RulesetInfo struct {
 	Version string
 }
 
+// Result stores the multiple values returned by a call to ddwaf_run
+type Result struct {
+	Events      []any
+	Derivatives map[string]any
+	Actions     []string
+}
+
 // Encoder/Decoder errors
 var (
 	errMaxDepth          = errors.New("max depth reached")

@@ -188,10 +188,10 @@ func TestUpdateWAF(t *testing.T) {
 		values := map[string]interface{}{
 			"my.input": "Arachni",
 		}
-		matches, actions, _, err := wafCtx.Run(values, time.Second)
+		res, err := wafCtx.Run(values, time.Second)
 		require.NoError(t, err)
-		require.NotEmpty(t, matches)
-		require.Nil(t, actions)
+		require.NotEmpty(t, res.Events)
+		require.Nil(t, res.Actions)
 
 		// Update
 		waf2, err := waf.Update(newArachniTestRule([]ruleInput{{Address: "my.input"}}, []string{"block"}))
@@ -206,10 +206,10 @@ func TestUpdateWAF(t *testing.T) {
 		values = map[string]interface{}{
 			"my.input": "Arachni",
 		}
-		matches, actions, _, err = wafCtx2.Run(values, time.Second)
+		res, err = wafCtx2.Run(values, time.Second)
 		require.NoError(t, err)
-		require.NotEmpty(t, matches)
-		require.NotEmpty(t, actions)
+		require.NotEmpty(t, res.Events)
+		require.NotEmpty(t, res.Actions)
 
 	})
 
@@ -245,56 +245,56 @@ func TestMatching(t *testing.T) {
 	values := map[string]interface{}{
 		"my.input": "go client",
 	}
-	matches, actions, _, err := wafCtx.Run(values, time.Second)
+	res, err := wafCtx.Run(values, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, matches)
-	require.Nil(t, actions)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
 
 	// Not matching because the address is not used by the rule
 	values = map[string]interface{}{
 		"server.request.uri.raw": "something",
 	}
-	matches, actions, _, err = wafCtx.Run(values, time.Second)
+	res, err = wafCtx.Run(values, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, matches)
-	require.Nil(t, actions)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
 
 	// Not matching due to a timeout
 	values = map[string]interface{}{
 		"my.input": "Arachni",
 	}
-	matches, actions, _, err = wafCtx.Run(values, 0)
+	res, err = wafCtx.Run(values, 0)
 	require.Equal(t, ErrTimeout, err)
-	require.Nil(t, matches)
-	require.Nil(t, actions)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
 
 	// Matching
 	// Note a WAF rule can only match once. This is why we test the matching case at the end.
 	values = map[string]interface{}{
 		"my.input": "Arachni",
 	}
-	matches, actions, _, err = wafCtx.Run(values, time.Second)
+	res, err = wafCtx.Run(values, time.Second)
 	require.NoError(t, err)
-	require.NotEmpty(t, matches)
-	require.Nil(t, actions)
+	require.NotEmpty(t, res.Events)
+	require.Nil(t, res.Actions)
 
 	// Not matching anymore since it already matched before
-	matches, actions, _, err = wafCtx.Run(values, time.Second)
+	res, err = wafCtx.Run(values, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, matches)
-	require.Nil(t, actions)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
 
 	// Nil values
-	matches, actions, _, err = wafCtx.Run(nil, time.Second)
+	res, err = wafCtx.Run(nil, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, matches)
-	require.Nil(t, actions)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
 
 	// Empty values
-	matches, actions, _, err = wafCtx.Run(map[string]interface{}{}, time.Second)
+	res, err = wafCtx.Run(map[string]interface{}{}, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, matches)
-	require.Nil(t, actions)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
 
 	wafCtx.Close()
 	waf.Close()
@@ -319,11 +319,11 @@ func TestActions(t *testing.T) {
 			values := map[string]interface{}{
 				"my.input": "Arachni",
 			}
-			matches, actions, _, err := wafCtx.Run(values, time.Second)
+			res, err := wafCtx.Run(values, time.Second)
 			require.NoError(t, err)
-			require.NotEmpty(t, matches)
+			require.NotEmpty(t, res.Events)
 			// FIXME: check with libddwaf why the order of returned actions is not kept the same
-			require.ElementsMatch(t, expectedActions, actions)
+			require.ElementsMatch(t, expectedActions, res.Actions)
 		}
 	}
 
@@ -378,12 +378,12 @@ func TestConcurrency(t *testing.T) {
 							"user-agent": userAgents[i],
 						},
 					}
-					matches, _, _, err := wafCtx.Run(data, time.Minute)
+					res, err := wafCtx.Run(data, time.Minute)
 					if err != nil {
 						panic(err)
 					}
-					if len(matches) > 0 {
-						panic(fmt.Errorf("c=%d matches=`%v`", c, matches))
+					if len(res.Events) > 0 {
+						panic(fmt.Errorf("c=%d matches=`%v`", c, res.Events))
 					}
 				}
 			}()
@@ -400,9 +400,9 @@ func TestConcurrency(t *testing.T) {
 				"user-agent": "Arachni",
 			},
 		}
-		matches, _, _, err := wafCtx.Run(data, time.Second)
+		res, err := wafCtx.Run(data, time.Second)
 		require.NoError(t, err)
-		require.NotEmpty(t, matches)
+		require.NotEmpty(t, res.Events)
 	})
 
 	t.Run("concurrent-waf-instance-usage", func(t *testing.T) {
@@ -439,13 +439,13 @@ func TestConcurrency(t *testing.T) {
 						},
 					}
 
-					matches, _, _, err := wafCtx.Run(data, time.Minute)
+					res, err := wafCtx.Run(data, time.Minute)
 
 					if err != nil {
 						panic(err)
 					}
-					if len(matches) > 0 {
-						panic(fmt.Errorf("c=%d matches=`%v`", c, matches))
+					if len(res.Events) > 0 {
+						panic(fmt.Errorf("c=%d matches=`%v`", c, res.Events))
 					}
 				}
 
@@ -455,10 +455,10 @@ func TestConcurrency(t *testing.T) {
 						"user-agent": "Arachni",
 					},
 				}
-				matches, actions, _, err := wafCtx.Run(data, time.Second)
+				res, err := wafCtx.Run(data, time.Second)
 				require.NoError(t, err)
-				require.NotEmpty(t, matches)
-				require.Nil(t, actions)
+				require.NotEmpty(t, res.Events)
+				require.Nil(t, res.Actions)
 			}()
 		}
 
@@ -638,11 +638,11 @@ func TestMetrics(t *testing.T) {
 			"server.request.uri.raw": "\\%uff00",
 		}
 		start := time.Now()
-		matches, actions, _, err := wafCtx.Run(data, time.Second)
+		res, err := wafCtx.Run(data, time.Second)
 		elapsedNS := time.Since(start).Nanoseconds()
 		require.NoError(t, err)
-		require.NotNil(t, matches)
-		require.Nil(t, actions)
+		require.NotNil(t, res.Events)
+		require.Nil(t, res.Actions)
 
 		// Make sure that WAF runtime was set
 		overall, internal := wafCtx.TotalRuntime()
@@ -662,7 +662,7 @@ func TestMetrics(t *testing.T) {
 		}
 
 		for i := uint64(1); i <= 10; i++ {
-			_, _, _, err := wafCtx.Run(data, time.Nanosecond)
+			_, err := wafCtx.Run(data, time.Nanosecond)
 			require.Equal(t, err, ErrTimeout)
 			require.Equal(t, i, wafCtx.TotalTimeouts())
 		}
@@ -1197,7 +1197,7 @@ func TestEncoder(t *testing.T) {
 			wafCtx := NewContext(waf)
 			require.NotNil(t, wafCtx)
 			defer wafCtx.Close()
-			_, _, _, err = wafCtx.Run(map[string]interface{}{
+			_, err = wafCtx.Run(map[string]interface{}{
 				"my.input": tc.Data,
 			}, time.Second)
 			require.NoError(t, err)
@@ -1328,11 +1328,11 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]interface{}{
 			"my.addr": map[string]interface{}{"key": "Arachni-sensitive-Arachni"},
 		}
-		events, actions, _, err := wafCtx.Run(data, time.Second)
+		res, err := wafCtx.Run(data, time.Second)
 		require.NoError(t, err)
-		require.NotNil(t, events)
-		require.Nil(t, actions)
-		matches, err := json.Marshal(events)
+		require.NotNil(t, res.Events)
+		require.Nil(t, res.Actions)
+		matches, err := json.Marshal(res.Events)
 		require.NoError(t, err)
 		require.NotContains(t, matches, "sensitive")
 	})
@@ -1347,11 +1347,11 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]interface{}{
 			"my.addr": map[string]interface{}{"key": "Arachni-sensitive-Arachni"},
 		}
-		events, actions, _, err := wafCtx.Run(data, time.Second)
+		res, err := wafCtx.Run(data, time.Second)
 		require.NoError(t, err)
-		require.NotNil(t, events)
-		require.Nil(t, actions)
-		matches, err := json.Marshal(events)
+		require.NotNil(t, res.Events)
+		require.Nil(t, res.Actions)
+		matches, err := json.Marshal(res.Events)
 		require.NoError(t, err)
 		require.NotContains(t, matches, "sensitive")
 	})
@@ -1366,11 +1366,11 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]interface{}{
 			"my.addr": map[string]interface{}{"key": "Arachni-sensitive-Arachni"},
 		}
-		events, actions, _, err := wafCtx.Run(data, time.Second)
+		res, err := wafCtx.Run(data, time.Second)
 		require.NoError(t, err)
-		require.NotNil(t, events)
-		require.Nil(t, actions)
-		matches, err := json.Marshal(events)
+		require.NotNil(t, res.Events)
+		require.Nil(t, res.Actions)
+		matches, err := json.Marshal(res.Events)
 		require.NoError(t, err)
 		require.Contains(t, string(matches), "sensitive")
 	})

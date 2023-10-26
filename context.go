@@ -58,7 +58,7 @@ func NewContext(handle *Handle) *Context {
 // timeout value. It returns the matches as a JSON string (usually opaquely used) along with the corresponding
 // actions in any. In case of an error, matches and actions can still be returned, for instance in the case of a
 // timeout error. Errors can be tested against the RunError type.
-func (context *Context) Run(addressesToData map[string]any, timeout time.Duration) (events []interface{}, actions []string, derivatives map[string]interface{}, err error) {
+func (context *Context) Run(addressesToData map[string]any, timeout time.Duration) (res Result, err error) {
 	if len(addressesToData) == 0 {
 		return
 	}
@@ -76,7 +76,7 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 	}
 	obj, err := encoder.Encode(addressesToData)
 	if err != nil {
-		return nil, nil, nil, err
+		return res, err
 	}
 
 	// ddwaf_run cannot run concurrently and the next append write on the context state so we need a mutex
@@ -90,7 +90,7 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 	return context.run(obj, timeout, &encoder.cgoRefs)
 }
 
-func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) ([]interface{}, []string, map[string]interface{}, error) {
+func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) (Result, error) {
 	// RLock the handle to safely get read access to the WAF handle and prevent concurrent changes of it
 	// such as a rules-data update.
 	context.handle.mutex.RLock()
@@ -107,7 +107,11 @@ func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoR
 		context.timeoutCount.Inc()
 	}
 
-	return events, actions, derivatives, err
+	return Result{
+		Events:      events,
+		Actions:     actions,
+		Derivatives: derivatives,
+	}, err
 }
 
 func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []interface{}, actions []string, derivatives map[string]interface{}, err error) {
