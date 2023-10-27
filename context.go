@@ -102,47 +102,39 @@ func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoR
 	ret := wafLib.wafRun(context.cContext, obj, result, uint64(timeout/time.Microsecond))
 
 	context.totalRuntimeNs.Add(result.total_runtime)
-	events, actions, derivatives, err := unwrapWafResult(ret, result)
+	res, err := unwrapWafResult(ret, result)
 	if err == ErrTimeout {
 		context.timeoutCount.Inc()
 	}
 
-	return Result{
-		Events:      events,
-		Actions:     actions,
-		Derivatives: derivatives,
-	}, err
+	return res, err
 }
 
-func unwrapWafResult(ret wafReturnCode, result *wafResult) (matches []interface{}, actions []string, derivatives map[string]interface{}, err error) {
+func unwrapWafResult(ret wafReturnCode, result *wafResult) (res Result, err error) {
 	if result.timeout > 0 {
 		err = ErrTimeout
 	}
 
 	if ret == wafOK {
-		return nil, nil, nil, err
+		return res, err
 	}
 
 	if ret != wafMatch {
-		return nil, nil, nil, goRunError(ret)
+		return res, goRunError(ret)
 	}
 
-	events, err := decodeArray(&result.events)
+	res.Events, err = decodeArray(&result.events)
 	if err != nil {
-		return nil, nil, nil, err
+		return res, err
 	}
 	if size := result.actions.nbEntries; size > 0 {
 		// using ruleIdArray cause it decodes string array (I think)
-		actions, err = decodeStringArray(&result.actions)
+		res.Actions, err = decodeStringArray(&result.actions)
 		// TODO: use decode array, and eventually genericize the function
 	}
 
-	//TODO: decode derivatives here (map[string]interface{})
-	derivatives, err = decodeMap(&result.derivatives)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return events, actions, derivatives, err
+	res.Derivatives, err = decodeMap(&result.derivatives)
+	return res, err
 }
 
 // Close calls handle.closeContext which calls ddwaf_context_destroy and maybe also close the handle if it in termination state.

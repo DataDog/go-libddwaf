@@ -384,7 +384,7 @@ func TestConcurrency(t *testing.T) {
 						panic(err)
 					}
 					if len(res.Events) > 0 {
-						panic(fmt.Errorf("c=%d matches=`%v`", c, res.Events))
+						panic(fmt.Errorf("c=%d events=`%v`", c, res.Events))
 					}
 				}
 			}()
@@ -446,7 +446,7 @@ func TestConcurrency(t *testing.T) {
 						panic(err)
 					}
 					if len(res.Events) > 0 {
-						panic(fmt.Errorf("c=%d matches=`%v`", c, res.Events))
+						panic(fmt.Errorf("c=%d events=`%v`", c, res.Events))
 					}
 				}
 
@@ -1397,9 +1397,9 @@ func TestObfuscatorConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
-		matches, err := json.Marshal(res.Events)
+		events, err := json.Marshal(res.Events)
 		require.NoError(t, err)
-		require.NotContains(t, matches, "sensitive")
+		require.NotContains(t, events, "sensitive")
 	})
 
 	t.Run("val", func(t *testing.T) {
@@ -1416,9 +1416,9 @@ func TestObfuscatorConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
-		matches, err := json.Marshal(res.Events)
+		events, err := json.Marshal(res.Events)
 		require.NoError(t, err)
-		require.NotContains(t, matches, "sensitive")
+		require.NotContains(t, events, "sensitive")
 	})
 
 	t.Run("off", func(t *testing.T) {
@@ -1435,9 +1435,9 @@ func TestObfuscatorConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
-		matches, err := json.Marshal(res.Events)
+		events, err := json.Marshal(res.Events)
 		require.NoError(t, err)
-		require.Contains(t, string(matches), "sensitive")
+		require.Contains(t, string(events), "sensitive")
 	})
 }
 
