@@ -156,6 +156,7 @@ func (waf *wafDl) wafResultFree(result *wafResult) {
 
 func (waf *wafDl) wafObjectFree(obj *wafObject) {
 	waf.syscall(waf.objectFree, ptrToUintptr(obj))
+	keepAlive(obj)
 }
 
 func (waf *wafDl) wafRun(context wafContext, obj *wafObject, result *wafResult, timeout uint64) wafReturnCode {

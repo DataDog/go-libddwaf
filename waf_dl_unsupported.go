@@ -43,6 +43,9 @@ func (waf *wafDl) wafContextDestroy(context wafContext) {
 func (waf *wafDl) wafResultFree(result *wafResult) {
 }
 
+func (waf *wafDl) wafObjectFree(obj *wafObject) {
+}
+
 func (waf *wafDl) wafRun(context wafContext, obj *wafObject, result *wafResult, timeout uint64) wafReturnCode {
 	return wafErrInternal
 }
