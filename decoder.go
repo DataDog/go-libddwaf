@@ -105,17 +105,17 @@ func decodeStringArray(obj *wafObject) ([]string, error) {
 		return nil, errNilObjectPtr
 	}
 
-	var ruleIds []string
+	var strArr []string
 	for i := uint64(0); i < obj.nbEntries; i++ {
 		objElem := castWithOffset[wafObject](obj.value, i)
 		if objElem._type != wafStringType {
 			return nil, errInvalidObjectType
 		}
 
-		ruleIds = append(ruleIds, gostringSized(cast[byte](objElem.value), objElem.nbEntries))
+		strArr = append(strArr, gostringSized(cast[byte](objElem.value), objElem.nbEntries))
 	}
 
-	return ruleIds, nil
+	return strArr, nil
 }
 
 func decodeObject(obj *wafObject) (any, error) {
@@ -144,7 +144,7 @@ func decodeArray(obj *wafObject) ([]any, error) {
 		return nil, errInvalidObjectType
 	}
 
-	var events []any
+	events := make([]any, obj.nbEntries)
 
 	for i := uint64(0); i < obj.nbEntries; i++ {
 		objElem := castWithOffset[wafObject](obj.value, i)
@@ -152,7 +152,7 @@ func decodeArray(obj *wafObject) ([]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		events = append(events, val)
+		events[i] = val
 	}
 
 	return events, nil
@@ -163,7 +163,7 @@ func decodeMap(obj *wafObject) (map[string]any, error) {
 		return nil, errInvalidObjectType
 	}
 
-	result := map[string]any{}
+	result := make(map[string]any, obj.nbEntries)
 	for i := uint64(0); i < obj.nbEntries; i++ {
 		objElem := castWithOffset[wafObject](obj.value, i)
 		key := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
