@@ -35,8 +35,8 @@ type Handle struct {
 	// in the handle).
 	mutex sync.RWMutex
 
-	// rulesetInfo holds information about rules initialization
-	rulesetInfo RulesetInfo
+	// diagnostics holds information about rules initialization
+	diagnostics Diagnostics
 }
 
 // NewHandle creates and returns a new instance of the WAF with the given security rules and configuration
@@ -64,9 +64,9 @@ func NewHandle(rules map[string]any, keyObfuscatorRegex string, valueObfuscatorR
 	}
 
 	config := newConfig(&encoder.cgoRefs, keyObfuscatorRegex, valueObfuscatorRegex)
-	cRulesetInfo := new(wafRulesetInfo)
+	diagnosticsWafObj := new(wafObject)
 
-	cHandle := wafLib.wafInit(obj, config, cRulesetInfo)
+	cHandle := wafLib.wafInit(obj, config, diagnosticsWafObj)
 	keepAlive(encoder.cgoRefs)
 	// Note that the encoded obj was copied by libddwaf, so we don't need to keep them alive
 	// for the lifetime of the handle (ddwaf API guarantee).
@@ -74,28 +74,23 @@ func NewHandle(rules map[string]any, keyObfuscatorRegex string, valueObfuscatorR
 		return nil, errors.New("could not instantiate the WAF")
 	}
 
-	defer wafLib.wafRulesetInfoFree(cRulesetInfo)
-
-	errorsMap, err := decodeErrors(&cRulesetInfo.errors)
-	if err != nil { // Something is very wrong
-		return nil, fmt.Errorf("could not decode the WAF ruleset errors: %w", err)
+	diags, err := decodeDiagnostics(diagnosticsWafObj)
+	if err != nil {
+		return nil, fmt.Errorf("could not decode the WAF diagnostics: %w", err)
 	}
 
+	defer wafLib.wafObjectFree(diagnosticsWafObj)
+
 	return &Handle{
-		cHandle:    cHandle,
-		refCounter: atomic.NewInt32(1), // We count the handle itself in the counter
-		rulesetInfo: RulesetInfo{
-			Loaded:  cRulesetInfo.loaded,
-			Failed:  cRulesetInfo.failed,
-			Errors:  errorsMap,
-			Version: gostring(cast[byte](cRulesetInfo.version)),
-		},
+		cHandle:     cHandle,
+		refCounter:  atomic.NewInt32(1), // We count the handle itself in the counter
+		diagnostics: *diags,
 	}, nil
 }
 
-// RulesetInfo returns the rules initialization metrics for the current WAF handle
-func (handle *Handle) RulesetInfo() RulesetInfo {
-	return handle.rulesetInfo
+// Diagnostics returns the rules initialization metrics for the current WAF handle
+func (handle *Handle) Diagnostics() Diagnostics {
+	return handle.diagnostics
 }
 
 // Addresses returns the list of addresses the WAF rule is expecting.
@@ -113,17 +108,16 @@ func (handle *Handle) Update(newRules any) (*Handle, error) {
 		return nil, fmt.Errorf("could not encode the WAF ruleset into a WAF object: %w", err)
 	}
 
-	cRulesetInfo := new(wafRulesetInfo)
+	diagnosticsWafObj := new(wafObject)
 
-	cHandle := wafLib.wafUpdate(handle.cHandle, obj, cRulesetInfo)
+	cHandle := wafLib.wafUpdate(handle.cHandle, obj, diagnosticsWafObj)
 	keepAlive(encoder.cgoRefs)
 	if cHandle == 0 {
 		return nil, errors.New("could not update the WAF instance")
 	}
 
-	defer wafLib.wafRulesetInfoFree(cRulesetInfo)
+	defer wafLib.wafObjectFree(diagnosticsWafObj)
 
-	errorsMap, err := decodeErrors(&cRulesetInfo.errors)
 	if err != nil { // Something is very wrong
 		return nil, fmt.Errorf("could not decode the WAF ruleset errors: %w", err)
 	}
@@ -131,12 +125,6 @@ func (handle *Handle) Update(newRules any) (*Handle, error) {
 	return &Handle{
 		cHandle:    cHandle,
 		refCounter: atomic.NewInt32(1), // We count the handle itself in the counter
-		rulesetInfo: RulesetInfo{
-			Loaded:  cRulesetInfo.loaded,
-			Failed:  cRulesetInfo.failed,
-			Errors:  errorsMap,
-			Version: gostring(cast[byte](cRulesetInfo.version)),
-		},
 	}, nil
 }
 
