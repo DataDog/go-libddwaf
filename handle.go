@@ -37,6 +37,9 @@ type Handle struct {
 
 	// diagnostics holds information about rules initialization
 	diagnostics Diagnostics
+
+	// addresses are what is supported by the ruleset given to the handle. Further used in AddressesBuilder
+	addresses supportedAddresses
 }
 
 // NewHandle creates and returns a new instance of the WAF with the given security rules and configuration
