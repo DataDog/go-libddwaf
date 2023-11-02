@@ -25,18 +25,20 @@ func (e *UnsupportedTargetError) Unwrap() error {
 
 // Diagnostics stores the information - provided by the WAF - about WAF rules initialization.
 type Diagnostics struct {
-	version        string
-	rules          *DiagnosticEntry
-	customRules    *DiagnosticEntry
-	exclusions     *DiagnosticEntry
-	rulesOverrides *DiagnosticEntry
-	rulesData      *DiagnosticEntry
+	Version        string
+	Rules          *DiagnosticEntry
+	CustomRules    *DiagnosticEntry
+	Exclusions     *DiagnosticEntry
+	RulesOverrides *DiagnosticEntry
+	RulesData      *DiagnosticEntry
 }
 
+// DiagnosticEntry stores the information - provided by the WAF - about loaded and failed rules
+// for a specific entry in the WAF ruleset
 type DiagnosticEntry struct {
-	loaded []string
-	failed []string
-	errors map[string][]string
+	Loaded []string
+	Failed []string
+	Errors map[string][]string
 }
 
 // Result stores the multiple values returned by a call to ddwaf_run
