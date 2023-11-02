@@ -20,7 +20,7 @@ import (
 // wafObject are either arrays (for maps, structs and arrays) or string (for all ints, booleans and strings),
 // we can store 2 slices of arrays and use runtime.KeepAlive in each code path to protect them from the GC.
 type cgoRefPool struct {
-	stringRefs [][]byte
+	stringRefs []string
 	arrayRefs  [][]wafObject
 }
 
@@ -30,12 +30,9 @@ func (refPool *cgoRefPool) append(newRefs cgoRefPool) {
 }
 
 func (refPool *cgoRefPool) AllocCString(str string) uintptr {
-	goArray := make([]byte, len(str)+1)
-	copy(goArray, str)
-	refPool.stringRefs = append(refPool.stringRefs, goArray)
-	goArray[len(str)] = 0 // Null termination byte for C strings
-
-	return sliceToUintptr(goArray)
+	nullTerminated := str + "\x00"
+	refPool.stringRefs = append(refPool.stringRefs, nullTerminated)
+	return nativeStringUnwrap(nullTerminated).Data
 }
 
 func (refPool *cgoRefPool) AllocWafString(obj *wafObject, str string) {
@@ -47,12 +44,10 @@ func (refPool *cgoRefPool) AllocWafString(obj *wafObject, str string) {
 		return
 	}
 
-	goArray := make([]byte, len(str))
-	copy(goArray, str)
-	refPool.stringRefs = append(refPool.stringRefs, goArray)
-
-	obj.value = sliceToUintptr(goArray)
-	obj.nbEntries = uint64(len(goArray))
+	refPool.stringRefs = append(refPool.stringRefs, str)
+	stringHeader := nativeStringUnwrap(str)
+	obj.value = stringHeader.Data
+	obj.nbEntries = uint64(stringHeader.Len)
 }
 
 func (refPool *cgoRefPool) AllocWafArray(obj *wafObject, typ wafObjectType, size uint64) []wafObject {
@@ -81,10 +76,8 @@ func (refPool *cgoRefPool) AllocWafMapKey(obj *wafObject, str string) {
 		return
 	}
 
-	goArray := make([]byte, len(str))
-	copy(goArray, str)
-	refPool.stringRefs = append(refPool.stringRefs, goArray)
-
-	obj.parameterName = sliceToUintptr(goArray)
-	obj.parameterNameLength = uint64(len(goArray))
+	refPool.stringRefs = append(refPool.stringRefs, str)
+	stringHeader := nativeStringUnwrap(str)
+	obj.parameterName = stringHeader.Data
+	obj.parameterNameLength = uint64(stringHeader.Len)
 }
