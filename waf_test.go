@@ -139,7 +139,7 @@ func newArachniTestRule(inputs []ruleInput, actions []string) map[string]any {
 	return parsed
 }
 
-func newDefaultHandle(rule map[string]any) (*Handle, error) {
+func newDefaultHandle(rule any) (*Handle, error) {
 	return NewHandle(rule, "", "")
 }
 
@@ -152,7 +152,7 @@ func TestNewWAF(t *testing.T) {
 	})
 
 	t.Run("invalid-rule", func(t *testing.T) {
-		var parsed map[string]any
+		var parsed any
 
 		require.NoError(t, json.Unmarshal([]byte(malformedRule), &parsed))
 
@@ -610,7 +610,7 @@ func TestMetrics(t *testing.T) {
   ]
 }
 `
-	var parsed map[string]any
+	var parsed any
 
 	require.NoError(t, json.Unmarshal([]byte(rules), &parsed))
 
