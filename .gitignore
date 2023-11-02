@@ -13,3 +13,6 @@
 
 .vscode/
 .idea/
+
+# Swap files
+*.swp
