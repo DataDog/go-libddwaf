@@ -38,9 +38,6 @@ const (
 	wafStringType                = 1 << 2
 	wafArrayType                 = 1 << 3
 	wafMapType                   = 1 << 4
-	wafBoolType                  = 1 << 5
-	wafFloatType                 = 1 << 6
-	wafNilType                   = 1 << 7
 )
 
 type wafObject struct {
@@ -77,10 +74,15 @@ type wafConfigObfuscator struct {
 
 type wafResult struct {
 	timeout       byte
-	events        wafObject
-	actions       wafObject
-	derivatives   wafObject
+	data          uintptr
+	actions       wafResultActions
 	total_runtime uint64
+}
+
+type wafResultActions struct {
+	array uintptr // char **
+	size  uint32
+	_     [4]byte // Forced padding
 }
 
 type wafRulesetInfo struct {
@@ -132,18 +134,6 @@ func cstring(name string) *byte {
 // We take the address and then dereference it to trick go vet from creating a possible misuse of unsafe.Pointer
 func cast[T any](ptr uintptr) *T {
 	return (*T)(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)))
-}
-
-// nativeToUintptr is a helper used by populate wafObject values
-// with Go values
-func nativeToUintptr[T any](x T) uintptr {
-	return *(*uintptr)(unsafe.Pointer(&x))
-}
-
-// uintToNative is a helper used retrieve Go values from an uintptr encoded
-// value from a wafObject
-func uintptrToNative[T any](x uintptr) T {
-	return *(*T)(unsafe.Pointer(&x))
 }
 
 // castWithOffset is the same as cast but adding an offset to the pointer by a multiple of the size
