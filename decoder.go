@@ -50,9 +50,9 @@ func decodeDiagnostics(obj *wafObject) (*Diagnostics, error) {
 		key := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
 		switch key {
 		case "rules":
-			diags.rules, err = decodeDiagnosticsEntry(objElem)
+			diags.Rules, err = decodeDiagnosticsEntry(objElem)
 		case "ruleset_version":
-			diags.version = gostringSized(cast[byte](objElem.value), objElem.nbEntries)
+			diags.Version = gostringSized(cast[byte](objElem.value), objElem.nbEntries)
 		default:
 			// ignore?
 		}
@@ -79,11 +79,11 @@ func decodeDiagnosticsEntry(obj *wafObject) (*DiagnosticEntry, error) {
 		key := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
 		switch key {
 		case "loaded":
-			entry.loaded, err = decodeStringArray(objElem)
+			entry.Loaded, err = decodeStringArray(objElem)
 		case "failed":
-			entry.failed, err = decodeStringArray(objElem)
+			entry.Failed, err = decodeStringArray(objElem)
 		case "errors":
-			entry.errors, err = decodeErrors(objElem)
+			entry.Errors, err = decodeErrors(objElem)
 		default:
 			return nil, errUnsupportedValue
 		}

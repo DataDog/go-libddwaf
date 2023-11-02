@@ -618,15 +618,15 @@ func TestMetrics(t *testing.T) {
 	require.NoError(t, err)
 	defer waf.Close()
 	t.Run("Diagnostics", func(t *testing.T) {
-		require.NotNil(t, waf.diagnostics.rules)
-		require.Len(t, waf.diagnostics.rules.failed, 3)
+		require.NotNil(t, waf.diagnostics.Rules)
+		require.Len(t, waf.diagnostics.Rules.Failed, 3)
 		for _, id := range []string{"missing-tags-1", "missing-tags-2", "missing-name"} {
-			require.Contains(t, waf.diagnostics.rules.failed, id)
+			require.Contains(t, waf.diagnostics.Rules.Failed, id)
 		}
-		require.Len(t, waf.diagnostics.rules.loaded, 1)
-		require.Contains(t, waf.diagnostics.rules.loaded, "valid-rule")
-		require.Equal(t, waf.diagnostics.version, "1.2.7")
-		require.Len(t, waf.diagnostics.rules.errors, 1)
+		require.Len(t, waf.diagnostics.Rules.Loaded, 1)
+		require.Contains(t, waf.diagnostics.Rules.Loaded, "valid-rule")
+		require.Equal(t, waf.diagnostics.Version, "1.2.7")
+		require.Len(t, waf.diagnostics.Rules.Errors, 1)
 	})
 
 	t.Run("RunDuration", func(t *testing.T) {
