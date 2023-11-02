@@ -189,10 +189,10 @@ func TestUpdateWAF(t *testing.T) {
 		values := map[string]interface{}{
 			"my.input": "Arachni",
 		}
-		res, err := wafCtx.Run(values, time.Second)
+		matches, actions, err := wafCtx.Run(values, time.Second)
 		require.NoError(t, err)
-		require.NotEmpty(t, res.Events)
-		require.Nil(t, res.Actions)
+		require.NotEmpty(t, matches)
+		require.Nil(t, actions)
 
 		// Update
 		waf2, err := waf.Update(newArachniTestRule([]ruleInput{{Address: "my.input"}}, []string{"block"}))
@@ -207,10 +207,10 @@ func TestUpdateWAF(t *testing.T) {
 		values = map[string]interface{}{
 			"my.input": "Arachni",
 		}
-		res, err = wafCtx2.Run(values, time.Second)
+		matches, actions, err = wafCtx2.Run(values, time.Second)
 		require.NoError(t, err)
-		require.NotEmpty(t, res.Events)
-		require.NotEmpty(t, res.Actions)
+		require.NotEmpty(t, matches)
+		require.NotEmpty(t, actions)
 
 	})
 
@@ -246,56 +246,56 @@ func TestMatching(t *testing.T) {
 	values := map[string]interface{}{
 		"my.input": "go client",
 	}
-	res, err := wafCtx.Run(values, time.Second)
+	matches, actions, err := wafCtx.Run(values, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, res.Events)
-	require.Nil(t, res.Actions)
+	require.Nil(t, matches)
+	require.Nil(t, actions)
 
 	// Not matching because the address is not used by the rule
 	values = map[string]interface{}{
 		"server.request.uri.raw": "something",
 	}
-	res, err = wafCtx.Run(values, time.Second)
+	matches, actions, err = wafCtx.Run(values, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, res.Events)
-	require.Nil(t, res.Actions)
+	require.Nil(t, matches)
+	require.Nil(t, actions)
 
 	// Not matching due to a timeout
 	values = map[string]interface{}{
 		"my.input": "Arachni",
 	}
-	res, err = wafCtx.Run(values, 0)
+	matches, actions, err = wafCtx.Run(values, 0)
 	require.Equal(t, ErrTimeout, err)
-	require.Nil(t, res.Events)
-	require.Nil(t, res.Actions)
+	require.Nil(t, matches)
+	require.Nil(t, actions)
 
 	// Matching
 	// Note a WAF rule can only match once. This is why we test the matching case at the end.
 	values = map[string]interface{}{
 		"my.input": "Arachni",
 	}
-	res, err = wafCtx.Run(values, time.Second)
+	matches, actions, err = wafCtx.Run(values, time.Second)
 	require.NoError(t, err)
-	require.NotEmpty(t, res.Events)
-	require.Nil(t, res.Actions)
+	require.NotEmpty(t, matches)
+	require.Nil(t, actions)
 
 	// Not matching anymore since it already matched before
-	res, err = wafCtx.Run(values, time.Second)
+	matches, actions, err = wafCtx.Run(values, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, res.Events)
-	require.Nil(t, res.Actions)
+	require.Nil(t, matches)
+	require.Nil(t, actions)
 
 	// Nil values
-	res, err = wafCtx.Run(nil, time.Second)
+	matches, actions, err = wafCtx.Run(nil, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, res.Events)
-	require.Nil(t, res.Actions)
+	require.Nil(t, matches)
+	require.Nil(t, actions)
 
 	// Empty values
-	res, err = wafCtx.Run(map[string]interface{}{}, time.Second)
+	matches, actions, err = wafCtx.Run(map[string]interface{}{}, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, res.Events)
-	require.Nil(t, res.Actions)
+	require.Nil(t, matches)
+	require.Nil(t, actions)
 
 	wafCtx.Close()
 	waf.Close()
@@ -320,11 +320,11 @@ func TestActions(t *testing.T) {
 			values := map[string]interface{}{
 				"my.input": "Arachni",
 			}
-			res, err := wafCtx.Run(values, time.Second)
+			matches, actions, err := wafCtx.Run(values, time.Second)
 			require.NoError(t, err)
-			require.NotEmpty(t, res.Events)
+			require.NotEmpty(t, matches)
 			// FIXME: check with libddwaf why the order of returned actions is not kept the same
-			require.ElementsMatch(t, expectedActions, res.Actions)
+			require.ElementsMatch(t, expectedActions, actions)
 		}
 	}
 
@@ -333,7 +333,7 @@ func TestActions(t *testing.T) {
 }
 
 func TestAddresses(t *testing.T) {
-	expectedAddresses := []string{"my.indexed.input", "my.third.input", "my.second.input", "my.first.input"}
+	expectedAddresses := []string{"my.first.input", "my.second.input", "my.indexed.input", "my.third.input"}
 	addresses := []ruleInput{{Address: "my.first.input"}, {Address: "my.second.input"}, {Address: "my.third.input"}, {Address: "my.indexed.input", KeyPath: []string{"indexed"}}}
 	waf, err := newDefaultHandle(newArachniTestRule(addresses, nil))
 	require.NoError(t, err)
@@ -379,12 +379,12 @@ func TestConcurrency(t *testing.T) {
 							"user-agent": userAgents[i],
 						},
 					}
-					res, err := wafCtx.Run(data, time.Minute)
+					matches, _, err := wafCtx.Run(data, time.Minute)
 					if err != nil {
 						panic(err)
 					}
-					if len(res.Events) > 0 {
-						panic(fmt.Errorf("c=%d events=`%v`", c, res.Events))
+					if len(matches) > 0 {
+						panic(fmt.Errorf("c=%d matches=`%v`", c, string(matches)))
 					}
 				}
 			}()
@@ -401,9 +401,9 @@ func TestConcurrency(t *testing.T) {
 				"user-agent": "Arachni",
 			},
 		}
-		res, err := wafCtx.Run(data, time.Second)
+		matches, _, err := wafCtx.Run(data, time.Second)
 		require.NoError(t, err)
-		require.NotEmpty(t, res.Events)
+		require.NotEmpty(t, matches)
 	})
 
 	t.Run("concurrent-waf-instance-usage", func(t *testing.T) {
@@ -440,13 +440,13 @@ func TestConcurrency(t *testing.T) {
 						},
 					}
 
-					res, err := wafCtx.Run(data, time.Minute)
+					matches, _, err := wafCtx.Run(data, time.Minute)
 
 					if err != nil {
 						panic(err)
 					}
-					if len(res.Events) > 0 {
-						panic(fmt.Errorf("c=%d events=`%v`", c, res.Events))
+					if len(matches) > 0 {
+						panic(fmt.Errorf("c=%d matches=`%v`", c, string(matches)))
 					}
 				}
 
@@ -456,10 +456,10 @@ func TestConcurrency(t *testing.T) {
 						"user-agent": "Arachni",
 					},
 				}
-				res, err := wafCtx.Run(data, time.Second)
+				matches, actions, err := wafCtx.Run(data, time.Second)
 				require.NoError(t, err)
-				require.NotEmpty(t, res.Events)
-				require.Nil(t, res.Actions)
+				require.NotEmpty(t, matches)
+				require.Nil(t, actions)
 			}()
 		}
 
@@ -617,16 +617,17 @@ func TestMetrics(t *testing.T) {
 	waf, err := newDefaultHandle(parsed)
 	require.NoError(t, err)
 	defer waf.Close()
-	t.Run("Diagnostics", func(t *testing.T) {
-		require.NotNil(t, waf.diagnostics.rules)
-		require.Len(t, waf.diagnostics.rules.failed, 3)
-		for _, id := range []string{"missing-tags-1", "missing-tags-2", "missing-name"} {
-			require.Contains(t, waf.diagnostics.rules.failed, id)
-		}
-		require.Len(t, waf.diagnostics.rules.loaded, 1)
-		require.Contains(t, waf.diagnostics.rules.loaded, "valid-rule")
-		require.Equal(t, waf.diagnostics.version, "1.2.7")
-		require.Len(t, waf.diagnostics.rules.errors, 1)
+	// TODO: (Francois Mazeau) see if we can make this test more configurable to future proof against libddwaf changes
+	t.Run("RulesetInfo", func(t *testing.T) {
+		rInfo := waf.RulesetInfo()
+		require.Equal(t, uint16(3), rInfo.Failed)
+		require.Equal(t, uint16(1), rInfo.Loaded)
+		require.Equal(t, 2, len(rInfo.Errors))
+		require.Equal(t, "1.2.7", rInfo.Version)
+		require.Equal(t, map[string][]string{
+			"missing key 'tags'": {"missing-tags-1", "missing-tags-2"},
+			"missing key 'name'": {"missing-name"},
+		}, rInfo.Errors)
 	})
 
 	t.Run("RunDuration", func(t *testing.T) {
@@ -638,11 +639,11 @@ func TestMetrics(t *testing.T) {
 			"server.request.uri.raw": "\\%uff00",
 		}
 		start := time.Now()
-		res, err := wafCtx.Run(data, time.Second)
+		matches, actions, err := wafCtx.Run(data, time.Second)
 		elapsedNS := time.Since(start).Nanoseconds()
 		require.NoError(t, err)
-		require.NotNil(t, res.Events)
-		require.Nil(t, res.Actions)
+		require.NotNil(t, matches)
+		require.Nil(t, actions)
 
 		// Make sure that WAF runtime was set
 		overall, internal := wafCtx.TotalRuntime()
@@ -662,7 +663,7 @@ func TestMetrics(t *testing.T) {
 		}
 
 		for i := uint64(1); i <= 10; i++ {
-			_, err := wafCtx.Run(data, time.Nanosecond)
+			_, _, err := wafCtx.Run(data, time.Nanosecond)
 			require.Equal(t, err, ErrTimeout)
 			require.Equal(t, i, wafCtx.TotalTimeouts())
 		}
@@ -677,10 +678,6 @@ func TestEncoder(t *testing.T) {
 		ExpectedWAFValueType   int
 		ExpectedWAFValueLength int
 		ExpectedWAFString      string
-		ExpectedWafValueInt    int64
-		ExpectedWafValueUint   uint64
-		ExpectedWafValueFloat  float64
-		ExpectedWafValueBool   bool
 		MaxValueDepth          interface{}
 		MaxContainerLength     interface{}
 		MaxStringLength        interface{}
@@ -691,10 +688,9 @@ func TestEncoder(t *testing.T) {
 			ExpectedError: errUnsupportedValue,
 		},
 		{
-			Name:                 "string-hekki",
-			Data:                 "hello, waf",
-			ExpectedWAFValueType: wafStringType,
-			ExpectedWAFString:    "hello, waf",
+			Name:              "string-hekki",
+			Data:              "hello, waf",
+			ExpectedWAFString: "hello, waf",
 		},
 		{
 			Name:                   "string-empty",
@@ -703,10 +699,9 @@ func TestEncoder(t *testing.T) {
 			ExpectedWAFValueLength: 0,
 		},
 		{
-			Name:                 "byte-slice",
-			Data:                 []byte("hello, waf"),
-			ExpectedWAFValueType: wafStringType,
-			ExpectedWAFString:    "hello, waf",
+			Name:              "byte-slice",
+			Data:              []byte("hello, waf"),
+			ExpectedWAFString: "hello, waf",
 		},
 		{
 			Name:                   "nil-byte-slice",
@@ -752,10 +747,9 @@ func TestEncoder(t *testing.T) {
 			ExpectedError: errUnsupportedValue,
 		},
 		{
-			Name:                 "non-nil-pointer-value",
-			Data:                 new(int),
-			ExpectedWAFValueType: wafIntType,
-			ExpectedWafValueInt:  0,
+			Name:              "non-nil-pointer-value",
+			Data:              new(int),
+			ExpectedWAFString: "0",
 		},
 		{
 			Name:                   "non-nil-pointer-value",
@@ -775,40 +769,34 @@ func TestEncoder(t *testing.T) {
 			ExpectedError: errUnsupportedValue,
 		},
 		{
-			Name:                 "int",
-			Data:                 int(1234),
-			ExpectedWAFValueType: wafIntType,
-			ExpectedWafValueInt:  1234,
+			Name:              "int",
+			Data:              int(1234),
+			ExpectedWAFString: "1234",
 		},
 		{
-			Name:                 "uint",
-			Data:                 uint(9876),
-			ExpectedWAFValueType: wafUintType,
-			ExpectedWafValueUint: 9876,
+			Name:              "uint",
+			Data:              uint(9876),
+			ExpectedWAFString: "9876",
 		},
 		{
-			Name:                 "bool",
-			Data:                 true,
-			ExpectedWAFValueType: wafBoolType,
-			ExpectedWafValueBool: true,
+			Name:              "bool",
+			Data:              true,
+			ExpectedWAFString: "true",
 		},
 		{
-			Name:                 "bool",
-			Data:                 false,
-			ExpectedWAFValueType: wafBoolType,
-			ExpectedWafValueBool: false,
+			Name:              "bool",
+			Data:              false,
+			ExpectedWAFString: "false",
 		},
 		{
-			Name:                  "float",
-			Data:                  33.12345,
-			ExpectedWAFValueType:  wafFloatType,
-			ExpectedWafValueFloat: 33.12345,
+			Name:              "float",
+			Data:              33.12345,
+			ExpectedWAFString: "33",
 		},
 		{
-			Name:                  "float",
-			Data:                  33.62345,
-			ExpectedWAFValueType:  wafFloatType,
-			ExpectedWafValueFloat: 33.62345,
+			Name:              "float",
+			Data:              33.62345,
+			ExpectedWAFString: "34",
 		},
 		{
 			Name:                   "slice",
@@ -948,25 +936,22 @@ func TestEncoder(t *testing.T) {
 			ExpectedWAFValueLength: 2,
 		},
 		{
-			Name:                 "scalar-values-max-depth-not-accounted",
-			MaxValueDepth:        0,
-			Data:                 -1234,
-			ExpectedWafValueInt:  -1234,
-			ExpectedWAFValueType: wafIntType,
+			Name:              "scalar-values-max-depth-not-accounted",
+			MaxValueDepth:     0,
+			Data:              -1234,
+			ExpectedWAFString: "-1234",
 		},
 		{
-			Name:                 "scalar-values-max-depth-not-accounted",
-			MaxValueDepth:        0,
-			Data:                 uint(1234),
-			ExpectedWafValueUint: 1234,
-			ExpectedWAFValueType: wafUintType,
+			Name:              "scalar-values-max-depth-not-accounted",
+			MaxValueDepth:     0,
+			Data:              uint(1234),
+			ExpectedWAFString: "1234",
 		},
 		{
-			Name:                 "scalar-values-max-depth-not-accounted",
-			MaxValueDepth:        0,
-			Data:                 false,
-			ExpectedWAFValueType: wafBoolType,
-			ExpectedWafValueBool: false,
+			Name:              "scalar-values-max-depth-not-accounted",
+			MaxValueDepth:     0,
+			Data:              false,
+			ExpectedWAFString: "false",
 		},
 		{
 			Name:                   "array-max-length",
@@ -983,11 +968,10 @@ func TestEncoder(t *testing.T) {
 			ExpectedWAFValueLength: 3,
 		},
 		{
-			Name:                 "string-max-length",
-			MaxStringLength:      3,
-			Data:                 "123456789",
-			ExpectedWAFString:    "123",
-			ExpectedWAFValueType: wafStringType,
+			Name:              "string-max-length",
+			MaxStringLength:   3,
+			Data:              "123456789",
+			ExpectedWAFString: "123",
 		},
 		{
 			Name:                   "string-max-length-truncation-leading-to-same-map-keys",
@@ -1093,7 +1077,6 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 1,
-			ExpectedWAFValueType:   wafMapType,
 		},
 		{
 			Name: "unsupported-map-values",
@@ -1104,7 +1087,6 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 2,
-			ExpectedWAFValueType:   wafMapType,
 		},
 		{
 			Name: "unsupported-map-values",
@@ -1115,7 +1097,6 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     1,
 			ExpectedWAFValueLength: 1,
-			ExpectedWAFValueType:   wafMapType,
 		},
 		{
 			Name: "unsupported-struct-values",
@@ -1130,7 +1111,6 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 1,
-			ExpectedWAFValueType:   wafMapType,
 		},
 		{
 			Name: "unsupported-map-values",
@@ -1145,7 +1125,6 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     3,
 			ExpectedWAFValueLength: 2,
-			ExpectedWAFValueType:   wafMapType,
 		},
 		{
 			Name: "unsupported-map-values",
@@ -1160,7 +1139,6 @@ func TestEncoder(t *testing.T) {
 			},
 			MaxContainerLength:     1,
 			ExpectedWAFValueLength: 1,
-			ExpectedWAFValueType:   wafMapType,
 		},
 	} {
 		tc := tc
@@ -1199,24 +1177,8 @@ func TestEncoder(t *testing.T) {
 			if tc.ExpectedWAFValueLength != 0 {
 				require.Equal(t, tc.ExpectedWAFValueLength, int(wo.nbEntries), "bad waf value length")
 			}
-			require.Equal(t, tc.ExpectedWAFValueType, int(wo._type), "bad waf string value type")
-
-			switch tc.ExpectedWAFValueType {
-			case wafIntType:
-				require.Equal(t, tc.ExpectedWafValueInt, int64(wo.value))
-				break
-			case wafUintType:
-				require.Equal(t, tc.ExpectedWafValueUint, uint64(wo.value))
-				break
-			case wafFloatType:
-				require.Equal(t, tc.ExpectedWafValueFloat, uintptrToNative[float64](wo.value))
-			case wafBoolType:
-				require.Equal(t, tc.ExpectedWafValueBool, uintptrToNative[bool](wo.value))
-
-				break
-			}
-
 			if expectedStr := tc.ExpectedWAFString; expectedStr != "" {
+				require.Equal(t, wafStringType, int(wo._type), "bad waf string value type")
 				cbuf := wo.value
 				gobuf := []byte(expectedStr)
 				require.Equal(t, len(gobuf), int(wo.nbEntries), "bad waf value length")
@@ -1236,7 +1198,7 @@ func TestEncoder(t *testing.T) {
 			wafCtx := NewContext(waf)
 			require.NotNil(t, wafCtx)
 			defer wafCtx.Close()
-			_, err = wafCtx.Run(map[string]interface{}{
+			_, _, err = wafCtx.Run(map[string]interface{}{
 				"my.input": tc.Data,
 			}, time.Second)
 			require.NoError(t, err)
@@ -1246,6 +1208,66 @@ func TestEncoder(t *testing.T) {
 
 // This test needs a working encoder to function properly, as it first encodes the objects before decoding them
 func TestDecoder(t *testing.T) {
+
+	t.Run("Actions/one", func(t *testing.T) {
+		input := []string{"one\u0000"}
+		var actual []uintptr
+		var expected []string
+		for _, str := range input {
+			actual = append(actual, (*reflect.StringHeader)(unsafe.Pointer(&str)).Data)
+			expected = append(expected, str[:len(str)-1])
+		}
+
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint64(len(actual))))
+	})
+
+	t.Run("Actions/empty-array", func(t *testing.T) {
+		require.Equal(t, []string(nil), decodeActions(0, 0))
+	})
+
+	t.Run("Actions/empty-string", func(t *testing.T) {
+		input := []string{"\u0000"}
+		var actual []uintptr
+		var expected []string
+		for _, str := range input {
+			actual = append(actual, (*reflect.StringHeader)(unsafe.Pointer(&str)).Data)
+			expected = append(expected, str[:len(str)-1])
+		}
+
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint64(len(actual))))
+	})
+
+	t.Run("Actions/five", func(t *testing.T) {
+		input := []string{"one\u0000", "one\u0000", "one\u0000", "one\u0000", "one\u0000"}
+		var actual []uintptr
+		var expected []string
+		for _, str := range input {
+			actual = append(actual, (*reflect.StringHeader)(unsafe.Pointer(&str)).Data)
+			expected = append(expected, str[:len(str)-1])
+		}
+
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint64(len(actual))))
+	})
+
+	t.Run("Actions/big-string", func(t *testing.T) {
+		p := ""
+		for i := 0; i < 100; i++ {
+			p += "it's more "
+		}
+
+		p += "\u0000"
+
+		input := []string{p}
+		var actual []uintptr
+		var expected []string
+		for _, str := range input {
+			actual = append(actual, (*reflect.StringHeader)(unsafe.Pointer(&str)).Data)
+			expected = append(expected, str[:len(str)-1])
+		}
+
+		require.Equal(t, expected, decodeActions(uintptr(unsafe.Pointer(&actual[0])), uint64(len(actual))))
+	})
+
 	t.Run("Errors", func(t *testing.T) {
 		e := newMaxEncoder()
 		objBuilder := func(value any) *wafObject {
@@ -1292,93 +1314,6 @@ func TestDecoder(t *testing.T) {
 		keepAlive(e.cgoRefs.arrayRefs)
 		keepAlive(e.cgoRefs.stringRefs)
 	})
-	t.Run("Values", func(t *testing.T) {
-
-		for _, tc := range []struct {
-			name string
-			data any
-		}{
-			{
-				name: "int64",
-				data: int64(-4),
-			},
-			{
-				name: "uint64",
-				data: uint64(4),
-			},
-			{
-				name: "float64",
-				data: 4.4444,
-			},
-			{
-				name: "bool",
-				data: true,
-			},
-			{
-				name: "bool",
-				data: false,
-			},
-			{
-				name: "string",
-				data: "",
-			},
-			{
-				name: "string",
-				data: "EliottAndFrancoisLoveDecoding",
-			},
-			{
-				name: "string",
-				data: "123",
-			},
-			{
-				name: "slice",
-				data: []any{int64(1), int64(2), int64(3), int64(4)},
-			},
-			{
-				name: "slice",
-				data: []any{"1", "2", "3", "4"},
-			},
-			{
-				name: "slice",
-				data: []any{true, false, false, true, true, true},
-			},
-			{
-				name: "slice-nested",
-				data: []any{[]any{true, false}, []any{false, false}, []any{true, true, true}},
-			},
-			{
-				name: "map",
-				data: map[string]any{"1": int64(1), "2": int64(2), "3": int64(3)},
-			},
-			{
-				name: "map",
-				data: map[string]any{"1": uint64(1), "2": uint64(2), "3": uint64(3)},
-			},
-			{
-				name: "map",
-				data: map[string]any{"1": 1.111, "2": 2.222, "3": 3.333},
-			},
-			{
-				name: "map",
-				data: map[string]any{"1": "1", "2": "2", "3": "3"},
-			},
-			{
-				name: "map-nested",
-				data: map[string]any{"1": map[string]any{"1": int64(1), "2": int64(2)}, "2": map[string]any{"3": int64(3), "4": int64(4)}},
-			},
-		} {
-			t.Run(tc.name, func(t *testing.T) {
-				e := newMaxEncoder()
-				obj, err := e.Encode(tc.data)
-				require.NoError(t, err)
-
-				val, err := decodeObject(obj)
-				require.NoError(t, err)
-				require.True(t, reflect.DeepEqual(tc.data, val))
-			})
-		}
-
-	})
 }
 
 func TestObfuscatorConfig(t *testing.T) {
@@ -1393,13 +1328,11 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]interface{}{
 			"my.addr": map[string]interface{}{"key": "Arachni-sensitive-Arachni"},
 		}
-		res, err := wafCtx.Run(data, time.Second)
+		matches, actions, err := wafCtx.Run(data, time.Second)
+		require.NotNil(t, matches)
+		require.Nil(t, actions)
 		require.NoError(t, err)
-		require.NotNil(t, res.Events)
-		require.Nil(t, res.Actions)
-		events, err := json.Marshal(res.Events)
-		require.NoError(t, err)
-		require.NotContains(t, events, "sensitive")
+		require.NotContains(t, (string)(matches), "sensitive")
 	})
 
 	t.Run("val", func(t *testing.T) {
@@ -1412,13 +1345,11 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]interface{}{
 			"my.addr": map[string]interface{}{"key": "Arachni-sensitive-Arachni"},
 		}
-		res, err := wafCtx.Run(data, time.Second)
+		matches, actions, err := wafCtx.Run(data, time.Second)
+		require.NotNil(t, matches)
+		require.Nil(t, actions)
 		require.NoError(t, err)
-		require.NotNil(t, res.Events)
-		require.Nil(t, res.Actions)
-		events, err := json.Marshal(res.Events)
-		require.NoError(t, err)
-		require.NotContains(t, events, "sensitive")
+		require.NotContains(t, (string)(matches), "sensitive")
 	})
 
 	t.Run("off", func(t *testing.T) {
@@ -1431,13 +1362,11 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]interface{}{
 			"my.addr": map[string]interface{}{"key": "Arachni-sensitive-Arachni"},
 		}
-		res, err := wafCtx.Run(data, time.Second)
+		matches, actions, err := wafCtx.Run(data, time.Second)
+		require.NotNil(t, matches)
+		require.Nil(t, actions)
 		require.NoError(t, err)
-		require.NotNil(t, res.Events)
-		require.Nil(t, res.Actions)
-		events, err := json.Marshal(res.Events)
-		require.NoError(t, err)
-		require.Contains(t, string(events), "sensitive")
+		require.Contains(t, (string)(matches), "sensitive")
 	})
 }
 

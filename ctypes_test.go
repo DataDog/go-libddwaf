@@ -40,7 +40,7 @@ func TestWafObject(t *testing.T) {
 
 	t.Run("int", func(t *testing.T) {
 		var actual wafObject
-		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_signed"), uintptr(unsafe.Pointer(&actual)), 42)
+		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_signed_force"), uintptr(unsafe.Pointer(&actual)), 42)
 		require.NotEqualValues(t, 0, r1)
 		require.EqualValues(t, 42, actual.value)
 		require.EqualValues(t, wafIntType, actual._type)
@@ -48,7 +48,7 @@ func TestWafObject(t *testing.T) {
 
 	t.Run("uint", func(t *testing.T) {
 		var actual wafObject
-		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_unsigned"), uintptr(unsafe.Pointer(&actual)), 42)
+		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_unsigned_force"), uintptr(unsafe.Pointer(&actual)), 42)
 		require.NotEqualValues(t, 0, r1)
 		require.EqualValues(t, 42, actual.value)
 		require.EqualValues(t, wafUintType, actual._type)
