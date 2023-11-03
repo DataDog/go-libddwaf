@@ -168,7 +168,7 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 			destPath := path.Join(embedDir, name)
 			fmt.Printf("... downloaded %s\n", destPath)
 			{
-				dest, err = os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+				dest, err = os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
 				if err != nil {
 					panic(err)
 				}
