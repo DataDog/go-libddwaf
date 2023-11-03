@@ -9,16 +9,16 @@ In order to update the embedded libraries, ensure you have a recent `node`
 available on your system, then run:
 
 ```console
-# Paths assume this runs from the repository root.
-$ ./lib/bump.mjs
-Latest libddwaf release: v1.15.0
-Looking up asset for darwin-amd64...
-... downloading from https://api.github.com/repos/DataDog/libddwaf/releases/assets/133245135
-Looking up asset for darwin-arm64...
-... downloading from https://api.github.com/repos/DataDog/libddwaf/releases/assets/133245141
-Looking up asset for linux-amd64...
-... downloading from https://api.github.com/repos/DataDog/libddwaf/releases/assets/133245129
-Looking up asset for linux-arm64...
-... downloading from https://api.github.com/repos/DataDog/libddwaf/releases/assets/133245130
-Successfully updated embedded libraries from v1.13.0 to v1.15.0!
+./_tools/libddwaf-updater/update.sh
+Will upgrade from v1.14.0 to v1.15.0
+... downloaded <repo-root>/Datadog/go-libddwaf/include/ddwaf.h
+... downloaded <repo-root>/Datadog/go-libddwaf/include/ddwaf.h
+... downloaded <repo-root>/Datadog/go-libddwaf/lib/darwin-arm64/libddwaf.dylib
+... downloaded <repo-root>/Datadog/go-libddwaf/lib/darwin-amd64/libddwaf.dylib
+... downloaded <repo-root>/Datadog/go-libddwaf/lib/linux-arm64/libddwaf.so
+... downloaded <repo-root>/Datadog/go-libddwaf/lib/linux-amd64/libddwaf.so
+... downloaded <repo-root>/Datadog/go-libddwaf/lib/linux-armv7/libddwaf.so
+... downloaded <repo-root>/Datadog/go-libddwaf/lib/linux-i386/libddwaf.so
+... downloaded <repo-root>/Datadog/go-libddwaf/include/ddwaf.h
+All done! Don't forget to check in changes to include/ and lib/, check the libddwaf upgrade guide to update bindings!
 ```
