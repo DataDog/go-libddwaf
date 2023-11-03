@@ -24,16 +24,16 @@ type wafDl struct {
 }
 
 type wafSymbols struct {
-	init              uintptr
-	update            uintptr
-	destroy           uintptr
-	requiredAddresses uintptr
-	getVersion        uintptr
-	contextInit       uintptr
-	contextDestroy    uintptr
-	objectFree        uintptr
-	resultFree        uintptr
-	run               uintptr
+	init           uintptr
+	update         uintptr
+	destroy        uintptr
+	knownAddresses uintptr
+	getVersion     uintptr
+	contextInit    uintptr
+	contextDestroy uintptr
+	objectFree     uintptr
+	resultFree     uintptr
+	run            uintptr
 }
 
 // newWafDl loads the libddwaf shared library and resolves all tge relevant symbols.
@@ -118,11 +118,11 @@ func (waf *wafDl) wafDestroy(handle wafHandle) {
 	keepAlive(handle)
 }
 
-// wafRequiredAddresses returns static strings so we do not need to free them
-func (waf *wafDl) wafRequiredAddresses(handle wafHandle) []string {
+// wafKnownAddresses returns static strings so we do not need to free them
+func (waf *wafDl) wafKnownAddresses(handle wafHandle) []string {
 	var nbAddresses uint32
 
-	arrayVoidC := waf.syscall(waf.requiredAddresses, uintptr(handle), ptrToUintptr(&nbAddresses))
+	arrayVoidC := waf.syscall(waf.knownAddresses, uintptr(handle), ptrToUintptr(&nbAddresses))
 	if arrayVoidC == 0 {
 		return nil
 	}
@@ -159,10 +159,11 @@ func (waf *wafDl) wafObjectFree(obj *wafObject) {
 	keepAlive(obj)
 }
 
-func (waf *wafDl) wafRun(context wafContext, obj *wafObject, result *wafResult, timeout uint64) wafReturnCode {
-	rc := wafReturnCode(waf.syscall(waf.run, uintptr(context), ptrToUintptr(obj), ptrToUintptr(result), uintptr(timeout)))
+func (waf *wafDl) wafRun(context wafContext, persistentData, ephemeralData *wafObject, result *wafResult, timeout uint64) wafReturnCode {
+	rc := wafReturnCode(waf.syscall(waf.run, uintptr(context), ptrToUintptr(persistentData), ptrToUintptr(ephemeralData), ptrToUintptr(result), uintptr(timeout)))
 	keepAlive(context)
-	keepAlive(obj)
+	keepAlive(persistentData)
+	keepAlive(ephemeralData)
 	keepAlive(result)
 	keepAlive(timeout)
 	return rc
@@ -192,7 +193,7 @@ func resolveWafSymbols(handle uintptr) (symbols wafSymbols, err error) {
 	if symbols.destroy, err = purego.Dlsym(handle, "ddwaf_destroy"); err != nil {
 		return
 	}
-	if symbols.requiredAddresses, err = purego.Dlsym(handle, "ddwaf_required_addresses"); err != nil {
+	if symbols.knownAddresses, err = purego.Dlsym(handle, "ddwaf_known_addresses"); err != nil {
 		return
 	}
 	if symbols.getVersion, err = purego.Dlsym(handle, "ddwaf_get_version"); err != nil {

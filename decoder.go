@@ -8,7 +8,7 @@ package waf
 // decodeErrors transforms the wafObject received by the wafRulesetInfo after the call to wafDl.wafInit to a map where
 // keys are the error message and the value is a array of all the rule ids which triggered this specific error
 func decodeErrors(obj *wafObject) (map[string][]string, error) {
-	if obj._type != wafMapType {
+	if !obj.isMap() {
 		return nil, errInvalidObjectType
 	}
 
@@ -36,7 +36,7 @@ func decodeErrors(obj *wafObject) (map[string][]string, error) {
 }
 
 func decodeDiagnostics(obj *wafObject) (*Diagnostics, error) {
-	if obj._type != wafMapType {
+	if !obj.isMap() {
 		return nil, errInvalidObjectType
 	}
 	if obj.value == 0 && obj.nbEntries > 0 {
@@ -65,7 +65,7 @@ func decodeDiagnostics(obj *wafObject) (*Diagnostics, error) {
 }
 
 func decodeDiagnosticsEntry(obj *wafObject) (*DiagnosticEntry, error) {
-	if obj._type != wafMapType {
+	if !obj.isMap() {
 		return nil, errInvalidObjectType
 	}
 	if obj.value == 0 && obj.nbEntries > 0 {
@@ -78,12 +78,14 @@ func decodeDiagnosticsEntry(obj *wafObject) (*DiagnosticEntry, error) {
 		objElem := castWithOffset[wafObject](obj.value, i)
 		key := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
 		switch key {
-		case "loaded":
-			entry.Loaded, err = decodeStringArray(objElem)
-		case "failed":
-			entry.Failed, err = decodeStringArray(objElem)
+		case "addresses":
+			entry.Addresses, err = decodeDiagnosticAddresses(objElem)
 		case "errors":
 			entry.Errors, err = decodeErrors(objElem)
+		case "failed":
+			entry.Failed, err = decodeStringArray(objElem)
+		case "loaded":
+			entry.Loaded, err = decodeStringArray(objElem)
 		default:
 			return nil, errUnsupportedValue
 		}
@@ -96,8 +98,36 @@ func decodeDiagnosticsEntry(obj *wafObject) (*DiagnosticEntry, error) {
 	return &entry, nil
 }
 
+func decodeDiagnosticAddresses(obj *wafObject) (res DiagnosticAddresses, err error) {
+	if !obj.isMap() {
+		return res, errInvalidObjectType
+	}
+	if obj.value == 0 && obj.nbEntries > 0 {
+		return res, errNilObjectPtr
+	}
+
+	for i := uint64(0); i < obj.nbEntries; i++ {
+		objElem := castWithOffset[wafObject](obj.value, i)
+		key := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
+		switch key {
+		case "required":
+			res.Required, err = decodeStringArray(objElem)
+		case "optional":
+			res.Optional, err = decodeStringArray(objElem)
+		default:
+			err = errUnsupportedValue
+		}
+
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
 func decodeStringArray(obj *wafObject) ([]string, error) {
-	if obj._type != wafArrayType {
+	if !obj.isArray() {
 		return nil, errInvalidObjectType
 	}
 
@@ -140,7 +170,7 @@ func decodeObject(obj *wafObject) (any, error) {
 }
 
 func decodeArray(obj *wafObject) ([]any, error) {
-	if obj._type != wafArrayType {
+	if !obj.isArray() {
 		return nil, errInvalidObjectType
 	}
 
@@ -159,7 +189,7 @@ func decodeArray(obj *wafObject) ([]any, error) {
 }
 
 func decodeMap(obj *wafObject) (map[string]any, error) {
-	if obj._type != wafMapType {
+	if !obj.isMap() {
 		return nil, errInvalidObjectType
 	}
 

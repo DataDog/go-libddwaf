@@ -36,9 +36,19 @@ type Diagnostics struct {
 // DiagnosticEntry stores the information - provided by the WAF - about loaded and failed rules
 // for a specific entry in the WAF ruleset
 type DiagnosticEntry struct {
-	Loaded []string
-	Failed []string
-	Errors map[string][]string
+	Addresses DiagnosticAddresses
+	Loaded    []string
+	Failed    []string
+	Errors    map[string][]string
+}
+
+// DiagnosticAddresses stores the information - provided by the WAF - about the known addresses and
+// whether they are required or optional. Addresses used by WAF rules are always required. Addresses
+// used by WAF exclusion filters may be required or (rarely) optional. Addresses used by WAF
+// processors may be required or optional.
+type DiagnosticAddresses struct {
+	Required []string
+	Optional []string
 }
 
 // Result stores the multiple values returned by a call to ddwaf_run

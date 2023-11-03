@@ -95,7 +95,7 @@ func (handle *Handle) Diagnostics() Diagnostics {
 
 // Addresses returns the list of addresses the WAF rule is expecting.
 func (handle *Handle) Addresses() []string {
-	return wafLib.wafRequiredAddresses(handle.cHandle)
+	return wafLib.wafKnownAddresses(handle.cHandle)
 }
 
 // Update the ruleset of a WAF instance into a new handle on its own

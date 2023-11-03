@@ -9,7 +9,7 @@ package waf
 
 import _ "embed" // Needed for go:embed
 
-//go:embed lib/darwin-amd64/_libddwaf.dylib
+//go:embed lib/darwin-amd64/libddwaf.dylib
 var libddwaf []byte
 
 const embedNamePattern = "libddwaf-*.dylib"

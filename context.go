@@ -54,12 +54,26 @@ func NewContext(handle *Handle) *Context {
 	return &Context{handle: handle, cContext: cContext}
 }
 
-// Run encodes the given addressesToData values and runs them against the WAF rules within the given
-// timeout value. It returns the matches as a JSON string (usually opaquely used) along with the corresponding
-// actions in any. In case of an error, matches and actions can still be returned, for instance in the case of a
-// timeout error. Errors can be tested against the RunError type.
-func (context *Context) Run(addressesToData map[string]any, timeout time.Duration) (res Result, err error) {
-	if len(addressesToData) == 0 {
+// RunAddressData provides address data to the Context.Run method.
+type RunAddressData struct {
+	// persistent address data is scoped to the lifetime of a given Context, and subsquent calls to Context.Run with the
+	// same address name will be silently ignored.
+	persistent map[string]any
+	// ephemeral address data is scoped to a given Context.Run call and is not persisted across calls. This is used for
+	// protocols such as gRPC client/server streaming or GraphQL, where a single request can incur multiple subrequests.
+	ephemeral map[string]any
+}
+
+func (d RunAddressData) isEmpty() bool {
+	return len(d.persistent) == 0 && len(d.ephemeral) == 0
+}
+
+// Run encodes the given persistentAddressToData and ephemeralAddressToData values and runs them against the WAF rules
+// within the given timeout value. It returns the matches as a JSON string (usually opaquely used) along with the
+// corresponding actions in any. In case of an error, matches and actions can still be returned, for instance in the
+// case of a timeout error. Errors can be tested against the RunError type.
+func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (res Result, err error) {
+	if addressData.isEmpty() {
 		return
 	}
 
@@ -74,7 +88,12 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 		containerMaxSize: wafMaxContainerSize,
 		objectMaxDepth:   wafMaxContainerDepth,
 	}
-	obj, err := encoder.Encode(addressesToData)
+	persistentData, err := encoder.Encode(addressData.persistent)
+	if err != nil {
+		return res, err
+	}
+
+	ephemeralData, err := encoder.Encode(addressData.ephemeral)
 	if err != nil {
 		return res, err
 	}
@@ -87,10 +106,10 @@ func (context *Context) Run(addressesToData map[string]any, timeout time.Duratio
 	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the ddwaf_context.
 	defer context.cgoRefs.append(encoder.cgoRefs)
 
-	return context.run(obj, timeout, &encoder.cgoRefs)
+	return context.run(persistentData, ephemeralData, timeout, &encoder.cgoRefs)
 }
 
-func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) (Result, error) {
+func (context *Context) run(persistentData, ephemeralData *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) (Result, error) {
 	// RLock the handle to safely get read access to the WAF handle and prevent concurrent changes of it
 	// such as a rules-data update.
 	context.handle.mutex.RLock()
@@ -99,7 +118,7 @@ func (context *Context) run(obj *wafObject, timeout time.Duration, cgoRefs *cgoR
 	result := new(wafResult)
 	defer wafLib.wafResultFree(result)
 
-	ret := wafLib.wafRun(context.cContext, obj, result, uint64(timeout/time.Microsecond))
+	ret := wafLib.wafRun(context.cContext, persistentData, ephemeralData, result, uint64(timeout/time.Microsecond))
 
 	context.totalRuntimeNs.Add(result.total_runtime)
 	res, err := unwrapWafResult(ret, result)
@@ -131,6 +150,9 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (res Result, err erro
 		// using ruleIdArray cause it decodes string array (I think)
 		res.Actions, err = decodeStringArray(&result.actions)
 		// TODO: use decode array, and eventually genericize the function
+		if err != nil {
+			return res, err
+		}
 	}
 
 	res.Derivatives, err = decodeMap(&result.derivatives)
