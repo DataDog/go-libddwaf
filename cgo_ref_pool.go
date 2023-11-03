@@ -29,12 +29,17 @@ func (refPool *cgoRefPool) append(newRefs cgoRefPool) {
 	refPool.arrayRefs = append(refPool.arrayRefs, newRefs.arrayRefs...)
 }
 
+// AllocCString is used in the rare cases where we need the WAF to receive standard null-terminated strings.
+// All cases where strings a wrapped in wafObject are handled by AllocWafString
 func (refPool *cgoRefPool) AllocCString(str string) uintptr {
 	nullTerminated := str + "\x00"
 	refPool.stringRefs = append(refPool.stringRefs, nullTerminated)
 	return nativeStringUnwrap(nullTerminated).Data
 }
 
+// AllocWafString fills the obj parameter wafObject with all parameters needed for the WAF interpret it as a string.
+// We take full advantage of the fact that the WAF can receive non-null-terminated strings by directly retrieving the
+// underlying array in the string value using the nativeStringUnwrap function. Hence, removing any copy in the process
 func (refPool *cgoRefPool) AllocWafString(obj *wafObject, str string) {
 	obj._type = wafStringType
 
@@ -50,6 +55,9 @@ func (refPool *cgoRefPool) AllocWafString(obj *wafObject, str string) {
 	obj.nbEntries = uint64(stringHeader.Len)
 }
 
+// AllocWafArray is used to create a tree-like structure since we allocate a wafObject array inside another wafOject.
+// wafObject can also represent a map, in that case we use the AllocWafMapKey function to make the wafObject key-value-pair
+// like objects.
 func (refPool *cgoRefPool) AllocWafArray(obj *wafObject, typ wafObjectType, size uint64) []wafObject {
 	if typ != wafMapType && typ != wafArrayType {
 		panic("Cannot allocate this waf object data type as an array: " + strconv.Itoa(int(typ)))
@@ -71,6 +79,9 @@ func (refPool *cgoRefPool) AllocWafArray(obj *wafObject, typ wafObjectType, size
 	return goArray
 }
 
+// AllocWafMapKey is used to store a string map key in a wafObject.
+// We take full advantage of the fact that the WAF can receive non-null-terminated strings by directly retrieving the
+// underlying array in the string value using the nativeStringUnwrap function. Hence, removing any copy in the process
 func (refPool *cgoRefPool) AllocWafMapKey(obj *wafObject, str string) {
 	if len(str) == 0 {
 		return
