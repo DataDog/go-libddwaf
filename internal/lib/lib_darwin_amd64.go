@@ -3,12 +3,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build linux && amd64 && !go1.22
-package vendor
+//go:build darwin && amd64 && !go1.22
+package lib
 
 import _ "embed" // Needed for go:embed
 
-//go:embed linux-amd64/libddwaf.so
+//go:embed darwin-amd64/libddwaf.dylib
 var libddwaf []byte
 
-const embedNamePattern = "libddwaf-*.so"
+const embedNamePattern = "libddwaf-*.dylib"
