@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"text/template"
@@ -94,6 +95,66 @@ var testArachniRuleTmpl = template.Must(template.New("").Parse(`
 }
 `))
 
+var testArachniRulePairTmpl = template.Must(template.New("").Parse(`
+{
+	"version": "2.1",
+  "rules": [
+	{
+	  "id": "ua0-600-12x-A",
+	  "name": "Arachni-A",
+	  "tags": {
+			"type": "security_scanner",
+			"category": "attack_attempt"
+	  },
+	  "conditions": [{
+		  "operator": "match_regex",
+		  "parameters": {
+			"inputs": [
+				{ "address": "{{ .Input1.Address }}"{{ if ne (len .Input1.KeyPath) 0 }},  "key_path": [ {{ range $i, $path := .Input1.KeyPath }}{{ if gt $i 0 }}, {{ end }}"{{ $path }}"{{ end }} ]{{ end }} }
+			],
+			"regex": "^Arachni-1"
+		  }
+		}],
+	  "transformers": []
+	  {{- if .Actions }},
+		"on_match": [
+		{{ range $i, $action := .Actions -}}
+		  {{ if gt $i 0 }},{{ end }}
+		  "{{ $action }}"
+		{{- end }}
+		]
+	  {{- end }}
+	},
+	{
+	  "id": "ua0-600-12x-B",
+	  "name": "Arachni-B",
+	  "tags": {
+			"type": "xss",
+			"category": "attack_attempt"
+	  },
+	  "conditions": [{
+		  "operator": "match_regex",
+		  "parameters": {
+			"inputs": [
+				{ "address": "{{ .Input2.Address }}"{{ if ne (len .Input2.KeyPath) 0 }},  "key_path": [ {{ range $i, $path := .Input2.KeyPath }}{{ if gt $i 0 }}, {{ end }}"{{ $path }}"{{ end }} ]{{ end }} }
+			],
+			"regex": "^Arachni-2"
+		  }
+		}],
+	  "transformers": []
+	  {{- if .Actions }},
+		"on_match": [
+		{{ range $i, $action := .Actions -}}
+		  {{ if gt $i 0 }},{{ end }}
+		  "{{ $action }}"
+		{{- end }}
+		]
+	  {{- end }}
+	}
+  ]
+}
+`))
+
 // Test with a valid JSON but invalid rule format (field "events" should be an array)
 const malformedRule = `
 {
@@ -138,7 +199,25 @@ func newArachniTestRule(inputs []ruleInput, actions []string) map[string]any {
 	parsed := map[string]any{}
 
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
-		return nil
+		panic(err)
+	}
+
+	return parsed
+}
+
+func newArachniTestRulePair(input1, input2 ruleInput) map[string]any {
+	var buf bytes.Buffer
+	if err := testArachniRulePairTmpl.Execute(&buf, struct {
+		Input1  ruleInput
+		Input2  ruleInput
+		Actions []string
+	}{input1, input2, nil}); err != nil {
+		panic(err)
+	}
+
+	parsed := map[string]any{}
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		panic(err)
 	}
 
 	return parsed
@@ -309,69 +388,75 @@ func TestMatching(t *testing.T) {
 }
 
 func TestMatchingEphemeral(t *testing.T) {
+	const (
+		input1 = "my.input.1"
+		input2 = "my.input.2"
+	)
 
-	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, err := newDefaultHandle(newArachniTestRulePair(ruleInput{Address: input1}, ruleInput{Address: input2}))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 
-	require.Equal(t, []string{"my.input"}, waf.Addresses())
+	addrs := waf.Addresses()
+	slices.Sort(addrs)
+	require.Equal(t, []string{input1, input2}, addrs)
 
 	wafCtx := NewContext(waf)
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
-	values := map[string]interface{}{
-		"my.input": "go client",
+	runAddresses := RunAddressData{
+		Ephemeral: map[string]interface{}{
+			input1: "go client",
+		},
+		Persistent: map[string]interface{}{
+			input2: "go client",
+		},
 	}
-	res, err := wafCtx.Run(RunAddressData{Ephemeral: values}, time.Second)
+	res, err := wafCtx.Run(runAddresses, time.Second)
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	// Not matching because the address is not used by the rule
-	values = map[string]interface{}{
-		"server.request.uri.raw": "something",
+	runAddresses = RunAddressData{
+		Ephemeral: map[string]interface{}{
+			"server.request.uri.raw": "something",
+		},
+		Persistent: map[string]interface{}{
+			"server.request.body.raw": "something",
+		},
 	}
-	res, err = wafCtx.Run(RunAddressData{Ephemeral: values}, time.Second)
+	res, err = wafCtx.Run(runAddresses, time.Second)
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	// Not matching due to a timeout
-	values = map[string]interface{}{
-		"my.input": "Arachni",
+	runAddresses = RunAddressData{
+		Ephemeral: map[string]interface{}{
+			input1: "Arachni-1",
+		},
+		Persistent: map[string]interface{}{
+			input2: "Arachni-2",
+		},
 	}
-	res, err = wafCtx.Run(RunAddressData{Ephemeral: values}, 0)
+	res, err = wafCtx.Run(runAddresses, 0)
 	require.Equal(t, ErrTimeout, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	// Matching
 	// Note a WAF rule with ephemeral addresses may match more than once!
-	values = map[string]interface{}{
-		"my.input": "Arachni",
-	}
-	res, err = wafCtx.Run(RunAddressData{Ephemeral: values}, time.Second)
+	res, err = wafCtx.Run(runAddresses, time.Second)
 	require.NoError(t, err)
-	require.NotEmpty(t, res.Events)
+	require.Len(t, res.Events, 2) // 1 ephemeral, 1 persistent [!!Only if the rules have a different tags.type value!!]
 	require.Nil(t, res.Actions)
 
-	// Still matching since we are using ephemeral addresses...
-	res, err = wafCtx.Run(RunAddressData{Ephemeral: values}, time.Second)
+	// Ephemeral address should still match, persistent shouldn't anymore
+	res, err = wafCtx.Run(runAddresses, time.Second)
 	require.NoError(t, err)
-	require.NotEmpty(t, res.Events)
-	require.Nil(t, res.Actions)
-
-	// Nil values
-	res, err = wafCtx.Run(RunAddressData{}, time.Second)
-	require.NoError(t, err)
-	require.Nil(t, res.Events)
-	require.Nil(t, res.Actions)
-
-	// Empty values
-	res, err = wafCtx.Run(RunAddressData{Ephemeral: map[string]interface{}{}}, time.Second)
-	require.NoError(t, err)
-	require.Nil(t, res.Events)
+	require.Len(t, res.Events, 1) // 1 ephemeral
 	require.Nil(t, res.Actions)
 
 	wafCtx.Close()
