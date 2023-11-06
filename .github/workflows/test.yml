@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: ["arm64", "armv7", "i386"]
+        arch: ["arm64", "arm/v7", "386"]
         cgo_enabled: [ "0", "1" ] # test it compiles with and without the cgo
       fail-fast: false
     steps:
