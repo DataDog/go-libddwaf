@@ -113,12 +113,11 @@ jobs:
         shell: bash
         env:
           GOARCH_ASSERT: "${{matrix.arch}}" # Ensures we are indeed running i386 code (see waf_dl_test.go)
-          GOARCH: "${{matrix.arch}}"
         run: |
           # Install gotestsum
           env GOBIN=$PWD go install gotest.tools/gotestsum@latest
           # Run the tests with gotestsum
-          env CGO_ENABLED=${{ matrix.cgo_enabled }} ./gotestsum -- -v -count=10 -shuffle=on ./...
+          env GOARCH=${{matrix.arch}} CGO_ENABLED=${{ matrix.cgo_enabled }} ./gotestsum -- -v -count=10 -shuffle=on ./...
 
   # A simple join target to simplify setting up branch protection settings in GH.
   done:
