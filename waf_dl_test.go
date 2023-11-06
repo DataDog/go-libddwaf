@@ -97,7 +97,7 @@ func testVerifyMachOHeader(t *testing.T) {
 // testVerifyPEHeader is here to ease the debug cases that will likely need to
 // dive in the linker to debug because the error handling is very poor
 func testVerifyPEHeader(t *testing.T) {
-	file, err := vendor.DumpEmbeddedWAF()
+	file, err := lib.DumpEmbeddedWAF()
 	require.NoError(t, err)
 
 	defer func() { _ = os.Remove(file) }()
