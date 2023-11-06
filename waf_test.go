@@ -1453,6 +1453,7 @@ func BenchmarkEncoder(b *testing.B) {
 			containerMaxSize: 100,
 		}
 		b.Run(fmt.Sprintf("%d", l), func(b *testing.B) {
+			b.ReportAllocs()
 			str := fullstr[:l]
 			slice := []string{str, str, str, str, str, str, str, str, str, str}
 			data := map[string]interface{}{
