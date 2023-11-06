@@ -268,7 +268,7 @@ var targets = []target{
 	// {os: "windows", arch: "amd64", base: "ddwaf", ext: "dll", assetLabel: "windows-x64"},
 	// {os: "windows", arch: "386", base: "ddwaf", ext: "dll", assetLabel: "windows-win32"},
 
-	//// These are currentlu not supported by ebitengine/purego:
+	//// These are currently not supported by ebitengine/purego:
 	// {os: "linux", arch: "armv7", ext: "so", assetLabel: "armv7-linux-musl"},
 	// {os: "linux", arch: "i386", ext: "so", assetLabel: "i386-linux-musl"},
 }
