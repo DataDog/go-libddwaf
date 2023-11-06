@@ -14,7 +14,7 @@ func loadSharedObject(file string) (uintptr, error) {
 	return uintptr(handle), err
 }
 
-func resovleSymbol(handle uintptr, name string) (uintptr, error) {
+func resolveSymbol(handle uintptr, name string) (uintptr, error) {
 	return windows.GetProcAddress(windows.Handle(handle), name)
 }
 
