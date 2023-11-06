@@ -264,16 +264,9 @@ var targets = []target{
 		arch:       "arm64",
 		assetLabel: "aarch64-linux-musl",
 	},
-	{
-		os:         "linux",
-		arch:       "armv7",
-		assetLabel: "armv7-linux-musl",
-	},
-	{
-		os:         "linux",
-		arch:       "i386",
-		assetLabel: "i386-linux-musl",
-	},
+	// These are currentlu not supported by ebitengine/purego:
+	// {os: "linux", arch: "armv7", assetLabel: "armv7-linux-musl"},
+	// {os: "linux", arch: "i386", assetLabel: "i386-linux-musl"},
 }
 
 func init() {

@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build !go1.22 && ((darwin && (amd64 || arm64)) || (linux && (amd64 || arm64 || armv7 || i386)))
+//go:build ((darwin && (amd64 || arm64)) || (linux && (amd64 || arm64))) && !go1.22
 
 package vendor
 
