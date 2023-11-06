@@ -34,6 +34,8 @@ var (
 )
 
 func main() {
+	force := os.Args[1] == "--force"
+
 	gh := github.NewClient(nil)
 
 	release, _, err := gh.Repositories.GetLatestRelease(context.Background(), "DataDog", "libddwaf")
@@ -44,7 +46,11 @@ func main() {
 	version := *release.TagName
 	if version == currentVersion {
 		fmt.Printf("Already up-to-date with v%s\n", version)
-		return
+		if force {
+			fmt.Println("--force is set, re-downloading assets anyway!")
+		} else {
+			return
+		}
 	} else {
 		fmt.Printf("Will upgrade from v%s to v%s\n", currentVersion, version)
 	}
