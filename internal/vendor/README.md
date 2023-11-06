@@ -5,8 +5,7 @@ of https://github.com/DataDog/libddwaf
 
 ### Updating
 
-In order to update the embedded libraries, ensure you have a recent `node`
-available on your system, then run:
+From the root of the repository, run:
 
 ```console
 ./_tools/libddwaf-updater/update.sh
