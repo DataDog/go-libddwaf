@@ -30,6 +30,13 @@ func TestVerifyHeader(t *testing.T) {
 	}
 }
 
+func TestEnsureRequiredArch(t *testing.T) {
+	val := os.Getenv("GOARCH_ASSERT")
+	if val != "" {
+		require.Equal(t, val, runtime.GOARCH)
+	}
+}
+
 // testVerifyELFHeader is here to ease the debug cases that will likely need
 // to dive in the linker to debug because the error handling is very poor
 func testVerifyELFHeader(t *testing.T) {

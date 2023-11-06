@@ -16,7 +16,7 @@ import (
 )
 
 func getSymbol(t *testing.T, lib uintptr, symbol string) uintptr {
-	sym, err := purego.Dlsym(lib, symbol)
+	sym, err := resolveSymbol(lib, symbol)
 	require.NoError(t, err)
 	return sym
 }
