@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
-	"slices"
+	"sort"
 	"sync"
 	"testing"
 	"text/template"
@@ -398,7 +398,7 @@ func TestMatchingEphemeral(t *testing.T) {
 	require.NotNil(t, waf)
 
 	addrs := waf.Addresses()
-	slices.Sort(addrs)
+	sort.Strings(addrs)
 	require.Equal(t, []string{input1, input2}, addrs)
 
 	wafCtx := NewContext(waf)
@@ -1366,16 +1366,12 @@ func TestEncoder(t *testing.T) {
 			switch tc.ExpectedWAFValueType {
 			case wafIntType:
 				require.Equal(t, tc.ExpectedWafValueInt, int64(wo.value))
-				break
 			case wafUintType:
 				require.Equal(t, tc.ExpectedWafValueUint, uint64(wo.value))
-				break
 			case wafFloatType:
 				require.Equal(t, tc.ExpectedWafValueFloat, uintptrToNative[float64](wo.value))
 			case wafBoolType:
 				require.Equal(t, tc.ExpectedWafValueBool, uintptrToNative[bool](wo.value))
-
-				break
 			}
 
 			if expectedStr := tc.ExpectedWAFString; expectedStr != "" {
