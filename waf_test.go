@@ -20,7 +20,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/internal/vendor"
+	"github.com/DataDog/go-libddwaf/internal/lib"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,7 +48,7 @@ func TestSupportsTarget(t *testing.T) {
 
 func TestVersion(t *testing.T) {
 	// Ensures the library version matches the expected version...
-	require.Equal(t, vendor.EmbeddedWAFVersion, Version())
+	require.Equal(t, lib.EmbeddedWAFVersion, Version())
 }
 
 var testArachniRule = newArachniTestRule([]ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil)

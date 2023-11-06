@@ -3,12 +3,5 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build windows && amd64 && !go1.22
-package vendor
-
-import _ "embed" // Needed for go:embed
-
-//go:embed windows-amd64/ddwaf.dll
-var libddwaf []byte
-
-const embedNamePattern = "ddwaf-*.dll"
+// Package lib provides a built-in WAF library version for the relevant runtime platform.
+package lib

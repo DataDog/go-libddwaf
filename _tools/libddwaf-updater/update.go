@@ -72,7 +72,7 @@ func main() {
 			created = true
 		}
 		if created || force {
-			if err := os.WriteFile(path.Join(embedDir, "vendor.go"), []byte(vedorMarkerFile), 0644); err != nil {
+			if err := os.WriteFile(path.Join(embedDir, "vendor.go"), []byte(vendorMarkerFile), 0644); err != nil {
 				panic(err)
 			}
 			createEmbedSource(tgt)
@@ -95,7 +95,7 @@ func main() {
 		written += wrote
 	}
 
-	fmt.Println("All done! Don't forget to check in changes to include/ and internal/vendor/, check the libddwaf upgrade guide to update bindings!")
+	fmt.Println("All done! Don't forget to check in changes to include/ and internal/lib/, check the libddwaf upgrade guide to update bindings!")
 }
 
 func createEmbedSource(tgt target) {
@@ -107,7 +107,7 @@ func createEmbedSource(tgt target) {
 			"// Copyright 2016-present Datadog, Inc.",
 			"",
 			fmt.Sprintf("//go:build %s && %s && !go1.22", tgt.os, tgt.arch),
-			"package vendor",
+			"package lib",
 			"",
 			`import _ "embed" // Needed for go:embed`,
 			"",
@@ -119,7 +119,7 @@ func createEmbedSource(tgt target) {
 		},
 		"\n",
 	)
-	if err := os.WriteFile(path.Join(libDir, fmt.Sprintf("vendor_%s_%s.go", tgt.os, tgt.arch)), []byte(gosource), 0644); err != nil {
+	if err := os.WriteFile(path.Join(libDir, fmt.Sprintf("lib_%s_%s.go", tgt.os, tgt.arch)), []byte(gosource), 0644); err != nil {
 		panic(err)
 	}
 }
@@ -282,7 +282,7 @@ var targets = []target{
 	// {os: "linux", arch: "i386", ext: "so", assetLabel: "i386-linux-musl"},
 }
 
-const vedorMarkerFile = `// Unless explicitly stated otherwise all files in this repository are licensed
+const vendorMarkerFile = `// Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
@@ -297,7 +297,7 @@ func init() {
 	_, filename, _, _ := runtime.Caller(0)
 	dir := path.Dir(filename)
 	rootDir = path.Join(dir, "..", "..")
-	libDir = path.Join(rootDir, "internal", "vendor")
+	libDir = path.Join(rootDir, "internal", "lib")
 	versionFile = path.Join(libDir, ".version")
 
 	file, err := os.Open(versionFile)

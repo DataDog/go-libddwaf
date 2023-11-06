@@ -4,7 +4,7 @@
 // Copyright 2016-present Datadog, Inc.
 
 //go:build windows && 386 && !go1.22
-package vendor
+package lib
 
 import _ "embed" // Needed for go:embed
 
