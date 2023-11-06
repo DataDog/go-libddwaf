@@ -3,6 +3,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Package vendor is required to help go tools support vendoring.
-// DO NOT REMOVE
+//go:build linux && i386 && !go1.22
 package vendor
+
+import _ "embed" // Needed for go:embed
+
+//go:embed linux-i386/libddwaf.so
+var libddwaf []byte
+
+const embedNamePattern = "libddwaf-*.so"

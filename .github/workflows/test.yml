@@ -96,6 +96,26 @@ jobs:
           platforms: arm64
       - run: docker run --platform=linux/arm64 -v $PWD:$PWD -w $PWD -eCGO_ENABLED=${{ matrix.cgo_enabled }} -eDD_APPSEC_WAF_TIMEOUT=$DD_APPSEC_WAF_TIMEOUT golang go test -v -count=10 -shuffle=on ./...
 
+      linux-i386:
+        runs-on: ubuntu-latest
+        strategy:
+          matrix:
+            cgo_enabled: [ "0", "1" ] # test it compiles with and without the cgo
+          fail-fast: false
+        steps:
+          - uses: actions/checkout@v3
+          - name: Go modules cache
+            uses: actions/cache@v3
+            with:
+              path: ~/go/pkg/mod
+              key: go-pkg-mod-${{ hashFiles('**/go.sum') }}
+              restore-keys: go-pkg-mod-
+          - name: Set up QEMU
+            uses: docker/setup-qemu-action@v2
+            with:
+              platforms: i386
+          - run: docker run --platform=linux/i386 -v $PWD:$PWD -w $PWD -eCGO_ENABLED=${{ matrix.cgo_enabled }} -eDD_APPSEC_WAF_TIMEOUT=$DD_APPSEC_WAF_TIMEOUT golang go test -v -count=10 -shuffle=on ./...
+
   # A simple join target to simplify setting up branch protection settings in GH.
   done:
     name: Done
@@ -104,6 +124,7 @@ jobs:
       - native
       - golang-linux-container
       - linux-arm64
+      - linux-i386
     steps:
       - name: Done
         run: echo "Done!"

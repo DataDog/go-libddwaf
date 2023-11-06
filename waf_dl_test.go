@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/DataDog/go-libddwaf/internal/vendor"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,7 +33,7 @@ func TestVerifyHeader(t *testing.T) {
 // testVerifyELFHeader is here to ease the debug cases that will likely need
 // to dive in the linker to debug because the error handling is very poor
 func testVerifyELFHeader(t *testing.T) {
-	file, err := dumpWafLibrary()
+	file, err := vendor.DumpEmbeddedWAF()
 	require.NoError(t, err)
 
 	defer func() {
@@ -59,7 +60,7 @@ func testVerifyELFHeader(t *testing.T) {
 // testVerifyMachOHeader is here to ease the debug cases that will likely need
 // to dive in the linker to debug because the error handling is very poor
 func testVerifyMachOHeader(t *testing.T) {
-	file, err := dumpWafLibrary()
+	file, err := vendor.DumpEmbeddedWAF()
 	require.NoError(t, err)
 
 	defer func() {

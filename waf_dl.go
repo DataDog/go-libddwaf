@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/DataDog/go-libddwaf/internal/vendor"
 	"github.com/ebitengine/purego"
 )
 
@@ -41,7 +42,7 @@ type wafSymbols struct {
 // are done with it so that associated resources can be released.
 func newWafDl() (dl *wafDl, err error) {
 	var file string
-	file, err = dumpWafLibrary()
+	file, err = vendor.DumpEmbeddedWAF()
 	if err != nil {
 		return
 	}

@@ -21,6 +21,7 @@ import (
 	"path"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/google/go-github/v56/github"
@@ -66,12 +67,9 @@ func main() {
 	wg := sync.WaitGroup{}
 	wg.Add(len(targets))
 	for _, tgt := range targets {
-		embedDir := path.Join(libDir, tgt.embedName)
+		embedDir := path.Join(libDir, fmt.Sprintf("%s-%s", tgt.os, tgt.arch))
 		if _, err = os.Stat(embedDir); errors.Is(err, os.ErrNotExist) {
 			if err = os.MkdirAll(embedDir, 0755); err != nil {
-				panic(err)
-			}
-			if err = os.WriteFile(path.Join(embedDir, "vendor.go"), []byte(vendorTemplate), 0644); err != nil {
 				panic(err)
 			}
 		}
@@ -80,7 +78,7 @@ func main() {
 
 	wg.Wait()
 
-	file, err := os.OpenFile(versionFile, os.O_WRONLY|os.O_TRUNC, 0644)
+	file, err := os.OpenFile(versionFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -93,7 +91,7 @@ func main() {
 		written += wrote
 	}
 
-	fmt.Println("All done! Don't forget to check in changes to include/ and lib/, check the libddwaf upgrade guide to update bindings!")
+	fmt.Println("All done! Don't forget to check in changes to include/ and internal/vendor/, check the libddwaf upgrade guide to update bindings!")
 }
 
 func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir string, assets map[string]*github.ReleaseAsset) {
@@ -181,6 +179,31 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 				defer dest.Close()
 				_, err = io.Copy(dest, arch)
 			}
+			if err == nil {
+				gosource := strings.Join(
+					[]string{
+						"// Unless explicitly stated otherwise all files in this repository are licensed",
+						"// under the Apache License Version 2.0.",
+						"// This product includes software developed at Datadog (https://www.datadoghq.com/).",
+						"// Copyright 2016-present Datadog, Inc.",
+						"",
+						fmt.Sprintf("//go:build %s && %s && !go1.22", tgt.os, tgt.arch),
+						"package vendor",
+						"",
+						`import _ "embed" // Needed for go:embed`,
+						"",
+						fmt.Sprintf("//go:embed %s-%s/%s", tgt.os, tgt.arch, name),
+						"var libddwaf []byte",
+						"",
+						fmt.Sprintf(`const embedNamePattern = "libddwaf-*%s"`, path.Ext(name)),
+						"", // Trailing new line...
+					},
+					"\n",
+				)
+				if err = os.WriteFile(path.Join(embedDir, "..", fmt.Sprintf("vendor_%s_%s.go", tgt.os, tgt.arch)), []byte(gosource), 0644); err != nil {
+					panic(err)
+				}
+			}
 
 			foundLib = true
 		case "ddwaf.h":
@@ -213,35 +236,42 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 }
 
 type target struct {
-	embedName  string
+	os         string
+	arch       string
 	assetLabel string
 	primary    bool // The one we'll get ddwaf.h from
 }
 
 var targets = []target{
 	{
-		embedName:  "darwin-amd64",
+		os:         "darwin",
+		arch:       "amd64",
 		assetLabel: "darwin-x86_64",
 	},
 	{
-		embedName:  "darwin-arm64",
+		os:         "darwin",
+		arch:       "arm64",
 		assetLabel: "darwin-arm64",
 	},
 	{
-		embedName:  "linux-amd64",
+		os:         "linux",
+		arch:       "amd64",
 		assetLabel: "x86_64-linux-musl",
 		primary:    true,
 	},
 	{
-		embedName:  "linux-arm64",
+		os:         "linux",
+		arch:       "arm64",
 		assetLabel: "aarch64-linux-musl",
 	},
 	{
-		embedName:  "linux-armv7",
+		os:         "linux",
+		arch:       "armv7",
 		assetLabel: "armv7-linux-musl",
 	},
 	{
-		embedName:  "linux-i386",
+		os:         "linux",
+		arch:       "i386",
 		assetLabel: "i386-linux-musl",
 	},
 }
@@ -250,9 +280,14 @@ func init() {
 	_, filename, _, _ := runtime.Caller(0)
 	dir := path.Dir(filename)
 	rootDir = path.Join(dir, "..", "..")
-	libDir = path.Join(rootDir, "lib")
+	libDir = path.Join(rootDir, "internal", "vendor")
 	versionFile = path.Join(libDir, ".version")
+
 	file, err := os.Open(versionFile)
+	if errors.Is(err, os.ErrNotExist) {
+		currentVersion = "<none>"
+		return
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -264,13 +299,3 @@ func init() {
 
 	currentVersion = string(data)
 }
-
-const vendorTemplate = `// Unless explicitly stated otherwise all files in this repository are licensed
-// under the Apache License Version 2.0.
-// This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-present Datadog, Inc.
-
-// Package vendor is required to help go tools support vendoring.
-// DO NOT REMOVE
-package vendor
-`

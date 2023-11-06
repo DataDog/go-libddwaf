@@ -21,6 +21,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/DataDog/go-libddwaf/internal/vendor"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,12 +47,9 @@ func TestSupportsTarget(t *testing.T) {
 	require.NoError(t, err)
 }
 
-//go:embed lib/.version
-var expectedWafVersion string
-
 func TestVersion(t *testing.T) {
 	// Ensures the library version matches the expected version...
-	require.Equal(t, expectedWafVersion, Version())
+	require.Equal(t, vendor.EmbeddedWAFVersion, Version())
 }
 
 var testArachniRule = newArachniTestRule([]ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil)

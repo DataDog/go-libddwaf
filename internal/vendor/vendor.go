@@ -3,18 +3,21 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build (linux || darwin) && (amd64 || arm64) && !go1.22
+//go:build !go1.22 && ((darwin && (amd64 || arm64)) || (linux && (amd64 || arm64 || armv7 || i386)))
 
-package waf
+package vendor
 
 import (
 	"fmt"
 	"os"
+
+	_ "embed"
 )
 
-// dumpWafLibrary dumps the bundled libddwaf shared library to a temporary file on the file system.
-// The caller is responsible for properly disposing of the temporary file once it is no longer needed.
-func dumpWafLibrary() (path string, err error) {
+//go:embed .version
+var EmbeddedWAFVersion string
+
+func DumpEmbeddedWAF() (path string, err error) {
 	file, err := os.CreateTemp("", embedNamePattern)
 	if err != nil {
 		return path, fmt.Errorf("error creating temp file: %w", err)
