@@ -21,6 +21,7 @@ import (
 // since purego calls are not type safe
 type wafDl struct {
 	wafSymbols
+	file   string
 	handle uintptr
 }
 
@@ -46,7 +47,7 @@ func newWafDl() (dl *wafDl, err error) {
 	if err != nil {
 		return
 	}
-	defer func() {
+	cleanup := func() {
 		rmErr := os.Remove(file)
 		if rmErr != nil {
 			if err == nil {
@@ -56,15 +57,17 @@ func newWafDl() (dl *wafDl, err error) {
 				err = fmt.Errorf("%w; along with an error while removing %s: %v", err, file, rmErr)
 			}
 		}
-	}()
+	}
 
 	var handle uintptr
 	if handle, err = loadSharedObject(file); err != nil {
+		defer cleanup()
 		return
 	}
 
 	var symbols wafSymbols
 	if symbols, err = resolveWafSymbols(handle); err != nil {
+		defer cleanup()
 		if closeErr := closeSharedObject(handle); closeErr != nil {
 			// TODO: rely on errors.Join() once go1.20 is our min supported Go version
 			err = fmt.Errorf("%w; along with an error while releasing the shared libddwaf library: %v", err, closeErr)
@@ -72,7 +75,7 @@ func newWafDl() (dl *wafDl, err error) {
 		return
 	}
 
-	dl = &wafDl{symbols, handle}
+	dl = &wafDl{symbols, file, handle}
 
 	// Try calling the waf to make sure everything is fine
 	err = tryCall(func() error {
@@ -80,7 +83,7 @@ func newWafDl() (dl *wafDl, err error) {
 		return nil
 	})
 	if err != nil {
-		if closeErr := closeSharedObject(handle); closeErr != nil {
+		if closeErr := dl.Close(); closeErr != nil {
 			// TODO: rely on errors.Join() once go1.20 is our min supported Go version
 			err = fmt.Errorf("%w; along with an error while releasing the shared libddwaf library: %v", err, closeErr)
 		}
@@ -91,7 +94,14 @@ func newWafDl() (dl *wafDl, err error) {
 }
 
 func (waf *wafDl) Close() error {
-	return closeSharedObject(waf.handle)
+	err := closeSharedObject(waf.handle)
+	// Ignore the remove error unless the close call failed, as Windows won't allow removing a currently used DLL.
+	rmErr := os.Remove(waf.file)
+	if rmErr != nil && err != nil {
+		// TODO: rely on errors.Join() once go1.20 is our min supported Go version
+		err = fmt.Errorf("%w; along with an error while removing %s: %v", err, waf.file, rmErr)
+	}
+	return err
 }
 
 // wafGetVersion returned string is a static string so we do not need to free it
