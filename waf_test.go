@@ -537,11 +537,17 @@ func TestActions(t *testing.T) {
 
 func TestAddresses(t *testing.T) {
 	expectedAddresses := []string{"my.indexed.input", "my.third.input", "my.second.input", "my.first.input"}
+	sort.Strings(expectedAddresses)
+
 	addresses := []ruleInput{{Address: "my.first.input"}, {Address: "my.second.input"}, {Address: "my.third.input"}, {Address: "my.indexed.input", KeyPath: []string{"indexed"}}}
 	waf, err := newDefaultHandle(newArachniTestRule(addresses, nil))
 	require.NoError(t, err)
 	defer waf.Close()
-	require.Equal(t, expectedAddresses, waf.Addresses())
+
+	wafAddresses := waf.Addresses()
+	sort.Strings(wafAddresses)
+
+	require.Equal(t, expectedAddresses, wafAddresses)
 }
 
 func TestConcurrency(t *testing.T) {
