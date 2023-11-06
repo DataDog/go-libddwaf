@@ -7,23 +7,19 @@ package main
 
 import (
 	gotar "archive/tar"
-	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 
+	"github.com/bitfield/script"
 	"github.com/google/go-github/v56/github"
 )
 
@@ -68,10 +64,15 @@ func main() {
 	wg.Add(len(targets))
 	for _, tgt := range targets {
 		embedDir := path.Join(libDir, fmt.Sprintf("%s-%s", tgt.os, tgt.arch))
+		created := false
 		if _, err = os.Stat(embedDir); errors.Is(err, os.ErrNotExist) {
 			if err = os.MkdirAll(embedDir, 0755); err != nil {
 				panic(err)
 			}
+			created = true
+		}
+		if created || force {
+			createEmbedSource(tgt)
 		}
 		go handleTarget(&wg, version, tgt, embedDir, assets)
 	}
@@ -94,6 +95,37 @@ func main() {
 	fmt.Println("All done! Don't forget to check in changes to include/ and internal/vendor/, check the libddwaf upgrade guide to update bindings!")
 }
 
+func createEmbedSource(tgt target) {
+	ext := "so"
+	if tgt.os == "darwin" {
+		ext = "dylib"
+	}
+
+	gosource := strings.Join(
+		[]string{
+			"// Unless explicitly stated otherwise all files in this repository are licensed",
+			"// under the Apache License Version 2.0.",
+			"// This product includes software developed at Datadog (https://www.datadoghq.com/).",
+			"// Copyright 2016-present Datadog, Inc.",
+			"",
+			fmt.Sprintf("//go:build %s && %s && !go1.22", tgt.os, tgt.arch),
+			"package vendor",
+			"",
+			`import _ "embed" // Needed for go:embed`,
+			"",
+			fmt.Sprintf("//go:embed %s-%s/libddwaf.%s", tgt.os, tgt.arch, ext),
+			"var libddwaf []byte",
+			"",
+			fmt.Sprintf(`const embedNamePattern = "libddwaf-*.%s"`, ext),
+			"", // Trailing new line...
+		},
+		"\n",
+	)
+	if err := os.WriteFile(path.Join(libDir, fmt.Sprintf("vendor_%s_%s.go", tgt.os, tgt.arch)), []byte(gosource), 0644); err != nil {
+		panic(err)
+	}
+}
+
 func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir string, assets map[string]*github.ReleaseAsset) {
 	defer wg.Done()
 
@@ -112,45 +144,34 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 	tarUrl := *tarAsset.BrowserDownloadURL
 	shaUrl := *shaAsset.BrowserDownloadURL
 
-	var tar []byte
-	{
-		resp, err := http.Get(tarUrl)
-		if err != nil {
-			panic(err)
-		}
-		defer resp.Body.Close()
-		tar, err = io.ReadAll(resp.Body)
-		if err != nil {
-			panic(err)
-		}
+	tmpdir, err := os.MkdirTemp("", "libddwaf-*")
+	if err != nil {
+		panic(err)
 	}
+	defer os.RemoveAll(tmpdir)
 
-	var sha string
-	{
-		resp, err := http.Get(shaUrl)
-		if err != nil {
-			panic(err)
-		}
-		defer resp.Body.Close()
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			panic(err)
-		}
-		split := slices.Index(data, ' ')
-		if split < 0 {
-			panic("invalid sha256 file content")
-		}
-		sha = string(data[:split])
+	if _, err := script.Get(tarUrl).WriteFile(path.Join(tmpdir, tarName)); err != nil {
+		panic(err)
 	}
-
-	hash := sha256.Sum256(tar)
-	sum := hex.EncodeToString(hash[:])
-
+	sha, err := script.Get(shaUrl).String()
+	if err != nil {
+		panic(err)
+	}
+	sum, err := script.File(path.Join(tmpdir, tarName)).SHA256Sum()
+	if err != nil {
+		panic(err)
+	}
+	// To match the shasum format...
+	sum = fmt.Sprintf("%s  %s\n", sum, tarName)
 	if sum != sha {
 		panic(fmt.Errorf("checksum mismatch on %s:\nExpected %s\nActual   %s", tarUrl, sha, sum))
 	}
 
-	reader, err := gzip.NewReader(bytes.NewReader(tar))
+	file, err := os.Open(path.Join(tmpdir, tarName))
+	if err != nil {
+		panic(err)
+	}
+	reader, err := gzip.NewReader(file)
 	if err != nil {
 		panic(err)
 	}
@@ -166,63 +187,28 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 			panic(err)
 		}
 
-		var dest *os.File
+		var destPath string
 		switch name := header.FileInfo().Name(); name {
 		case "libddwaf.so", "libddwaf.dylib":
-			destPath := path.Join(embedDir, name)
-			fmt.Printf("... downloaded %s\n", destPath)
-			{
-				dest, err = os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
-				if err != nil {
-					panic(err)
-				}
-				defer dest.Close()
-				_, err = io.Copy(dest, arch)
-			}
-			if err == nil {
-				gosource := strings.Join(
-					[]string{
-						"// Unless explicitly stated otherwise all files in this repository are licensed",
-						"// under the Apache License Version 2.0.",
-						"// This product includes software developed at Datadog (https://www.datadoghq.com/).",
-						"// Copyright 2016-present Datadog, Inc.",
-						"",
-						fmt.Sprintf("//go:build %s && %s && !go1.22", tgt.os, tgt.arch),
-						"package vendor",
-						"",
-						`import _ "embed" // Needed for go:embed`,
-						"",
-						fmt.Sprintf("//go:embed %s-%s/%s", tgt.os, tgt.arch, name),
-						"var libddwaf []byte",
-						"",
-						fmt.Sprintf(`const embedNamePattern = "libddwaf-*%s"`, path.Ext(name)),
-						"", // Trailing new line...
-					},
-					"\n",
-				)
-				if err = os.WriteFile(path.Join(embedDir, "..", fmt.Sprintf("vendor_%s_%s.go", tgt.os, tgt.arch)), []byte(gosource), 0644); err != nil {
-					panic(err)
-				}
-			}
-
+			destPath = path.Join(embedDir, name)
 			foundLib = true
 		case "ddwaf.h":
 			if tgt.primary {
-				destPath := path.Join(rootDir, "include", name)
-				fmt.Printf("... downloaded %s\n", destPath)
-				dest, err = os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-				if err != nil {
-					panic(err)
-				}
-				defer dest.Close()
-				_, err = io.Copy(dest, arch)
+				destPath = path.Join(rootDir, "include", name)
+				foundHdr = true
+			} else {
+				continue
 			}
-			foundHdr = true
+		default:
+			continue
 		}
-		if err != nil {
+
+		fmt.Printf("... downloaded %s\n", destPath)
+		if _, err := script.NewPipe().WithReader(arch).WriteFile(destPath); err != nil {
 			panic(err)
 		}
-		if foundLib && foundHdr {
+
+		if foundLib && (foundHdr || !tgt.primary) {
 			break
 		}
 	}
@@ -230,7 +216,7 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 	if !foundLib {
 		panic(fmt.Errorf("could not find libddwaf.so/libddwaf.dylib in %s", tarUrl))
 	}
-	if !foundHdr {
+	if tgt.primary && !foundHdr {
 		panic(fmt.Errorf("could not find ddwaf.h in %s", tarUrl))
 	}
 }
