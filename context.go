@@ -69,10 +69,11 @@ func (d RunAddressData) isEmpty() bool {
 	return len(d.Persistent) == 0 && len(d.Ephemeral) == 0
 }
 
-// Run encodes the given persistentAddressToData and ephemeralAddressToData values and runs them against the WAF rules
-// within the given timeout value. It returns the matches as a JSON string (usually opaquely used) along with the
-// corresponding actions in any. In case of an error, matches and actions can still be returned, for instance in the
-// case of a timeout error. Errors can be tested against the RunError type.
+// Run encodes the given addressData values and runs them against the WAF rules within the given timeout value. If a
+// given address is present both as persistent and ephemeral, the persistent value takes precedence. It returns the
+// matches as a JSON string (usually opaquely used) along with the corresponding actions in any. In case of an error,
+// matches and actions can still be returned, for instance in the case of a timeout error. Errors can be tested against
+// the RunError type.
 func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (res Result, err error) {
 	if addressData.isEmpty() {
 		return

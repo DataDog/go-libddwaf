@@ -384,6 +384,50 @@ func TestMatching(t *testing.T) {
 	require.Nil(t, NewContext(waf))
 }
 
+func TestMatchingEphemeralAndPersistent(t *testing.T) {
+	// This test validates the WAF behavior when a given address is provided both as ephemeral and persistent.
+	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	defer waf.Close()
+
+	wafCtx := NewContext(waf)
+	require.NotNil(t, wafCtx)
+	defer wafCtx.Close()
+
+	// Intentionally setting the same key on both fields
+	addresses := RunAddressData{
+		Persistent: map[string]any{"my.input": "Arachni/persistent"},
+		Ephemeral:  map[string]any{"my.input": "Arachni/ephemeral"},
+	}
+
+	res, err := wafCtx.Run(addresses, time.Second)
+	require.NoError(t, err)
+
+	// There is only one hit here
+	require.Len(t, res.Events, 1)
+	event := res.Events[0].(map[string]any)
+	// The hit is on the PERSISTENT value
+	require.Equal(t,
+		[]any{map[string]any{
+			"operator":       "match_regex",
+			"operator_value": "^Arachni",
+			"parameters": []any{map[string]any{
+				"address":   "my.input",
+				"highlight": []any{"Arachni"},
+				"key_path":  []any{},
+				"value":     "Arachni/persistent", // <-- The important bit, really
+			}},
+		}},
+		event["rule_matches"],
+	)
+
+	// Matche the same inputs a second time...
+	res, err = wafCtx.Run(addresses, time.Second)
+	require.NoError(t, err)
+	// There shouldn't be any match anymore...
+	require.Empty(t, res.Events)
+}
+
 func TestMatchingEphemeral(t *testing.T) {
 	const (
 		input1 = "my.input.1"
