@@ -5,7 +5,6 @@
 
 //go:build ((darwin && (amd64 || arm64)) || (linux && (amd64 || arm64)) || (windows && (amd64 || 386))) && !go1.22
 
-// Package vendor provides a built-in WAF library version for the relevant runtime platform.
 package vendor
 
 import (
