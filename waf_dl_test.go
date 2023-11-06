@@ -10,6 +10,7 @@ package waf
 import (
 	"debug/elf"
 	"debug/macho"
+	"debug/pe"
 	"fmt"
 	"os"
 	"runtime"
@@ -21,10 +22,12 @@ import (
 
 func TestVerifyHeader(t *testing.T) {
 	switch runtime.GOOS {
-	case "linux":
-		testVerifyELFHeader(t)
 	case "darwin":
 		testVerifyMachOHeader(t)
+	case "linux":
+		testVerifyELFHeader(t)
+	case "windows":
+		testVerifyPEHeader(t)
 	default:
 		panic(fmt.Sprintf("unexpected GOOS=%s", runtime.GOOS))
 	}
@@ -89,4 +92,25 @@ func testVerifyMachOHeader(t *testing.T) {
 	require.Equal(t, macho.TypeDylib, machOFile.Type, "Is not a shared library")
 
 	//TODO(eliott.bouhana) add more checks
+}
+
+// testVerifyPEHeader is here to ease the debug cases that will likely need to
+// dive in the linker to debug because the error handling is very poor
+func testVerifyPEHeader(t *testing.T) {
+	file, err := vendor.DumpEmbeddedWAF()
+	require.NoError(t, err)
+
+	defer func() { _ = os.Remove(file) }()
+
+	peFile, err := pe.Open(file)
+	require.NoError(t, err)
+
+	switch runtime.GOARCH {
+	case "amd64":
+		require.Equal(t, pe.IMAGE_FILE_MACHINE_AMD64, peFile.Machine, "Wrong architecture")
+	case "386":
+		require.Equal(t, pe.IMAGE_FILE_MACHINE_I386, peFile.Machine, "Wrong architecture")
+	default:
+		panic(fmt.Sprintf("unexpected GOARCH=%s", runtime.GOARCH))
+	}
 }
