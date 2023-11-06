@@ -108,10 +108,10 @@ func createEmbedSource(tgt target) {
 			"",
 			`import _ "embed" // Needed for go:embed`,
 			"",
-			fmt.Sprintf("//go:embed %s-%s/libddwaf.%s", tgt.os, tgt.arch, tgt.ext),
+			fmt.Sprintf("//go:embed %s-%s/%s.%s", tgt.os, tgt.arch, tgt.base, tgt.ext),
 			"var libddwaf []byte",
 			"",
-			fmt.Sprintf(`const embedNamePattern = "libddwaf-*.%s"`, tgt.ext),
+			fmt.Sprintf(`const embedNamePattern = "%s-*.%s"`, tgt.base, tgt.ext),
 			"", // Trailing new line...
 		},
 		"\n",
@@ -152,12 +152,11 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 	if err != nil {
 		panic(err)
 	}
+	sha = sha[:64] // Only keep the hex-encoded SHA256
 	sum, err := script.File(path.Join(tmpdir, tarName)).SHA256Sum()
 	if err != nil {
 		panic(err)
 	}
-	// To match the shasum format...
-	sum = fmt.Sprintf("%s  %s\n", sum, tarName)
 	if sum != sha {
 		panic(fmt.Errorf("checksum mismatch on %s:\nExpected %s\nActual   %s", tarUrl, sha, sum))
 	}
@@ -184,7 +183,7 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 
 		var destPath string
 		switch name := header.FileInfo().Name(); name {
-		case "libddwaf.so", "libddwaf.dylib":
+		case "libddwaf.so", "libddwaf.dylib", "ddwaf.dll":
 			destPath = path.Join(embedDir, name)
 			foundLib = true
 		case "ddwaf.h":
@@ -225,7 +224,8 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 type target struct {
 	os         string
 	arch       string
-	ext        string
+	base       string // The base name (without extension)
+	ext        string // The file extension
 	assetLabel string
 	primary    bool // The one we'll get ddwaf.h from
 }
@@ -234,27 +234,45 @@ var targets = []target{
 	{
 		os:         "darwin",
 		arch:       "amd64",
+		base:       "libddwaf",
 		ext:        "dylib",
 		assetLabel: "darwin-x86_64",
 	},
 	{
 		os:         "darwin",
 		arch:       "arm64",
+		base:       "libddwaf",
 		ext:        "dylib",
 		assetLabel: "darwin-arm64",
 	},
 	{
 		os:         "linux",
 		arch:       "amd64",
+		base:       "libddwaf",
 		ext:        "so",
 		assetLabel: "x86_64-linux-musl",
 		primary:    true,
 	},
 	{
 		os:         "linux",
+		base:       "libddwaf",
 		ext:        "so",
 		arch:       "arm64",
 		assetLabel: "aarch64-linux-musl",
+	},
+	{
+		os:         "windows",
+		arch:       "amd64",
+		base:       "ddwaf",
+		ext:        "dll",
+		assetLabel: "windows-x64",
+	},
+	{
+		os:         "windows",
+		arch:       "386",
+		base:       "ddwaf",
+		ext:        "dll",
+		assetLabel: "windows-win32",
 	},
 	// These are currentlu not supported by ebitengine/purego:
 	// {os: "linux", arch: "armv7", ext: "so", assetLabel: "armv7-linux-musl"},
