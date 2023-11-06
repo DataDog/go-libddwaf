@@ -54,7 +54,8 @@ func NewContext(handle *Handle) *Context {
 	return &Context{handle: handle, cContext: cContext}
 }
 
-// RunAddressData provides address data to the Context.Run method.
+// RunAddressData provides address data to the Context.Run method. If a given key is present in both
+// RunAddressData.Persistent and RunAddressData.Ephemeral, the value from RunAddressData.Persistent will take precedence.
 type RunAddressData struct {
 	// Persistent address data is scoped to the lifetime of a given Context, and subsquent calls to Context.Run with the
 	// same address name will be silently ignored.
