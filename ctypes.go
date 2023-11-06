@@ -124,6 +124,11 @@ func gostring(ptr *byte) string {
 	return string(unsafe.Slice(ptr, length))
 }
 
+// nativeStringUnwrap cast a native string type into it's runtime value. Exported as the struct reflect.StringHeader
+func nativeStringUnwrap(str string) reflect.StringHeader {
+	return *(*reflect.StringHeader)(unsafe.Pointer(&str))
+}
+
 func gostringSized(ptr *byte, size uint64) string {
 	if ptr == nil {
 		return ""

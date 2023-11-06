@@ -20,7 +20,7 @@ import (
 // wafObject are either arrays (for maps, structs and arrays) or string (for all ints, booleans and strings),
 // we can store 2 slices of arrays and use runtime.KeepAlive in each code path to protect them from the GC.
 type cgoRefPool struct {
-	stringRefs [][]byte
+	stringRefs []string
 	arrayRefs  [][]wafObject
 }
 
@@ -29,15 +29,20 @@ func (refPool *cgoRefPool) append(newRefs cgoRefPool) {
 	refPool.arrayRefs = append(refPool.arrayRefs, newRefs.arrayRefs...)
 }
 
+// AllocCString is used in the rare cases where we need the WAF to receive standard null-terminated strings.
+// All cases where strings a wrapped in wafObject are handled by AllocWafString
 func (refPool *cgoRefPool) AllocCString(str string) uintptr {
-	goArray := make([]byte, len(str)+1)
-	copy(goArray, str)
-	refPool.stringRefs = append(refPool.stringRefs, goArray)
-	goArray[len(str)] = 0 // Null termination byte for C strings
+	if len(str) > 0 && str[len(str)-1] != '\x00' {
+		str = str + "\x00"
+	}
 
-	return sliceToUintptr(goArray)
+	refPool.stringRefs = append(refPool.stringRefs, str)
+	return nativeStringUnwrap(str).Data
 }
 
+// AllocWafString fills the obj parameter wafObject with all parameters needed for the WAF interpret it as a string.
+// We take full advantage of the fact that the WAF can receive non-null-terminated strings by directly retrieving the
+// underlying array in the string value using the nativeStringUnwrap function. Hence, removing any copy in the process
 func (refPool *cgoRefPool) AllocWafString(obj *wafObject, str string) {
 	obj._type = wafStringType
 
@@ -47,14 +52,15 @@ func (refPool *cgoRefPool) AllocWafString(obj *wafObject, str string) {
 		return
 	}
 
-	goArray := make([]byte, len(str))
-	copy(goArray, str)
-	refPool.stringRefs = append(refPool.stringRefs, goArray)
-
-	obj.value = sliceToUintptr(goArray)
-	obj.nbEntries = uint64(len(goArray))
+	refPool.stringRefs = append(refPool.stringRefs, str)
+	stringHeader := nativeStringUnwrap(str)
+	obj.value = stringHeader.Data
+	obj.nbEntries = uint64(stringHeader.Len)
 }
 
+// AllocWafArray is used to create a tree-like structure since we allocate a wafObject array inside another wafOject.
+// wafObject can also represent a map, in that case we use the AllocWafMapKey function to make the wafObject key-value-pair
+// like objects.
 func (refPool *cgoRefPool) AllocWafArray(obj *wafObject, typ wafObjectType, size uint64) []wafObject {
 	if typ != wafMapType && typ != wafArrayType {
 		panic("Cannot allocate this waf object data type as an array: " + strconv.Itoa(int(typ)))
@@ -76,15 +82,16 @@ func (refPool *cgoRefPool) AllocWafArray(obj *wafObject, typ wafObjectType, size
 	return goArray
 }
 
+// AllocWafMapKey is used to store a string map key in a wafObject.
+// We take full advantage of the fact that the WAF can receive non-null-terminated strings by directly retrieving the
+// underlying array in the string value using the nativeStringUnwrap function. Hence, removing any copy in the process
 func (refPool *cgoRefPool) AllocWafMapKey(obj *wafObject, str string) {
 	if len(str) == 0 {
 		return
 	}
 
-	goArray := make([]byte, len(str))
-	copy(goArray, str)
-	refPool.stringRefs = append(refPool.stringRefs, goArray)
-
-	obj.parameterName = sliceToUintptr(goArray)
-	obj.parameterNameLength = uint64(len(goArray))
+	refPool.stringRefs = append(refPool.stringRefs, str)
+	stringHeader := nativeStringUnwrap(str)
+	obj.parameterName = stringHeader.Data
+	obj.parameterNameLength = uint64(stringHeader.Len)
 }
