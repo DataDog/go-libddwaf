@@ -107,9 +107,9 @@ func testVerifyPEHeader(t *testing.T) {
 
 	switch runtime.GOARCH {
 	case "amd64":
-		require.Equal(t, pe.IMAGE_FILE_MACHINE_AMD64, peFile.Machine, "Wrong architecture")
+		require.Equal(t, uint16(pe.IMAGE_FILE_MACHINE_AMD64), peFile.Machine, "Wrong architecture")
 	case "386":
-		require.Equal(t, pe.IMAGE_FILE_MACHINE_I386, peFile.Machine, "Wrong architecture")
+		require.Equal(t, uint16(pe.IMAGE_FILE_MACHINE_I386), peFile.Machine, "Wrong architecture")
 	default:
 		panic(fmt.Sprintf("unexpected GOARCH=%s", runtime.GOARCH))
 	}
