@@ -96,11 +96,6 @@ func main() {
 }
 
 func createEmbedSource(tgt target) {
-	ext := "so"
-	if tgt.os == "darwin" {
-		ext = "dylib"
-	}
-
 	gosource := strings.Join(
 		[]string{
 			"// Unless explicitly stated otherwise all files in this repository are licensed",
@@ -113,10 +108,10 @@ func createEmbedSource(tgt target) {
 			"",
 			`import _ "embed" // Needed for go:embed`,
 			"",
-			fmt.Sprintf("//go:embed %s-%s/libddwaf.%s", tgt.os, tgt.arch, ext),
+			fmt.Sprintf("//go:embed %s-%s/libddwaf.%s", tgt.os, tgt.arch, tgt.ext),
 			"var libddwaf []byte",
 			"",
-			fmt.Sprintf(`const embedNamePattern = "libddwaf-*.%s"`, ext),
+			fmt.Sprintf(`const embedNamePattern = "libddwaf-*.%s"`, tgt.ext),
 			"", // Trailing new line...
 		},
 		"\n",
@@ -144,7 +139,7 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 	tarUrl := *tarAsset.BrowserDownloadURL
 	shaUrl := *shaAsset.BrowserDownloadURL
 
-	tmpdir, err := os.MkdirTemp("", "libddwaf-*")
+	tmpdir, err := os.MkdirTemp("", "libddwaf-updater-*")
 	if err != nil {
 		panic(err)
 	}
@@ -207,9 +202,11 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 		if _, err := script.NewPipe().WithReader(arch).WriteFile(destPath); err != nil {
 			panic(err)
 		}
-		// Make the libraries executable, as this can be useful to link directly to those objects to perform troubleshooting.
-		if err := os.Chmod(destPath, 0755); err != nil {
-			panic(err)
+		if path.Ext(destPath) != ".h" {
+			// Make the libraries executable, as this can be useful to link directly to those objects to perform troubleshooting.
+			if err := os.Chmod(destPath, 0755); err != nil {
+				panic(err)
+			}
 		}
 
 		if foundLib && (foundHdr || !tgt.primary) {
@@ -228,6 +225,7 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 type target struct {
 	os         string
 	arch       string
+	ext        string
 	assetLabel string
 	primary    bool // The one we'll get ddwaf.h from
 }
@@ -236,27 +234,31 @@ var targets = []target{
 	{
 		os:         "darwin",
 		arch:       "amd64",
+		ext:        "dylib",
 		assetLabel: "darwin-x86_64",
 	},
 	{
 		os:         "darwin",
 		arch:       "arm64",
+		ext:        "dylib",
 		assetLabel: "darwin-arm64",
 	},
 	{
 		os:         "linux",
 		arch:       "amd64",
+		ext:        "so",
 		assetLabel: "x86_64-linux-musl",
 		primary:    true,
 	},
 	{
 		os:         "linux",
+		ext:        "so",
 		arch:       "arm64",
 		assetLabel: "aarch64-linux-musl",
 	},
 	// These are currentlu not supported by ebitengine/purego:
-	// {os: "linux", arch: "armv7", assetLabel: "armv7-linux-musl"},
-	// {os: "linux", arch: "i386", assetLabel: "i386-linux-musl"},
+	// {os: "linux", arch: "armv7", ext: "so", assetLabel: "armv7-linux-musl"},
+	// {os: "linux", arch: "i386", ext: "so", assetLabel: "i386-linux-musl"},
 }
 
 func init() {
