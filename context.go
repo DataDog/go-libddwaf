@@ -83,17 +83,24 @@ func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (
 		context.totalOverallRuntimeNs.Add(uint64(dt.Nanoseconds()))
 	}()
 
-	encoder := encoder{
+	persistentEncoder := encoder{
 		stringMaxSize:    wafMaxStringLength,
 		containerMaxSize: wafMaxContainerSize,
 		objectMaxDepth:   wafMaxContainerDepth,
 	}
-	persistentData, err := encoder.Encode(addressData.Persistent)
+	persistentData, err := persistentEncoder.Encode(addressData.Persistent)
 	if err != nil {
 		return res, err
 	}
 
-	ephemeralData, err := encoder.Encode(addressData.Ephemeral)
+	// The WAF releases ephemeral address data at the end of each run call, so we need not keep the Go values live beyond
+	// that in the same way we need for persistent data. We hence use a separate encoder.
+	ephemeralEncoder := encoder{
+		stringMaxSize:    wafMaxStringLength,
+		containerMaxSize: wafMaxContainerSize,
+		objectMaxDepth:   wafMaxContainerDepth,
+	}
+	ephemeralData, err := ephemeralEncoder.Encode(addressData.Ephemeral)
 	if err != nil {
 		return res, err
 	}
@@ -104,9 +111,9 @@ func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (
 
 	// Save the Go pointer references to addressesToData that were referenced by the encoder
 	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the ddwaf_context.
-	defer context.cgoRefs.append(encoder.cgoRefs)
+	defer context.cgoRefs.append(persistentEncoder.cgoRefs)
 
-	return context.run(persistentData, ephemeralData, timeout, &encoder.cgoRefs)
+	return context.run(persistentData, ephemeralData, timeout, &persistentEncoder.cgoRefs)
 }
 
 func (context *Context) run(persistentData, ephemeralData *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) (Result, error) {
