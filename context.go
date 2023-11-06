@@ -115,7 +115,12 @@ func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (
 	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the ddwaf_context.
 	defer context.cgoRefs.append(persistentEncoder.cgoRefs)
 
-	return context.run(persistentData, ephemeralData, timeout, &persistentEncoder.cgoRefs)
+	res, err = context.run(persistentData, ephemeralData, timeout, &persistentEncoder.cgoRefs)
+
+	// Ensure the ephemerals don't get optimized away by the compiler before the WAF had a chance to use them.
+	keepAlive(ephemeralEncoder.cgoRefs)
+
+	return
 }
 
 func (context *Context) run(persistentData, ephemeralData *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) (Result, error) {

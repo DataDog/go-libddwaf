@@ -561,6 +561,11 @@ func TestConcurrency(t *testing.T) {
 		// Said otherwise, the User-Agent rule will run as long as it doesn't match, otherwise it gets ignored.
 		// This is the reason why the following user agent are not Arachni.
 		userAgents := [...]string{"Foo", "Bar", "Datadog"}
+		bodies := [3]map[string]any{
+			{"foo": "bar"},
+			{"baz": "bat"},
+			{"payload": "interesting"},
+		}
 		length := len(userAgents)
 
 		var startBarrier, stopBarrier sync.WaitGroup
@@ -582,7 +587,10 @@ func TestConcurrency(t *testing.T) {
 							"user-agent": userAgents[i],
 						},
 					}
-					res, err := wafCtx.Run(RunAddressData{Persistent: data}, time.Minute)
+					ephemeralData := map[string]interface{}{
+						"server.request.body": bodies[i],
+					}
+					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeralData}, time.Minute)
 					if err != nil {
 						panic(err)
 					}
