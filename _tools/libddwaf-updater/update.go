@@ -72,7 +72,7 @@ func main() {
 			created = true
 		}
 		if created || force {
-			if err := os.WriteFile(path.Join(embedDir, "vendor.go"), []byte(vedorMarkerFile), 0644); err != nil {
+			if err := os.WriteFile(path.Join(embedDir, "vendor.go"), []byte(vendorMarkerFile), 0644); err != nil {
 				panic(err)
 			}
 			createEmbedSource(tgt)
@@ -273,7 +273,7 @@ var targets = []target{
 	// {os: "linux", arch: "i386", ext: "so", assetLabel: "i386-linux-musl"},
 }
 
-const vedorMarkerFile = `// Unless explicitly stated otherwise all files in this repository are licensed
+const vendorMarkerFile = `// Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
