@@ -56,16 +56,16 @@ func NewContext(handle *Handle) *Context {
 
 // RunAddressData provides address data to the Context.Run method.
 type RunAddressData struct {
-	// persistent address data is scoped to the lifetime of a given Context, and subsquent calls to Context.Run with the
+	// Persistent address data is scoped to the lifetime of a given Context, and subsquent calls to Context.Run with the
 	// same address name will be silently ignored.
-	persistent map[string]any
-	// ephemeral address data is scoped to a given Context.Run call and is not persisted across calls. This is used for
+	Persistent map[string]any
+	// Ephemeral address data is scoped to a given Context.Run call and is not persisted across calls. This is used for
 	// protocols such as gRPC client/server streaming or GraphQL, where a single request can incur multiple subrequests.
-	ephemeral map[string]any
+	Ephemeral map[string]any
 }
 
 func (d RunAddressData) isEmpty() bool {
-	return len(d.persistent) == 0 && len(d.ephemeral) == 0
+	return len(d.Persistent) == 0 && len(d.Ephemeral) == 0
 }
 
 // Run encodes the given persistentAddressToData and ephemeralAddressToData values and runs them against the WAF rules
@@ -88,12 +88,12 @@ func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (
 		containerMaxSize: wafMaxContainerSize,
 		objectMaxDepth:   wafMaxContainerDepth,
 	}
-	persistentData, err := encoder.Encode(addressData.persistent)
+	persistentData, err := encoder.Encode(addressData.Persistent)
 	if err != nil {
 		return res, err
 	}
 
-	ephemeralData, err := encoder.Encode(addressData.ephemeral)
+	ephemeralData, err := encoder.Encode(addressData.Ephemeral)
 	if err != nil {
 		return res, err
 	}
