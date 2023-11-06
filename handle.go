@@ -88,6 +88,7 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 		cHandle:     cHandle,
 		refCounter:  atomic.NewInt32(1), // We count the handle itself in the counter
 		diagnostics: *diags,
+		addresses:   newSupportedAddresses(wafLib.wafRequiredAddresses(cHandle)),
 	}, nil
 }
 
