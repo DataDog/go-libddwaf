@@ -32,9 +32,12 @@ func (refPool *cgoRefPool) append(newRefs cgoRefPool) {
 // AllocCString is used in the rare cases where we need the WAF to receive standard null-terminated strings.
 // All cases where strings a wrapped in wafObject are handled by AllocWafString
 func (refPool *cgoRefPool) AllocCString(str string) uintptr {
-	nullTerminated := str + "\x00"
-	refPool.stringRefs = append(refPool.stringRefs, nullTerminated)
-	return nativeStringUnwrap(nullTerminated).Data
+	if len(str) > 0 && str[len(str)-1] != '\x00' {
+		str = str + "\x00"
+	}
+
+	refPool.stringRefs = append(refPool.stringRefs, str)
+	return nativeStringUnwrap(str).Data
 }
 
 // AllocWafString fills the obj parameter wafObject with all parameters needed for the WAF interpret it as a string.
