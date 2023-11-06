@@ -207,6 +207,10 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, embedDir strin
 		if _, err := script.NewPipe().WithReader(arch).WriteFile(destPath); err != nil {
 			panic(err)
 		}
+		// Make the libraries executable, as this can be useful to link directly to those objects to perform troubleshooting.
+		if err := os.Chmod(destPath, 0755); err != nil {
+			panic(err)
+		}
 
 		if foundLib && (foundHdr || !tgt.primary) {
 			break
