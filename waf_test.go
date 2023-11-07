@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build (amd64 || arm64) && (linux || darwin) && !go1.22
+//go:build ((darwin && (amd64 || arm64)) || (linux && (amd64 || arm64)) || (windows && (amd64 || 386))) && !go1.22
 
 package waf
 
@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"sort"
 	"sync"
 	"testing"
@@ -546,11 +547,17 @@ func TestActions(t *testing.T) {
 
 func TestAddresses(t *testing.T) {
 	expectedAddresses := []string{"my.indexed.input", "my.third.input", "my.second.input", "my.first.input"}
+	sort.Strings(expectedAddresses)
+
 	addresses := []ruleInput{{Address: "my.first.input"}, {Address: "my.second.input"}, {Address: "my.third.input"}, {Address: "my.indexed.input", KeyPath: []string{"indexed"}}}
 	waf, err := newDefaultHandle(newArachniTestRule(addresses, nil))
 	require.NoError(t, err)
 	defer waf.Close()
-	require.Equal(t, expectedAddresses, waf.Addresses())
+
+	wafAddresses := waf.Addresses()
+	sort.Strings(wafAddresses)
+
+	require.Equal(t, expectedAddresses, wafAddresses)
 }
 
 func TestConcurrency(t *testing.T) {
@@ -838,6 +845,27 @@ func TestMetrics(t *testing.T) {
 	  "conditions": [
 	  ],
 	  "transformers": []
+	},
+	{
+	  "id": "valid-rule-2",
+	  "name": "Unicode Full/Half Width Abuse Attack Attempt",
+	  "tags": {
+		"type": "attack_tool"
+	  },
+	  "conditions": [
+		{
+		  "parameters": {
+			"inputs": [
+			  {
+				"address": "server.request.body"
+			  }
+			],
+			"regex": "\\%u[fF]{2}[0-9a-fA-F]{2}"
+		  },
+		  "operator": "match_regex"
+		}
+	  ],
+	  "transformers": []
 	}
   ]
 }
@@ -855,8 +883,9 @@ func TestMetrics(t *testing.T) {
 		for _, id := range []string{"missing-tags-1", "missing-tags-2", "missing-name"} {
 			require.Contains(t, waf.diagnostics.Rules.Failed, id)
 		}
-		require.Len(t, waf.diagnostics.Rules.Loaded, 1)
+		require.Len(t, waf.diagnostics.Rules.Loaded, 2)
 		require.Contains(t, waf.diagnostics.Rules.Loaded, "valid-rule")
+		require.Contains(t, waf.diagnostics.Rules.Loaded, "valid-rule-2")
 		require.Equal(t, waf.diagnostics.Version, "1.2.7")
 		require.Len(t, waf.diagnostics.Rules.Errors, 1)
 	})
@@ -870,14 +899,20 @@ func TestMetrics(t *testing.T) {
 			"server.request.uri.raw": "\\%uff00",
 		}
 		ephemeral := map[string]interface{}{
-			"server.request.body": map[string]bool{"safe": true},
+			"server.request.body": "\\%uff00",
 		}
 		start := time.Now()
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Second)
+		runs := 1
+		if runtime.GOOS == "windows" {
+			runs = 1000 // Looks like the WAF is unable to return nano-time on Windows
+		}
+		for i := 0; i < runs; i++ {
+			res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Second)
+			require.NoError(t, err)
+			require.NotNil(t, res.Events)
+			require.Nil(t, res.Actions)
+		}
 		elapsedNS := time.Since(start).Nanoseconds()
-		require.NoError(t, err)
-		require.NotNil(t, res.Events)
-		require.Nil(t, res.Actions)
 
 		// Make sure that WAF runtime was set
 		overall, internal := wafCtx.TotalRuntime()

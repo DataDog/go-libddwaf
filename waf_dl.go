@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build (linux || darwin) && (amd64 || arm64) && !go1.22
+//go:build ((darwin && (amd64 || arm64)) || (linux && (amd64 || arm64)) || (windows && (amd64 || 386))) && !go1.22
 
 package waf
 
@@ -21,6 +21,7 @@ import (
 // since purego calls are not type safe
 type wafDl struct {
 	wafSymbols
+	file   string
 	handle uintptr
 }
 
@@ -46,7 +47,7 @@ func newWafDl() (dl *wafDl, err error) {
 	if err != nil {
 		return
 	}
-	defer func() {
+	cleanup := func() {
 		rmErr := os.Remove(file)
 		if rmErr != nil {
 			if err == nil {
@@ -56,23 +57,25 @@ func newWafDl() (dl *wafDl, err error) {
 				err = fmt.Errorf("%w; along with an error while removing %s: %v", err, file, rmErr)
 			}
 		}
-	}()
+	}
 
 	var handle uintptr
-	if handle, err = purego.Dlopen(file, purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
+	if handle, err = loadSharedObject(file); err != nil {
+		defer cleanup()
 		return
 	}
 
 	var symbols wafSymbols
 	if symbols, err = resolveWafSymbols(handle); err != nil {
-		if closeErr := purego.Dlclose(handle); closeErr != nil {
+		defer cleanup()
+		if closeErr := closeSharedObject(handle); closeErr != nil {
 			// TODO: rely on errors.Join() once go1.20 is our min supported Go version
 			err = fmt.Errorf("%w; along with an error while releasing the shared libddwaf library: %v", err, closeErr)
 		}
 		return
 	}
 
-	dl = &wafDl{symbols, handle}
+	dl = &wafDl{symbols, file, handle}
 
 	// Try calling the waf to make sure everything is fine
 	err = tryCall(func() error {
@@ -80,7 +83,7 @@ func newWafDl() (dl *wafDl, err error) {
 		return nil
 	})
 	if err != nil {
-		if closeErr := purego.Dlclose(handle); closeErr != nil {
+		if closeErr := dl.Close(); closeErr != nil {
 			// TODO: rely on errors.Join() once go1.20 is our min supported Go version
 			err = fmt.Errorf("%w; along with an error while releasing the shared libddwaf library: %v", err, closeErr)
 		}
@@ -91,7 +94,14 @@ func newWafDl() (dl *wafDl, err error) {
 }
 
 func (waf *wafDl) Close() error {
-	return purego.Dlclose(waf.handle)
+	err := closeSharedObject(waf.handle)
+	// Ignore the remove error unless the close call failed, as Windows won't allow removing a currently used DLL.
+	rmErr := os.Remove(waf.file)
+	if rmErr != nil && err != nil {
+		// TODO: rely on errors.Join() once go1.20 is our min supported Go version
+		err = fmt.Errorf("%w; along with an error while removing %s: %v", err, waf.file, rmErr)
+	}
+	return err
 }
 
 // wafGetVersion returned string is a static string so we do not need to free it
@@ -185,34 +195,34 @@ func (waf *wafDl) syscall(fn uintptr, args ...uintptr) uintptr {
 // resolveWafSymbols resolves relevant symbols from the libddwaf shared library using the provided
 // purego.Dlopen handle.
 func resolveWafSymbols(handle uintptr) (symbols wafSymbols, err error) {
-	if symbols.init, err = purego.Dlsym(handle, "ddwaf_init"); err != nil {
+	if symbols.init, err = resolveSymbol(handle, "ddwaf_init"); err != nil {
 		return
 	}
-	if symbols.update, err = purego.Dlsym(handle, "ddwaf_update"); err != nil {
+	if symbols.update, err = resolveSymbol(handle, "ddwaf_update"); err != nil {
 		return
 	}
-	if symbols.destroy, err = purego.Dlsym(handle, "ddwaf_destroy"); err != nil {
+	if symbols.destroy, err = resolveSymbol(handle, "ddwaf_destroy"); err != nil {
 		return
 	}
-	if symbols.knownAddresses, err = purego.Dlsym(handle, "ddwaf_known_addresses"); err != nil {
+	if symbols.knownAddresses, err = resolveSymbol(handle, "ddwaf_known_addresses"); err != nil {
 		return
 	}
-	if symbols.getVersion, err = purego.Dlsym(handle, "ddwaf_get_version"); err != nil {
+	if symbols.getVersion, err = resolveSymbol(handle, "ddwaf_get_version"); err != nil {
 		return
 	}
-	if symbols.contextInit, err = purego.Dlsym(handle, "ddwaf_context_init"); err != nil {
+	if symbols.contextInit, err = resolveSymbol(handle, "ddwaf_context_init"); err != nil {
 		return
 	}
-	if symbols.contextDestroy, err = purego.Dlsym(handle, "ddwaf_context_destroy"); err != nil {
+	if symbols.contextDestroy, err = resolveSymbol(handle, "ddwaf_context_destroy"); err != nil {
 		return
 	}
-	if symbols.resultFree, err = purego.Dlsym(handle, "ddwaf_result_free"); err != nil {
+	if symbols.resultFree, err = resolveSymbol(handle, "ddwaf_result_free"); err != nil {
 		return
 	}
-	if symbols.objectFree, err = purego.Dlsym(handle, "ddwaf_object_free"); err != nil {
+	if symbols.objectFree, err = resolveSymbol(handle, "ddwaf_object_free"); err != nil {
 		return
 	}
-	if symbols.run, err = purego.Dlsym(handle, "ddwaf_run"); err != nil {
+	if symbols.run, err = resolveSymbol(handle, "ddwaf_run"); err != nil {
 		return
 	}
 

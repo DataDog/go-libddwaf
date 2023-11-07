@@ -263,11 +263,20 @@ var targets = []target{
 		arch:       "arm64",
 		assetLabel: "aarch64-linux-musl",
 	},
-
-	//// Not ready for these just yet...
-	// {os: "windows", arch: "amd64", base: "ddwaf", ext: "dll", assetLabel: "windows-x64"},
-	// {os: "windows", arch: "386", base: "ddwaf", ext: "dll", assetLabel: "windows-win32"},
-
+	{
+		os:         "windows",
+		arch:       "amd64",
+		base:       "ddwaf",
+		ext:        "dll",
+		assetLabel: "windows-x64",
+	},
+	{
+		os:         "windows",
+		arch:       "386",
+		base:       "ddwaf",
+		ext:        "dll",
+		assetLabel: "windows-win32",
+	},
 	//// These are currently not supported by ebitengine/purego:
 	// {os: "linux", arch: "armv7", ext: "so", assetLabel: "armv7-linux-musl"},
 	// {os: "linux", arch: "i386", ext: "so", assetLabel: "i386-linux-musl"},
