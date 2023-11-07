@@ -76,10 +76,11 @@ jobs:
           # Run the tests with gotestsum
           env CGO_ENABLED=${{ matrix.cgo_enabled }} ./gotestsum -- -v -count=10 -shuffle=on ./...
 
-  linux-arm64:
+  linux-other:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        arch: ["arm64"]
         cgo_enabled: [ "0", "1" ] # test it compiles with and without the cgo
       fail-fast: false
     steps:
@@ -88,13 +89,13 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/go/pkg/mod
-          key: go-pkg-mod-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-pkg-mod-
+          key: go-pkg-mod-${{ matrix.arch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-pkg-mod-${{ matrix.arch }} go-pkg-mod-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         with:
-          platforms: arm64
-      - run: docker run --platform=linux/arm64 -v $PWD:$PWD -w $PWD -eCGO_ENABLED=${{ matrix.cgo_enabled }} -eDD_APPSEC_WAF_TIMEOUT=$DD_APPSEC_WAF_TIMEOUT golang go test -v -count=10 -shuffle=on ./...
+          platforms: ${{ matrix.arch }}
+      - run: docker run --platform=linux/${{ matrix.arch }} -v${HOME}/go/pkg/mod:/root/go/pkg/mod -v $PWD:$PWD -w $PWD -eCGO_ENABLED=${{ matrix.cgo_enabled }} -eDD_APPSEC_WAF_TIMEOUT=$DD_APPSEC_WAF_TIMEOUT golang go test -v -count=10 -shuffle=on ./...
 
   # A simple join target to simplify setting up branch protection settings in GH.
   done:
@@ -103,7 +104,7 @@ jobs:
     needs:
       - native
       - golang-linux-container
-      - linux-arm64
+      - linux-other
     steps:
       - name: Done
         run: echo "Done!"

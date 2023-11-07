@@ -58,6 +58,16 @@ type wafObject struct {
 	// packed (apart from breaking all tracers of course)
 }
 
+// isArray determines whether this WAF Object is an array or not.
+func (w *wafObject) isArray() bool {
+	return w._type == wafArrayType
+}
+
+// isMap determines whether this WAF Object is a map or not.
+func (w *wafObject) isMap() bool {
+	return w._type == wafMapType
+}
+
 type wafConfig struct {
 	limits     wafConfigLimits
 	obfuscator wafConfigObfuscator

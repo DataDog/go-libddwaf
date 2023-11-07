@@ -4,12 +4,11 @@
 // Copyright 2016-present Datadog, Inc.
 
 //go:build linux && arm64 && !go1.22
-
-package waf
+package lib
 
 import _ "embed" // Needed for go:embed
 
-//go:embed lib/linux-arm64/libddwaf.so
+//go:embed linux-arm64/libddwaf.so
 var libddwaf []byte
 
 const embedNamePattern = "libddwaf-*.so"

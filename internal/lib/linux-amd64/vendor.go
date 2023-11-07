@@ -3,13 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build linux && amd64 && !go1.22
+package vendor
 
-package waf
-
-import _ "embed" // Needed for go:embed
-
-//go:embed lib/linux-amd64/libddwaf.so
-var libddwaf []byte
-
-const embedNamePattern = "libddwaf-*.so"
+// This file is there to make sure "go mod vendor" does not drop those directories, as it otherwise removes
+// any directiory that contains no ".go" files.

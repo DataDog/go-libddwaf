@@ -29,7 +29,7 @@ func (waf *wafDl) wafUpdate(handle wafHandle, ruleset *wafObject, info *wafObjec
 func (waf *wafDl) wafDestroy(handle wafHandle) {
 }
 
-func (waf *wafDl) wafRequiredAddresses(handle wafHandle) []string {
+func (waf *wafDl) wafKnownAddresses(handle wafHandle) []string {
 	return nil
 }
 
@@ -46,7 +46,7 @@ func (waf *wafDl) wafResultFree(result *wafResult) {
 func (waf *wafDl) wafObjectFree(obj *wafObject) {
 }
 
-func (waf *wafDl) wafRun(context wafContext, obj *wafObject, result *wafResult, timeout uint64) wafReturnCode {
+func (waf *wafDl) wafRun(context wafContext, persistentData, ephemeralData *wafObject, result *wafResult, timeout uint64) wafReturnCode {
 	return wafErrInternal
 }
 
