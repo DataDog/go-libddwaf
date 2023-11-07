@@ -733,3 +733,53 @@ func TestEncoder(t *testing.T) {
 		})
 	}
 }
+
+// This test needs a working encoder to function properly, as it first encodes the objects before decoding them
+func TestDecoder(t *testing.T) {
+	t.Run("Errors", func(t *testing.T) {
+		e := newMaxEncoder()
+		objBuilder := func(value any) *wafObject {
+			encoded, err := e.Encode(value)
+			require.NoError(t, err, "Encoding object failed")
+			return encoded
+		}
+
+		for _, tc := range []struct {
+			Name          string
+			ExpectedValue map[string][]string
+		}{
+			{
+				Name:          "empty",
+				ExpectedValue: map[string][]string{},
+			},
+			{
+				Name: "one-empty-entry",
+				ExpectedValue: map[string][]string{
+					"afasdfafs": nil,
+				},
+			},
+			{
+				Name: "one-filled-entry",
+				ExpectedValue: map[string][]string{
+					"afasdfafs": {"rule1", "rule2"},
+				},
+			},
+			{
+				Name: "multiple-entries",
+				ExpectedValue: map[string][]string{
+					"afasdfafs": {"rule1", "rule2"},
+					"sfdsafdsa": {"rule3", "rule4"},
+				},
+			},
+		} {
+			t.Run(tc.Name, func(t *testing.T) {
+				val, err := decodeErrors(objBuilder(tc.ExpectedValue))
+				require.NoErrorf(t, err, "Error decoding the object: %v", err)
+				require.Equal(t, tc.ExpectedValue, val)
+			})
+		}
+
+		keepAlive(e.cgoRefs.arrayRefs)
+		keepAlive(e.cgoRefs.stringRefs)
+	})
+}

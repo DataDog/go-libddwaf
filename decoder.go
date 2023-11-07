@@ -19,9 +19,6 @@ func decodeErrors(obj *wafObject) (map[string][]string, error) {
 	wafErrors := map[string][]string{}
 	for i := uint64(0); i < obj.nbEntries; i++ {
 		objElem := castWithOffset[wafObject](obj.value, i)
-		if objElem._type != wafArrayType {
-			return nil, errInvalidObjectType
-		}
 
 		errorMessage := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
 		ruleIds, err := decodeStringArray(objElem)
@@ -141,6 +138,11 @@ func decodeDiagnosticAddresses(obj *wafObject) (res DiagnosticAddresses, err err
 }
 
 func decodeStringArray(obj *wafObject) ([]string, error) {
+	// We consider that nil is an empty array
+	if obj._type == wafNilType {
+		return nil, nil
+	}
+
 	if !obj.isArray() {
 		return nil, errInvalidObjectType
 	}
