@@ -140,3 +140,18 @@ func Version() string {
 	Load()
 	return wafVersion
 }
+
+// HasEvents return true if the result holds at least 1 event
+func (r *Result) HasEvents() bool {
+	return len(r.Events) > 0
+}
+
+// HasDerivatives return true if the result holds at least 1 derivative
+func (r *Result) HasDerivatives() bool {
+	return len(r.Derivatives) > 0
+}
+
+// HasActions return true if the result holds at least 1 action
+func (r *Result) HasActions() bool {
+	return len(r.Actions) > 0
+}
