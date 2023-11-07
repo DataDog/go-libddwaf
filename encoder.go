@@ -30,6 +30,14 @@ type native interface {
 	int64 | uint64 | uintptr
 }
 
+func newLimitedEncoder() *encoder {
+	return &encoder{
+		containerMaxSize: wafMaxContainerSize,
+		stringMaxSize:    wafMaxStringLength,
+		objectMaxDepth:   wafMaxContainerDepth,
+	}
+}
+
 func newMaxEncoder() *encoder {
 	return &encoder{
 		containerMaxSize: math.MaxInt,
@@ -38,67 +46,93 @@ func newMaxEncoder() *encoder {
 	}
 }
 
+// Encode takes a Go value and returns a wafObject pointer and an error.
+// The returned wafObject is the root of the tree of imbriqued wafObjects representing the Go value.
+// The only error case is if the top-level object is "Unusable" which means that the data is nil or a non-data type
+// like a function or a channel.
 func (encoder *encoder) Encode(data any) (*wafObject, error) {
 	value := reflect.ValueOf(data)
 	wo := &wafObject{}
 
-	if err := encoder.encode(value, wo, encoder.objectMaxDepth); err != nil {
-		return nil, err
+	encoder.encode(value, wo, encoder.objectMaxDepth)
+
+	if wo._type == wafInvalidType {
+		return nil, errUnsupportedValue
 	}
 
 	return wo, nil
 }
 
-func encodeNative[T native](val T, t wafObjectType, obj *wafObject) error {
+func encodeNative[T native](val T, t wafObjectType, obj *wafObject) {
 	obj._type = t
 	obj.value = (uintptr)(val)
-	return nil
 }
 
-func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) error {
+var nullableTypeKinds = map[reflect.Kind]struct{}{
+	reflect.Interface:     {},
+	reflect.Pointer:       {},
+	reflect.UnsafePointer: {},
+	reflect.Map:           {},
+	reflect.Slice:         {},
+	reflect.Func:          {},
+	reflect.Chan:          {},
+}
+
+// isValueNil check if the value is nullable and if it is actually nil
+// we cannot directly use value.IsNil() because it panics on non-pointer values
+func isValueNil(value reflect.Value) bool {
+	_, nullable := nullableTypeKinds[value.Kind()]
+	return nullable && value.IsNil()
+}
+
+func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) {
+	value.IsValid()
 	switch kind := value.Kind(); {
 	// Terminal cases (leafs of the tree)
 	case kind == reflect.Invalid:
-		return errUnsupportedValue
+		encodeNative[uintptr](0, wafInvalidType, obj)
+	// Is nullable type kind
+	case isValueNil(value):
+		encodeNative[uintptr](0, wafNilType, obj)
+
 	// 		Booleans
 	case kind == reflect.Bool:
-		return encodeNative(nativeToUintptr(value.Bool()), wafBoolType, obj)
+		encodeNative(nativeToUintptr(value.Bool()), wafBoolType, obj)
 	// 		Numbers
 	case value.CanInt(): // any int type or alias
-		return encodeNative(value.Int(), wafIntType, obj)
+		encodeNative(value.Int(), wafIntType, obj)
 	case value.CanUint(): // any Uint type or alias
-		return encodeNative(value.Uint(), wafUintType, obj)
+		encodeNative(value.Uint(), wafUintType, obj)
 	case value.CanFloat(): // any float type or alias
-		return encodeNative(nativeToUintptr(value.Float()), wafFloatType, obj)
+		encodeNative(nativeToUintptr(value.Float()), wafFloatType, obj)
 
 	//		Strings
 	case kind == reflect.String: // string type
-		return encoder.encodeString(value.String(), obj)
+		encoder.encodeString(value.String(), obj)
 	case value.Type() == reflect.TypeOf([]byte(nil)): // byte array -> string
-		return encoder.encodeString(string(value.Bytes()), obj)
+		encoder.encodeString(string(value.Bytes()), obj)
 
 	// Recursive cases (internal nodes of the tree)
 	case kind == reflect.Interface || kind == reflect.Pointer: // Pointer and interfaces are not taken into account
-		return encoder.encode(value.Elem(), obj, depth)
+		encoder.encode(value.Elem(), obj, depth)
 	case kind == reflect.Array || kind == reflect.Slice: // either an array or a slice of an array
-		return encoder.encodeArray(value, obj, depth)
+		encoder.encodeArray(value, obj, depth)
 	case kind == reflect.Map:
-		return encoder.encodeMap(value, obj, depth)
+		encoder.encodeMap(value, obj, depth)
 	case kind == reflect.Struct:
-		return encoder.encodeStruct(value, obj, depth)
+		encoder.encodeStruct(value, obj, depth)
 
 	default:
-		return errUnsupportedValue
+		encodeNative[uintptr](0, wafInvalidType, obj)
 	}
 }
 
-func (encoder *encoder) encodeString(str string, obj *wafObject) error {
+func (encoder *encoder) encodeString(str string, obj *wafObject) {
 	if len(str) > encoder.stringMaxSize {
 		str = str[:encoder.stringMaxSize]
 	}
 
 	encoder.cgoRefs.AllocWafString(obj, str)
-	return nil
 }
 
 func getFieldNameFromType(field reflect.StructField) (string, bool) {
@@ -127,9 +161,11 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 // - It will only take the first encoder.containerMaxSize elements of the struct
 // - If the field has a json tag it will become the field name
 // - Private fields and also values producing an error at encoding will be skipped
-func (encoder *encoder) encodeStruct(value reflect.Value, obj *wafObject, depth int) error {
+// - Even if the element values are invalid or null we still keep them to report the field name
+func (encoder *encoder) encodeStruct(value reflect.Value, obj *wafObject, depth int) {
 	if depth < 0 {
-		return errMaxDepth
+		encodeNative[uintptr](0, wafInvalidType, obj)
+		return
 	}
 
 	typ := value.Type()
@@ -149,29 +185,28 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *wafObject, depth 
 		}
 
 		objElem := &objArray[length]
-		if encoder.encodeMapKey(reflect.ValueOf(fieldName), objElem) != nil {
+		// If the Map key is of unsupported type, skip it
+		if encoder.encodeMapKey(reflect.ValueOf(fieldName), objElem, depth) != nil {
 			continue
 		}
 
-		if encoder.encode(value.Field(i), objElem, depth-1) != nil {
-			continue
-		}
+		encoder.encode(value.Field(i), objElem, depth-1)
 
 		length++
 	}
 
 	// Set the length to the final number of successfully encoded elements
 	obj.nbEntries = uint64(length)
-	return nil
 }
 
 // encodeMap takes a reflect.Value and a wafObject pointer and iterates on the map elements and returns
 // a wafObject map of type wafMapType. The specificities are the following:
 // - It will only take the first encoder.containerMaxSize elements of the map
-// - Values and keys producing an error at encoding will be skipped
-func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int) error {
+// - Even if the element values are invalid or null we still keep them to report the map key
+func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int) {
 	if depth < 0 {
-		return errMaxDepth
+		encodeNative[uintptr](0, wafInvalidType, obj)
+		return
 	}
 
 	capacity := value.Len()
@@ -187,31 +222,29 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int
 		}
 
 		objElem := &objArray[length]
-		if encoder.encodeMapKey(iter.Key(), objElem) != nil {
+		if encoder.encodeMapKey(iter.Key(), objElem, depth) != nil {
 			continue
 		}
 
-		if encoder.encode(iter.Value(), objElem, depth-1) != nil {
-			continue
-		}
-
+		encoder.encode(iter.Value(), objElem, depth-1)
 		length++
 	}
 
 	// Fix the size because we skipped map entries
 	obj.nbEntries = uint64(length)
-	return nil
 }
 
 // encodeMapKey takes a reflect.Value and a wafObject and returns a wafObject ready to be considered a map key
 // We use the function cgoRefPool.AllocWafMapKey to store the key in the wafObject. But first we need
 // to grab the real underlying value by recursing through the pointer and interface values.
-func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject) error {
+func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject, depth int) error {
 	kind := value.Kind()
-	for ; kind == reflect.Pointer || kind == reflect.Interface; value, kind = value.Elem(), value.Elem().Kind() {
+	for ; depth > 0 && (kind == reflect.Pointer || kind == reflect.Interface); value, kind = value.Elem(), value.Elem().Kind() {
 		if value.IsNil() {
 			return errInvalidMapKey
 		}
+
+		depth--
 	}
 
 	if kind != reflect.String && value.Type() != reflect.TypeOf([]byte(nil)) {
@@ -232,10 +265,11 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject) error 
 // encodeArray takes a reflect.Value and a wafObject pointer and iterates on the elements and returns
 // a wafObject array of type wafArrayType. The specificities are the following:
 // - It will only take the first encoder.containerMaxSize elements of the array
-// - Values producing an error at encoding will be skipped
-func (encoder *encoder) encodeArray(value reflect.Value, obj *wafObject, depth int) error {
+// - Elements producing an error at encoding or null values will be skipped
+func (encoder *encoder) encodeArray(value reflect.Value, obj *wafObject, depth int) {
 	if depth < 0 {
-		return errMaxDepth
+		encodeNative[uintptr](0, wafInvalidType, obj)
+		return
 	}
 
 	length := value.Len()
@@ -248,7 +282,11 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *wafObject, depth i
 	objArray := encoder.cgoRefs.AllocWafArray(obj, wafArrayType, uint64(capacity))
 	for i := 0; currIndex < capacity && i < length; i++ {
 		objElem := &objArray[currIndex]
-		if encoder.encode(value.Index(i), objElem, depth-1) != nil {
+
+		encoder.encode(value.Index(i), objElem, depth-1)
+
+		// If the element is null or invalid, we have no map key to report so we can skip it
+		if objElem.IsUnusable() {
 			continue
 		}
 
@@ -257,5 +295,4 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *wafObject, depth i
 
 	// Fix the size because we skipped map entries
 	obj.nbEntries = uint64(currIndex)
-	return nil
 }

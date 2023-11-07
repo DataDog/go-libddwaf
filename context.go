@@ -85,27 +85,15 @@ func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (
 		context.totalOverallRuntimeNs.Add(uint64(dt.Nanoseconds()))
 	}()
 
-	persistentEncoder := encoder{
-		stringMaxSize:    wafMaxStringLength,
-		containerMaxSize: wafMaxContainerSize,
-		objectMaxDepth:   wafMaxContainerDepth,
-	}
-	persistentData, err := persistentEncoder.Encode(addressData.Persistent)
-	if err != nil {
-		return res, err
-	}
+	// We can ignore the encoding error because it can only tell us that the user values are incompatible with the WAF
+	// which is not something we care about here.
+	persistentEncoder := newLimitedEncoder()
+	persistentData, _ := persistentEncoder.Encode(addressData.Persistent)
 
 	// The WAF releases ephemeral address data at the end of each run call, so we need not keep the Go values live beyond
 	// that in the same way we need for persistent data. We hence use a separate encoder.
-	ephemeralEncoder := encoder{
-		stringMaxSize:    wafMaxStringLength,
-		containerMaxSize: wafMaxContainerSize,
-		objectMaxDepth:   wafMaxContainerDepth,
-	}
-	ephemeralData, err := ephemeralEncoder.Encode(addressData.Ephemeral)
-	if err != nil {
-		return res, err
-	}
+	ephemeralEncoder := newLimitedEncoder()
+	ephemeralData, _ := ephemeralEncoder.Encode(addressData.Ephemeral)
 
 	// ddwaf_run cannot run concurrently and the next append write on the context state so we need a mutex
 	context.mutex.Lock()
