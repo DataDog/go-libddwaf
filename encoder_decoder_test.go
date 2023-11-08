@@ -8,230 +8,218 @@
 package waf
 
 import (
+	"reflect"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestEncoder(t *testing.T) {
+func wafTest(t *testing.T, obj *wafObject) {
+	// Pass the encoded value to the WAF to make sure it doesn't return an error
+	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
+	require.NoError(t, err)
+	defer waf.Close()
+	wafCtx := NewContext(waf)
+	require.NotNil(t, wafCtx)
+	defer wafCtx.Close()
+	_, err = wafCtx.Run(RunAddressData{
+		Persistent: map[string]any{"my.input": obj},
+		Ephemeral:  map[string]any{"my.other.input": obj},
+	}, time.Second)
+	require.NoError(t, err)
+}
+
+func TestEncodeDecode(t *testing.T) {
+
+	// Nil value as Output as a special meaning: the output should be the same as the input
+	// So we use this value in case we need a real nil output value
+	nilOutput := make(chan any, 1)
+
 	for _, tc := range []struct {
-		Name                   string
-		PermanentData          any
-		EphemeralData          any // Strive to have different values than PermanentData, to steer constant grouping away
-		ExpectedError          error
-		ExpectedWAFValueType   int
-		ExpectedWAFValueLength int
-		ExpectedWAFString      string
-		ExpectedWafValueInt    int64
-		ExpectedWafValueUint   uint64
-		ExpectedWafValueFloat  float64
-		ExpectedWafValueBool   bool
-		MaxValueDepth          any
-		MaxContainerLength     any
-		MaxStringLength        any
+		Name        string
+		Input       any
+		Output      any
+		DecodeError error
+		EncodeError error
 	}{
 		{
-			Name:          "unsupported type",
-			PermanentData: make(chan struct{}),
-			EphemeralData: make(chan struct{}),
-			ExpectedError: errUnsupportedValue,
+			Name:  "int64",
+			Input: int64(-4),
 		},
 		{
-			Name:                 "string-hekki",
-			PermanentData:        "hello, waf",
-			EphemeralData:        "hello, waf!",
-			ExpectedWAFValueType: wafStringType,
-			ExpectedWAFString:    "hello, waf",
+			Name:  "uint64",
+			Input: uint64(4),
 		},
 		{
-			Name:                   "string-empty",
-			PermanentData:          "",
-			EphemeralData:          "",
-			ExpectedWAFValueType:   wafStringType,
-			ExpectedWAFValueLength: 0,
+			Name:  "float64",
+			Input: 4.4444,
 		},
 		{
-			Name:                 "byte-slice",
-			PermanentData:        []byte("hello, waf"),
-			EphemeralData:        []byte("hello, waf!"),
-			ExpectedWAFValueType: wafStringType,
-			ExpectedWAFString:    "hello, waf",
+			Name:  "bool",
+			Input: true,
 		},
 		{
-			Name:                 "nil-byte-slice",
-			PermanentData:        []byte(nil),
-			EphemeralData:        []byte(nil),
-			ExpectedWAFValueType: wafNilType,
+			Name:  "bool",
+			Input: false,
 		},
 		{
-			Name:                 "nil-map",
-			PermanentData:        map[string]any(nil),
-			EphemeralData:        map[string]any(nil),
-			ExpectedWAFValueType: wafNilType,
+			Name:  "string",
+			Input: "",
 		},
 		{
-			Name:                   "map-with-empty-key-string",
-			PermanentData:          map[string]int{"": 1},
-			EphemeralData:          map[string]int{"": 2},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 1,
+			Name:  "string",
+			Input: "EliottAndFrancoisLoveDecoding",
 		},
 		{
-			Name:                   "empty-struct",
-			PermanentData:          struct{}{},
-			EphemeralData:          struct{}{},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 0,
+			Name:  "string",
+			Input: "123",
+		},
+		{
+			Name:  "slice",
+			Input: []any{int64(1), int64(2), int64(3), int64(4)},
+		},
+		{
+			Name:  "slice",
+			Input: []any{"1", "2", "3", "4"},
+		},
+		{
+			Name:   "slice",
+			Input:  []string{"1", "2", "3", "4"},
+			Output: []any{"1", "2", "3", "4"},
+		},
+		{
+			Name:  "slice",
+			Input: []any{true, false, false, true, true, true},
+		},
+		{
+			Name:  "slice-nested",
+			Input: []any{[]any{true, false}, []any{false, false}, []any{true, true, true}},
+		},
+		{
+			Name:  "map",
+			Input: map[string]any{"1": int64(1), "2": int64(2), "3": int64(3)},
+		},
+		{
+			Name:  "map",
+			Input: map[string]any{"1": uint64(1), "2": uint64(2), "3": uint64(3)},
+		},
+		{
+			Name:   "map",
+			Input:  map[string]int64{"1": 1, "2": 2, "3": 3},
+			Output: map[string]any{"1": int64(1), "2": int64(2), "3": int64(3)},
+		},
+		{
+			Name:  "map",
+			Input: map[string]any{"1": 1.111, "2": 2.222, "3": 3.333},
+		},
+		{
+			Name:  "map",
+			Input: map[string]any{"1": "1", "2": "2", "3": "3"},
+		},
+		{
+			Name:  "map-nested",
+			Input: map[string]any{"1": map[string]any{"1": int64(1), "2": int64(2)}, "2": map[string]any{"3": int64(3), "4": int64(4)}},
+		},
+		{
+			Name:  "string-hekki",
+			Input: "hello, waf",
+		},
+		{
+			Name:  "string-empty",
+			Input: "",
+		},
+		{
+			Name:   "byte-slice",
+			Input:  []byte("hello, waf"),
+			Output: "hello, waf",
+		},
+		{
+			Name:   "nil-byte-slice",
+			Input:  []byte(nil),
+			Output: nilOutput,
+		},
+		{
+			Name:   "nil-map",
+			Input:  map[string]any(nil),
+			Output: nilOutput,
+		},
+		{
+			Name:  "map-with-empty-key-string",
+			Input: map[string]any{"": uint64(1)},
+		},
+		{
+			Name:   "empty-struct",
+			Input:  struct{}{},
+			Output: map[string]any{},
 		},
 		{
 			Name: "empty-struct-with-private-fields",
-			PermanentData: struct {
+			Input: struct {
 				a string
 				b int
 				c bool
 			}{},
-			EphemeralData: struct {
-				a2 string
-				b2 int
-				c2 bool
-			}{},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 0,
+			Output: map[string]any{},
 		},
 		{
-			Name:          "invalid-interface-value",
-			PermanentData: nil,
-			EphemeralData: nil,
-			ExpectedError: errUnsupportedValue,
+			Name:        "invalid-interface-value",
+			Input:       nil,
+			EncodeError: errUnsupportedValue,
 		},
 		{
-			Name:                 "nil-str-pointer-value",
-			PermanentData:        (*string)(nil),
-			EphemeralData:        (*string)(nil),
-			ExpectedWAFValueType: wafNilType,
+			Name:   "nil-str-pointer-value",
+			Input:  (*string)(nil),
+			Output: nilOutput,
 		},
 		{
-			Name:                 "nil-int-pointer-value",
-			PermanentData:        (*int)(nil),
-			EphemeralData:        (*int)(nil),
-			ExpectedWAFValueType: wafNilType,
+			Name:   "nil-int-pointer-value",
+			Input:  (*int)(nil),
+			Output: nilOutput,
 		},
 		{
-			Name:                 "non-nil-pointer-value",
-			PermanentData:        new(int),
-			EphemeralData:        new(int),
-			ExpectedWAFValueType: wafIntType,
-			ExpectedWafValueInt:  0,
+			Name:   "empty-map",
+			Input:  map[string]any{},
+			Output: map[string]any{},
 		},
 		{
-			Name:                   "non-nil-pointer-value",
-			PermanentData:          new(string),
-			EphemeralData:          new(string),
-			ExpectedWAFValueType:   wafStringType,
-			ExpectedWAFValueLength: 0,
+			Name:        "unsupported",
+			Input:       func() {},
+			Output:      func() {},
+			EncodeError: errUnsupportedValue,
 		},
 		{
-			Name:                   "having-an-empty-map",
-			PermanentData:          map[string]any{},
-			EphemeralData:          map[string]any{},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 0,
+			Name:        "map-nested-unsupported",
+			Input:       map[string]any{"1": func() {}},
+			DecodeError: errUnsupportedValue,
 		},
 		{
-			Name:          "unsupported",
-			PermanentData: func() {},
-			EphemeralData: func() {},
-			ExpectedError: errUnsupportedValue,
+			Name:  "slice",
+			Input: []any{float64(33.12345), "ok", int64(27)},
 		},
 		{
-			Name:                 "int",
-			PermanentData:        int(1234),
-			EphemeralData:        int(12345),
-			ExpectedWAFValueType: wafIntType,
-			ExpectedWafValueInt:  1234,
+			Name:   "slice-having-unsupported-values",
+			Input:  []any{float64(33.12345), func() {}, "ok", uint64(27)},
+			Output: []any{float64(33.12345), "ok", uint64(27)},
 		},
 		{
-			Name:                 "uint",
-			PermanentData:        uint(9876),
-			EphemeralData:        uint(98765),
-			ExpectedWAFValueType: wafUintType,
-			ExpectedWafValueUint: 9876,
+			Name:   "slice-having-nil-values",
+			Input:  []any{float64(33.12345), "ok", uint64(27), nil},
+			Output: []any{float64(33.12345), "ok", uint64(27)},
 		},
 		{
-			Name:                 "bool",
-			PermanentData:        true,
-			EphemeralData:        false,
-			ExpectedWAFValueType: wafBoolType,
-			ExpectedWafValueBool: true,
+			Name:   "map-with-unsupported-key-values",
+			Input:  map[any]any{"k1": uint64(1), 27: "int key", "k2": "2"},
+			Output: map[string]any{"k1": uint64(1), "k2": "2"},
 		},
 		{
-			Name:                 "bool",
-			PermanentData:        false,
-			EphemeralData:        true,
-			ExpectedWAFValueType: wafBoolType,
-			ExpectedWafValueBool: false,
-		},
-		{
-			Name:                  "float",
-			PermanentData:         33.12345,
-			EphemeralData:         33.123456,
-			ExpectedWAFValueType:  wafFloatType,
-			ExpectedWafValueFloat: 33.12345,
-		},
-		{
-			Name:                  "float",
-			PermanentData:         33.62345,
-			EphemeralData:         33.623456,
-			ExpectedWAFValueType:  wafFloatType,
-			ExpectedWafValueFloat: 33.62345,
-		},
-		{
-			Name:                   "slice",
-			PermanentData:          []any{33.12345, "ok", 27},
-			EphemeralData:          []any{33.123456, "ko", 72},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 3,
-		},
-		{
-			Name:                   "slice-having-unsupported-values",
-			PermanentData:          []any{33.12345, func() {}, "ok", 27, nil},
-			EphemeralData:          []any{33.123456, func() {}, "ko", 72, nil},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 3,
-		},
-		{
-			Name:                   "array",
-			PermanentData:          [...]any{func() {}, 33.12345, "ok", 27},
-			EphemeralData:          [...]any{func() {}, 33.123456, "ko", 72},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 3,
-		},
-		{
-			Name:                   "map",
-			PermanentData:          map[string]any{"k1": 1, "k2": "2"},
-			EphemeralData:          map[string]any{"k3": 3, "k4": "4"},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 2,
-		},
-		{
-			Name:                   "map-with-unsupported-key-values",
-			PermanentData:          map[any]any{"k1": 1, 27: "int key", "k2": "2"},
-			EphemeralData:          map[any]any{"k3": 2, 72: "int key!", "k4": "5"},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 2,
-		},
-		{
-			Name:                   "map-with-indirect-key-string-values",
-			PermanentData:          map[any]any{"k1": 1, new(string): "string pointer key", "k2": "2"},
-			EphemeralData:          map[any]any{"k3": 2, new(string): "string pointer key!", "k4": "5"},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 3,
+			Name:   "map-with-indirect-key-string-values",
+			Input:  map[any]any{"k1": uint64(1), new(string): "string pointer key", "k2": "2"},
+			Output: map[string]any{"k1": uint64(1), "": "string pointer key", "k2": "2"},
 		},
 		{
 			Name: "struct",
-			PermanentData: struct {
+			Input: struct {
 				Public  string
 				private string
 				a       string
@@ -242,23 +230,312 @@ func TestEncoder(t *testing.T) {
 				a:       "a",
 				A:       "A",
 			},
-			EphemeralData: struct {
-				Public2  string
-				private2 string
-				a2       string
-				A2       string
-			}{
-				Public2:  "Public!",
-				private2: "private!",
-				a2:       "a!",
-				A2:       "A!",
+			Output: map[string]any{
+				"Public": "Public",
+				"A":      "A",
 			},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 2, // public fields only
 		},
 		{
 			Name: "struct-with-unsupported-values",
-			PermanentData: struct {
+			Input: struct {
+				Public  string
+				private string
+				a       string
+				A       chan any
+			}{
+				Public:  "Public",
+				private: "private",
+				a:       "a",
+				A:       make(chan any),
+			},
+			DecodeError: errUnsupportedValue,
+		},
+	} {
+		if tc.Output == nil {
+			tc.Output = tc.Input
+		}
+
+		if tc.Output == nilOutput {
+			tc.Output = nil
+		}
+
+		encoder := newMaxEncoder()
+		encoded, err := encoder.Encode(tc.Input)
+
+		t.Run(tc.Name+"/assert", func(t *testing.T) {
+			if tc.EncodeError != nil {
+				require.Error(t, err, "expected an encoding error when encoding %v", tc.Input)
+				require.Equal(t, tc.EncodeError, err)
+				return
+			}
+
+			require.NoError(t, err, "unexpected error when encoding: %v", err)
+			val, err := decodeObject(encoded)
+
+			if tc.DecodeError != nil {
+				require.Error(t, err, "expected a decoding error when decoding %v", tc.Input)
+				require.Equal(t, tc.DecodeError, err)
+				return
+			}
+
+			require.NoError(t, err, "unexpected error when decoding: %v", err)
+			require.True(t, reflect.DeepEqual(tc.Output, val), "expected %v, got %v", tc.Output, val)
+		})
+
+		t.Run(tc.Name+"/run", func(t *testing.T) {
+			wafTest(t, encoded)
+			keepAlive(encoder.cgoRefs)
+		})
+	}
+}
+
+func TestEncoderLimits(t *testing.T) {
+
+	for _, tc := range []struct {
+		Name               string
+		Input              any
+		Output             any
+		MaxValueDepth      any
+		MaxContainerLength any
+		MaxStringLength    any
+	}{
+		{
+			Name:          "array-depth",
+			MaxValueDepth: 1,
+			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
+			Output:        []any{uint64(1), uint64(2), uint64(3), uint64(4)},
+		},
+		{
+			Name:          "array-depth",
+			MaxValueDepth: 2,
+			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
+			Output:        []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
+		},
+		{
+			Name:          "array-depth",
+			MaxValueDepth: 0,
+			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
+			Output:        nil,
+		},
+		{
+			Name:          "key-map-depth",
+			MaxValueDepth: 1,
+			Input:         map[any]any{new(string): "x"},
+			Output:        map[string]any{},
+		},
+		{
+			Name:          "map-depth",
+			MaxValueDepth: 1,
+			Input:         map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
+			Output:        map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": nil},
+		},
+		{
+			Name:          "map-depth",
+			MaxValueDepth: 2,
+			Input:         map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
+			Output:        map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]any{}},
+		},
+		{
+			Name:          "map-depth",
+			MaxValueDepth: 0,
+			Input:         map[string]any{},
+			Output:        nil,
+		},
+		{
+			Name:          "struct-depth",
+			MaxValueDepth: 0,
+			Input:         struct{}{},
+			Output:        nil,
+		},
+		{
+			Name:          "struct-depth",
+			MaxValueDepth: 1,
+			Input: struct {
+				F0 string
+				F1 struct{}
+			}{F0: "F0", F1: struct{}{}},
+			Output: map[string]any{
+				"F0": "F0",
+				"F1": nil,
+			},
+		},
+		{
+			Name:          "struct-max-depth",
+			MaxValueDepth: 1,
+			Input: struct {
+				F0 string
+				F1 struct{}
+			}{F0: "F0", F1: struct{}{}},
+			Output: map[string]any{
+				"F0": "F0",
+				"F1": nil,
+			},
+		},
+		{
+			Name:               "array-max-length",
+			MaxContainerLength: 3,
+			Input:              []any{uint64(1), uint64(2), uint64(3), uint64(4), uint64(5)},
+			Output:             []any{uint64(1), uint64(2), uint64(3)},
+		},
+		{
+			Name:               "array-max-length-with-invalid",
+			MaxContainerLength: 3,
+			Input:              []any{make(chan any), uint64(1), uint64(2), uint64(3), uint64(4), uint64(5)},
+			Output:             []any{uint64(1), uint64(2), uint64(3)},
+		},
+		{
+			Name:               "array-max-length-with-invalid",
+			MaxContainerLength: 3,
+			Input:              []any{uint64(1), uint64(2), uint64(3), uint64(4), uint64(5), make(chan any)},
+			Output:             []any{uint64(1), uint64(2), uint64(3)},
+		},
+		{
+			Name:               "struct-max-length",
+			MaxContainerLength: 2,
+			Input: struct {
+				F0 string
+				F1 string
+				F2 string
+			}{F0: "", F1: "", F2: ""},
+			Output: map[string]any{"F0": "", "F1": ""},
+		},
+
+		{
+			Name:               "struct-max-length-with-invalid",
+			MaxContainerLength: 2,
+			Input: struct {
+				F0 string
+				F1 string
+				F2 chan any
+			}{F0: "", F1: "", F2: make(chan any)},
+			Output: map[string]any{"F0": "", "F1": ""},
+		},
+		{
+			Name:            "string-max-length",
+			MaxStringLength: 3,
+			Input:           "123456789",
+			Output:          "123",
+		},
+		{
+			Name:            "string-max-length-truncation-leading-to-same-map-keys",
+			MaxStringLength: 1,
+			Input:           map[string]string{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": "v5"},
+			Output:          map[string]any{"k": "v"},
+		},
+	} {
+		maxValueDepth := 99999
+		if max := tc.MaxValueDepth; max != nil {
+			maxValueDepth = max.(int)
+		}
+		maxContainerLength := 99999
+		if max := tc.MaxContainerLength; max != nil {
+			maxContainerLength = max.(int)
+		}
+		maxStringLength := 99999
+		if max := tc.MaxStringLength; max != nil {
+			maxStringLength = max.(int)
+		}
+		encoder := encoder{
+			objectMaxDepth:   maxValueDepth,
+			stringMaxSize:    maxStringLength,
+			containerMaxSize: maxContainerLength,
+		}
+
+		encoded, err := encoder.Encode(tc.Input)
+
+		t.Run(tc.Name+"/assert", func(t *testing.T) {
+			require.NoError(t, err, "unexpected error when encoding: %v", err)
+
+			val, err := decodeObject(encoded)
+			require.NoError(t, err, "unexpected error when decoding: %v", err)
+
+			require.True(t, reflect.DeepEqual(tc.Output, val), "expected %v, got %v", tc.Output, val)
+		})
+
+		t.Run(tc.Name+"/run", func(t *testing.T) {
+			wafTest(t, encoded)
+			keepAlive(encoder.cgoRefs)
+		})
+	}
+}
+
+type typeTree struct {
+	_type    wafObjectType
+	children []typeTree
+}
+
+func assertEqualType(t *testing.T, expected typeTree, actual *wafObject) {
+	require.Equal(t, expected._type, actual._type, "expected type %v, got type %v", expected._type, actual._type)
+
+	if expected._type != wafMapType && expected._type != wafArrayType {
+		return
+	}
+
+	if uint64(len(expected.children)) != actual.nbEntries {
+		t.Fatalf("expected len %v, got len %v", len(expected.children), actual.nbEntries)
+	}
+
+	for i := range expected.children {
+		assertEqualType(t, expected.children[i], castWithOffset[wafObject](actual.value, uint64(i)))
+	}
+}
+
+func TestEncoderTypeTree(t *testing.T) {
+
+	for _, tc := range []struct {
+		Name   string
+		Input  any
+		Output typeTree
+		Error  error
+	}{
+		{
+			Name:  "unsupported type",
+			Input: make(chan struct{}),
+			Error: errUnsupportedValue,
+		},
+		{
+			Name:   "nil-byte-slice",
+			Input:  []byte(nil),
+			Output: typeTree{_type: wafNilType},
+		},
+		{
+			Name:   "nil-map",
+			Input:  map[string]any(nil),
+			Output: typeTree{_type: wafNilType},
+		},
+		{
+			Name:  "invalid-interface-value",
+			Input: nil,
+			Error: errUnsupportedValue,
+		},
+		{
+			Name:   "nil-str-pointer-value",
+			Input:  (*string)(nil),
+			Output: typeTree{_type: wafNilType},
+		},
+		{
+			Name:   "nil-int-pointer-value",
+			Input:  (*int)(nil),
+			Output: typeTree{_type: wafNilType},
+		},
+		{
+			Name:  "unsupported",
+			Input: func() {},
+			Error: errUnsupportedValue,
+		},
+		{
+			Name:  "unsupported",
+			Input: make(chan struct{}),
+			Error: errUnsupportedValue,
+		},
+		{
+			Name:   "slice-having-unsupported-values",
+			Input:  []any{33.12345, func() {}, "ok", 27, nil},
+			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafFloatType}, {_type: wafStringType}, {_type: wafIntType}}},
+		},
+		{
+			Name: "struct-with-nil-values",
+			Input: struct {
 				Public  string
 				private string
 				a       string
@@ -269,235 +546,51 @@ func TestEncoder(t *testing.T) {
 				a:       "a",
 				A:       nil,
 			},
-			EphemeralData: struct {
-				Public2  string
-				private2 string
-				a2       string
-				A2       func()
+			Output: typeTree{_type: wafMapType, children: []typeTree{{_type: wafStringType}, {_type: wafNilType}}},
+		},
+		{
+			Name: "struct-with-invalid-values",
+			Input: struct {
+				Public  string
+				private string
+				a       string
+				A       chan any
 			}{
-				Public2:  "Public!",
-				private2: "private!",
-				a2:       "a!",
-				A2:       nil,
+				Public:  "Public",
+				private: "private",
+				a:       "a",
+				A:       make(chan any),
 			},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 2, // public fields of supported types
+			Output: typeTree{_type: wafMapType, children: []typeTree{{_type: wafStringType}, {_type: wafInvalidType}}},
 		},
 		{
-			Name:                   "array-max-depth",
-			MaxValueDepth:          0,
-			PermanentData:          []any{1, 2, 3, 4, []int{1, 2, 3, 4}},
-			EphemeralData:          []any{5, 6, 7, 8, []int{9, 10, 11, 12}},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 4,
+			Name:   "unsupported-array-values",
+			Input:  []any{"supported", func() {}, "supported", make(chan struct{})},
+			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafStringType}, {_type: wafStringType}}},
 		},
 		{
-			Name:                   "array-max-depth",
-			MaxValueDepth:          1,
-			PermanentData:          []any{1, 2, 3, 4, []int{1, 2, 3, 4}},
-			EphemeralData:          []any{5, 6, 7, 8, []int{9, 10, 11, 12}},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 5,
+			Name:   "unsupported-array-values",
+			Input:  []any{"supported", func() {}, "supported", make(chan struct{})},
+			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafStringType}, {_type: wafStringType}}},
 		},
 		{
-			Name:                   "array-max-depth",
-			MaxValueDepth:          0,
-			PermanentData:          []any{},
-			EphemeralData:          []any{},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 0,
+			Name:   "unsupported-array-values",
+			Input:  []any{func() {}, "supported", make(chan struct{}), "supported"},
+			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafStringType}, {_type: wafStringType}}},
 		},
 		{
-			Name:                   "map-max-depth",
-			MaxValueDepth:          0,
-			PermanentData:          map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
-			EphemeralData:          map[string]any{"k6": "v6", "k7": "v7", "k8": "v8", "k9": "v9", "k10": map[string]string{}},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 5,
+			Name:   "unsupported-array-values",
+			Input:  []any{func() {}, "supported", make(chan struct{}), "supported"},
+			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafStringType}, {_type: wafStringType}}},
 		},
 		{
-			Name:                   "map-max-depth",
-			MaxValueDepth:          1,
-			PermanentData:          map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
-			EphemeralData:          map[string]any{"k6": "v6", "k7": "v7", "k8": "v8", "k9": "v9", "k10": map[string]string{}},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 5,
-		},
-		{
-			Name:                   "map-max-depth",
-			MaxValueDepth:          0,
-			PermanentData:          map[string]any{},
-			EphemeralData:          map[string]any{},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 0,
-		},
-		{
-			Name:                   "struct-max-depth",
-			MaxValueDepth:          0,
-			PermanentData:          struct{}{},
-			EphemeralData:          struct{}{},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 0,
-		},
-		{
-			Name:          "struct-max-depth",
-			MaxValueDepth: 0,
-			PermanentData: struct {
-				F0 string
-				F1 struct{}
-			}{},
-			EphemeralData: struct {
-				F2 string
-				F3 struct{}
-			}{},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 2,
-		},
-		{
-			Name:          "struct-max-depth",
-			MaxValueDepth: 1,
-			PermanentData: struct {
-				F0 string
-				F1 struct{}
-			}{},
-			EphemeralData: struct {
-				F2 string
-				F3 struct{}
-			}{},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 2,
-		},
-		{
-			Name:                 "scalar-values-max-depth-not-accounted",
-			MaxValueDepth:        0,
-			PermanentData:        -1234,
-			EphemeralData:        -12345,
-			ExpectedWafValueInt:  -1234,
-			ExpectedWAFValueType: wafIntType,
-		},
-		{
-			Name:                 "scalar-values-max-depth-not-accounted",
-			MaxValueDepth:        0,
-			PermanentData:        uint(1234),
-			EphemeralData:        uint(12345),
-			ExpectedWafValueUint: 1234,
-			ExpectedWAFValueType: wafUintType,
-		},
-		{
-			Name:                 "scalar-values-max-depth-not-accounted",
-			MaxValueDepth:        0,
-			PermanentData:        false,
-			EphemeralData:        true,
-			ExpectedWAFValueType: wafBoolType,
-			ExpectedWafValueBool: false,
-		},
-		{
-			Name:                   "array-max-length",
-			MaxContainerLength:     3,
-			PermanentData:          []any{1, 2, 3, 4, 5},
-			EphemeralData:          []any{6, 7, 8, 9, 10},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 3,
-		},
-		{
-			Name:                   "map-max-length",
-			MaxContainerLength:     3,
-			PermanentData:          map[string]string{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": "v5"},
-			EphemeralData:          map[string]string{"k6": "v6", "k7": "v7", "k8": "v8", "k9": "v9", "k10": "v10"},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 3,
-		},
-		{
-			Name:                 "string-max-length",
-			MaxStringLength:      3,
-			PermanentData:        "123456789",
-			EphemeralData:        "1234567890",
-			ExpectedWAFString:    "123",
-			ExpectedWAFValueType: wafStringType,
-		},
-		{
-			Name:                   "string-max-length-truncation-leading-to-same-map-keys",
-			MaxStringLength:        1,
-			PermanentData:          map[string]string{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": "v5"},
-			EphemeralData:          map[string]string{"k6": "v6", "k7": "v7", "k8": "v8", "k9": "v9", "k10": "v10"},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 5,
-		},
-		{
-			Name:                   "unsupported-array-values",
-			MaxContainerLength:     1,
-			PermanentData:          []any{"supported", func() {}, "supported", make(chan struct{})},
-			EphemeralData:          []any{"supported!", func() {}, "supported!", make(chan struct{})},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 1,
-		},
-		{
-			Name:                   "unsupported-array-values",
-			MaxContainerLength:     2,
-			PermanentData:          []any{"supported", func() {}, "supported", make(chan struct{})},
-			EphemeralData:          []any{"supported!", func() {}, "supported!", make(chan struct{})},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 2,
-		},
-		{
-			Name:                   "unsupported-array-values",
-			MaxContainerLength:     1,
-			PermanentData:          []any{func() {}, "supported", make(chan struct{}), "supported"},
-			EphemeralData:          []any{func() {}, "supported!", make(chan struct{}), "supported!"},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 1,
-		},
-		{
-			Name:                   "unsupported-array-values",
-			MaxContainerLength:     2,
-			PermanentData:          []any{func() {}, "supported", make(chan struct{}), "supported"},
-			EphemeralData:          []any{func() {}, "supported!", make(chan struct{}), "supported!"},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 2,
-		},
-		{
-			Name:                   "unsupported-array-values",
-			MaxContainerLength:     1,
-			PermanentData:          []any{func() {}, make(chan struct{}), "supported"},
-			EphemeralData:          []any{func() {}, make(chan struct{}), "supported!"},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 1,
-		},
-		{
-			Name:                   "unsupported-array-values",
-			MaxContainerLength:     3,
-			PermanentData:          []any{"supported", func() {}, make(chan struct{})},
-			EphemeralData:          []any{"supported!", func() {}, make(chan struct{})},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 1,
-		},
-		{
-			Name:                   "unsupported-array-values",
-			MaxContainerLength:     3,
-			PermanentData:          []any{func() {}, "supported", make(chan struct{})},
-			EphemeralData:          []any{func() {}, "supported!", make(chan struct{})},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 1,
-		},
-		{
-			Name:                   "unsupported-array-values",
-			MaxContainerLength:     3,
-			PermanentData:          []any{func() {}, make(chan struct{}), "supported"},
-			EphemeralData:          []any{func() {}, make(chan struct{}), "supported!"},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 1,
-		},
-		{
-			Name:                   "unsupported-array-values",
-			MaxContainerLength:     2,
-			PermanentData:          []any{func() {}, make(chan struct{}), "supported", "supported"},
-			EphemeralData:          []any{func() {}, make(chan struct{}), "supported!", "supported!"},
-			ExpectedWAFValueType:   wafArrayType,
-			ExpectedWAFValueLength: 2,
+			Name:   "unsupported-array-values",
+			Input:  []any{func() {}, make(chan struct{}), "supported"},
+			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafStringType}}},
 		},
 		{
 			Name: "unsupported-map-key-types",
-			PermanentData: map[any]int{
+			Input: map[any]int{
 				"supported":           1,
 				interface{ m() }(nil): 1,
 				nil:                   1,
@@ -505,231 +598,53 @@ func TestEncoder(t *testing.T) {
 				(*string)(nil):        1,
 				make(chan struct{}):   1,
 			},
-			EphemeralData: map[any]int{
-				"supported":           2,
-				interface{ m() }(nil): 2,
-				nil:                   2,
-				(*int)(nil):           2,
-				(*string)(nil):        2,
-				make(chan struct{}):   2,
-			},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 1,
+			Output: typeTree{_type: wafMapType, children: []typeTree{{_type: wafIntType}}},
 		},
 		{
 			Name: "unsupported-map-key-types",
-			PermanentData: map[any]int{
+			Input: map[any]int{
 				interface{ m() }(nil): 1,
 				nil:                   1,
 				(*int)(nil):           1,
 				(*string)(nil):        1,
 				make(chan struct{}):   1,
 			},
-			EphemeralData: map[any]int{
-				interface{ m() }(nil): 2,
-				nil:                   2,
-				(*int)(nil):           2,
-				(*string)(nil):        2,
-				make(chan struct{}):   2,
-			},
-			ExpectedWAFValueType:   wafMapType,
-			ExpectedWAFValueLength: 0,
+			Output: typeTree{_type: wafMapType},
 		},
 		{
 			Name: "unsupported-map-values",
-			PermanentData: map[string]any{
-				"k0": "supported",
-				"k1": func() {},
+			Input: map[string]any{
+				"k0": func() {},
 				"k2": make(chan struct{}),
 			},
-			EphemeralData: map[string]any{
-				"k3": "supported!",
-				"k4": func() {},
-				"k5": make(chan struct{}),
-			},
-			MaxContainerLength:     3,
-			ExpectedWAFValueLength: 3,
-			ExpectedWAFValueType:   wafMapType,
+			Output: typeTree{_type: wafMapType, children: []typeTree{{_type: wafInvalidType}, {_type: wafInvalidType}}},
 		},
 		{
-			Name: "unsupported-map-values",
-			PermanentData: map[string]any{
-				"k0": "supported",
-				"k1": "supported",
-				"k2": make(chan struct{}),
+			Name: "nil-map-values",
+			Input: map[string]any{
+				"k0": (*struct{ a int })(nil),
+				"k1": (*string)(nil),
+				"k2": (*int)(nil),
 			},
-			EphemeralData: map[string]any{
-				"k3": "supported!",
-				"k4": "supported!",
-				"k5": make(chan struct{}),
-			},
-			MaxContainerLength:     3,
-			ExpectedWAFValueLength: 3,
-			ExpectedWAFValueType:   wafMapType,
-		},
-		{
-			Name: "unsupported-map-values",
-			PermanentData: map[string]any{
-				"k0": "supported",
-				"k1": "supported",
-				"k2": make(chan struct{}),
-			},
-			EphemeralData: map[string]any{
-				"k3": "supported!",
-				"k4": "supported!",
-				"k5": make(chan struct{}),
-			},
-			MaxContainerLength:     1,
-			ExpectedWAFValueLength: 1,
-			ExpectedWAFValueType:   wafMapType,
-		},
-		{
-			Name: "unsupported-struct-values",
-			PermanentData: struct {
-				F0 string
-				F1 func()
-				F2 chan struct{}
-			}{
-				F0: "supported",
-				F1: func() {},
-				F2: make(chan struct{}),
-			},
-			EphemeralData: struct {
-				F3 string
-				F4 func()
-				F5 chan struct{}
-			}{
-				F3: "supported!",
-				F4: func() {},
-				F5: make(chan struct{}),
-			},
-			MaxContainerLength:     3,
-			ExpectedWAFValueLength: 3,
-			ExpectedWAFValueType:   wafMapType,
-		},
-		{
-			Name: "unsupported-map-values",
-			PermanentData: struct {
-				F0 string
-				F1 string
-				F2 chan struct{}
-			}{
-				F0: "supported",
-				F1: "supported",
-				F2: make(chan struct{}),
-			},
-			EphemeralData: struct {
-				F3 string
-				F4 string
-				F5 chan struct{}
-			}{
-				F3: "supported!",
-				F4: "supported!",
-				F5: make(chan struct{}),
-			},
-			MaxContainerLength:     3,
-			ExpectedWAFValueLength: 3,
-			ExpectedWAFValueType:   wafMapType,
-		},
-		{
-			Name: "unsupported-map-values",
-			PermanentData: struct {
-				F0 string
-				F1 string
-				F2 chan struct{}
-			}{
-				F0: "supported",
-				F1: "supported",
-				F2: make(chan struct{}),
-			},
-			EphemeralData: struct {
-				F3 string
-				F4 string
-				F5 chan struct{}
-			}{
-				F3: "supported!",
-				F4: "supported!",
-				F5: make(chan struct{}),
-			},
-			MaxContainerLength:     1,
-			ExpectedWAFValueLength: 1,
-			ExpectedWAFValueType:   wafMapType,
+			Output: typeTree{_type: wafMapType, children: []typeTree{{_type: wafNilType}, {_type: wafNilType}, {_type: wafNilType}}},
 		},
 	} {
-		tc := tc
-		t.Run(tc.Name, func(t *testing.T) {
-			maxValueDepth := 10
-			if max := tc.MaxValueDepth; max != nil {
-				maxValueDepth = max.(int)
-			}
-			maxContainerLength := 1000
-			if max := tc.MaxContainerLength; max != nil {
-				maxContainerLength = max.(int)
-			}
-			maxStringLength := 4096
-			if max := tc.MaxStringLength; max != nil {
-				maxStringLength = max.(int)
-			}
-			e := encoder{
-				objectMaxDepth:   maxValueDepth,
-				stringMaxSize:    maxStringLength,
-				containerMaxSize: maxContainerLength,
-			}
-			wo, err := e.Encode(tc.PermanentData)
-			if tc.ExpectedError != nil {
-				require.Error(t, err)
-				require.Equal(t, tc.ExpectedError, err)
-				require.Nil(t, wo)
+		encoder := newMaxEncoder()
+		encoded, err := encoder.Encode(tc.Input)
+		t.Run(tc.Name+"/assert", func(t *testing.T) {
+			if tc.Error != nil {
+				require.Error(t, err, "expected an encoding error when encoding %v", tc.Input)
+				require.Equal(t, tc.Error, err)
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotEqual(t, &wafObject{}, wo)
+			require.NoError(t, err, "unexpected error when encoding: %v", err)
+			assertEqualType(t, tc.Output, encoded)
+		})
 
-			if tc.ExpectedWAFValueType != 0 {
-				require.Equal(t, tc.ExpectedWAFValueType, int(wo._type), "bad waf value type")
-			}
-			if tc.ExpectedWAFValueLength != 0 {
-				require.Equal(t, tc.ExpectedWAFValueLength, int(wo.nbEntries), "bad waf value length")
-			}
-			require.Equal(t, tc.ExpectedWAFValueType, int(wo._type), "bad waf string value type")
-
-			switch tc.ExpectedWAFValueType {
-			case wafIntType:
-				require.Equal(t, tc.ExpectedWafValueInt, int64(wo.value))
-			case wafUintType:
-				require.Equal(t, tc.ExpectedWafValueUint, uint64(wo.value))
-			case wafFloatType:
-				require.Equal(t, tc.ExpectedWafValueFloat, uintptrToNative[float64](wo.value))
-			case wafBoolType:
-				require.Equal(t, tc.ExpectedWafValueBool, uintptrToNative[bool](wo.value))
-			}
-
-			if expectedStr := tc.ExpectedWAFString; expectedStr != "" {
-				cbuf := wo.value
-				gobuf := []byte(expectedStr)
-				require.Equal(t, len(gobuf), int(wo.nbEntries), "bad waf value length")
-				for i, gobyte := range gobuf {
-					// Go pointer arithmetic for cbyte := cbuf[i]
-					cbyte := *(*uint8)(unsafe.Pointer(cbuf + uintptr(i))) //nolint:govet
-					if cbyte != gobyte {
-						t.Fatalf("bad waf string value content: i=%d cbyte=%d gobyte=%d", i, cbyte, gobyte)
-					}
-				}
-			}
-
-			// Pass the encoded value to the WAF to make sure it doesn't return an error
-			waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
-			require.NoError(t, err)
-			defer waf.Close()
-			wafCtx := NewContext(waf)
-			require.NotNil(t, wafCtx)
-			defer wafCtx.Close()
-			_, err = wafCtx.Run(RunAddressData{
-				Persistent: map[string]any{"my.input": tc.PermanentData},
-				Ephemeral:  map[string]any{"my.other.input": tc.EphemeralData},
-			}, time.Second)
-			require.NoError(t, err)
+		t.Run(tc.Name+"/run", func(t *testing.T) {
+			wafTest(t, encoded)
+			keepAlive(encoder.cgoRefs)
 		})
 	}
 }

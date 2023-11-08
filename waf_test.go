@@ -595,10 +595,10 @@ func TestConcurrency(t *testing.T) {
 							"user-agent": userAgents[i],
 						},
 					}
-					ephemeralData := map[string]interface{}{
+					output := map[string]interface{}{
 						"server.request.body": bodies[i],
 					}
-					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeralData}, time.Minute)
+					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: output}, time.Minute)
 					if err != nil {
 						panic(err)
 					}

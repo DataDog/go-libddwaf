@@ -139,7 +139,7 @@ func decodeDiagnosticAddresses(obj *wafObject) (res DiagnosticAddresses, err err
 
 func decodeStringArray(obj *wafObject) ([]string, error) {
 	// We consider that nil is an empty array
-	if obj._type == wafNilType {
+	if obj.isNil() {
 		return nil, nil
 	}
 
@@ -180,12 +180,18 @@ func decodeObject(obj *wafObject) (any, error) {
 		return uintptrToNative[float64](obj.value), nil
 	case wafBoolType:
 		return uintptrToNative[bool](obj.value), nil
+	case wafNilType:
+		return nil, nil
 	default:
 		return nil, errUnsupportedValue
 	}
 }
 
 func decodeArray(obj *wafObject) ([]any, error) {
+	if obj.isNil() {
+		return nil, nil
+	}
+
 	if !obj.isArray() {
 		return nil, errInvalidObjectType
 	}
@@ -205,6 +211,10 @@ func decodeArray(obj *wafObject) ([]any, error) {
 }
 
 func decodeMap(obj *wafObject) (map[string]any, error) {
+	if obj.isNil() {
+		return nil, nil
+	}
+
 	if !obj.isMap() {
 		return nil, errInvalidObjectType
 	}

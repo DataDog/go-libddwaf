@@ -58,6 +58,11 @@ type wafObject struct {
 	// packed (apart from breaking all tracers of course)
 }
 
+// isNil determines whether this WAF Object is nil or not.
+func (w *wafObject) isNil() bool {
+	return w._type == wafNilType
+}
+
 // isArray determines whether this WAF Object is an array or not.
 func (w *wafObject) isArray() bool {
 	return w._type == wafArrayType
