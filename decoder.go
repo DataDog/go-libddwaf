@@ -49,8 +49,16 @@ func decodeDiagnostics(obj *wafObject) (*Diagnostics, error) {
 		objElem := castWithOffset[wafObject](obj.value, i)
 		key := gostringSized(cast[byte](objElem.parameterName), objElem.parameterNameLength)
 		switch key {
+		case "custom_rules":
+			diags.CustomRules, err = decodeDiagnosticsEntry(objElem)
+		case "exclusions":
+			diags.Exclusions, err = decodeDiagnosticsEntry(objElem)
 		case "rules":
 			diags.Rules, err = decodeDiagnosticsEntry(objElem)
+		case "rules_data":
+			diags.RulesData, err = decodeDiagnosticsEntry(objElem)
+		case "rules_override":
+			diags.RulesOverrides, err = decodeDiagnosticsEntry(objElem)
 		case "ruleset_version":
 			diags.Version = gostringSized(cast[byte](objElem.value), objElem.nbEntries)
 		default:
