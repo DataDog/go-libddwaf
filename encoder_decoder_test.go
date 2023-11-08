@@ -298,6 +298,8 @@ func TestEncoderLimits(t *testing.T) {
 		MaxValueDepth      any
 		MaxContainerLength any
 		MaxStringLength    any
+		EncodeError        error
+		DecodeError        error
 	}{
 		{
 			Name:          "array-depth",
@@ -315,7 +317,7 @@ func TestEncoderLimits(t *testing.T) {
 			Name:          "array-depth",
 			MaxValueDepth: 0,
 			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
-			Output:        nil,
+			EncodeError:   errMaxDepthExceeded,
 		},
 		{
 			Name:          "key-map-depth",
@@ -328,6 +330,7 @@ func TestEncoderLimits(t *testing.T) {
 			MaxValueDepth: 1,
 			Input:         map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
 			Output:        map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": nil},
+			DecodeError:   errUnsupportedValue,
 		},
 		{
 			Name:          "map-depth",
@@ -339,13 +342,13 @@ func TestEncoderLimits(t *testing.T) {
 			Name:          "map-depth",
 			MaxValueDepth: 0,
 			Input:         map[string]any{},
-			Output:        nil,
+			EncodeError:   errMaxDepthExceeded,
 		},
 		{
 			Name:          "struct-depth",
 			MaxValueDepth: 0,
 			Input:         struct{}{},
-			Output:        nil,
+			EncodeError:   errMaxDepthExceeded,
 		},
 		{
 			Name:          "struct-depth",
@@ -358,6 +361,7 @@ func TestEncoderLimits(t *testing.T) {
 				"F0": "F0",
 				"F1": nil,
 			},
+			DecodeError: errUnsupportedValue,
 		},
 		{
 			Name:          "struct-max-depth",
@@ -370,6 +374,7 @@ func TestEncoderLimits(t *testing.T) {
 				"F0": "F0",
 				"F1": nil,
 			},
+			DecodeError: errUnsupportedValue,
 		},
 		{
 			Name:               "array-max-length",
@@ -444,11 +449,22 @@ func TestEncoderLimits(t *testing.T) {
 		encoded, err := encoder.Encode(tc.Input)
 
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
+			if tc.EncodeError != nil {
+				require.Error(t, err, "expected an encoding error when encoding %v", tc.EncodeError)
+				require.Equal(t, tc.EncodeError, err)
+				return
+			}
+
 			require.NoError(t, err, "unexpected error when encoding: %v", err)
 
 			val, err := decodeObject(encoded)
-			require.NoError(t, err, "unexpected error when decoding: %v", err)
+			if tc.DecodeError != nil {
+				require.Error(t, err, "expected a decoding error when decoding %v", tc.DecodeError)
+				require.Equal(t, tc.DecodeError, err)
+				return
+			}
 
+			require.NoError(t, err, "unexpected error when decoding: %v", err)
 			require.True(t, reflect.DeepEqual(tc.Output, val), "expected %v, got %v", tc.Output, val)
 		})
 

@@ -54,10 +54,8 @@ func (encoder *encoder) Encode(data any) (*wafObject, error) {
 	value := reflect.ValueOf(data)
 	wo := &wafObject{}
 
-	encoder.encode(value, wo, encoder.objectMaxDepth)
-
-	if wo._type == wafInvalidType {
-		return nil, errUnsupportedValue
+	if err := encoder.encode(value, wo, encoder.objectMaxDepth); err != nil {
+		return nil, err
 	}
 
 	return wo, nil
@@ -85,13 +83,13 @@ func isValueNil(value reflect.Value) bool {
 	return nullable && value.IsNil()
 }
 
-func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) {
+func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) error {
 	switch kind := value.Kind(); {
 	// Terminal cases (leafs of the tree)
 
 	//		Is invalid type: nil interfaces for example, cannot be used to run any reflect method or it's susceptible to panic
 	case !value.IsValid() || kind == reflect.Invalid:
-		encodeNative[uintptr](0, wafInvalidType, obj)
+		return errUnsupportedValue
 	// 		Is nullable type: nil pointers, channels, maps or functions
 	case isValueNil(value):
 		encodeNative[uintptr](0, wafNilType, obj)
@@ -116,13 +114,13 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) {
 
 	// 		Pointer and interfaces are not taken into account, we only recurse on them
 	case kind == reflect.Interface || kind == reflect.Pointer:
-		encoder.encode(value.Elem(), obj, depth)
+		return encoder.encode(value.Elem(), obj, depth)
 
 	// Containers (internal nodes of the tree)
 
 	// 		All recursive cases can only execute if the depth is superior to 0
 	case depth <= 0:
-		encodeNative[uintptr](0, wafNilType, obj)
+		return errMaxDepthExceeded
 
 	// 		Either an array or a slice of an array
 	case kind == reflect.Array || kind == reflect.Slice:
@@ -133,8 +131,10 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) {
 		encoder.encodeStruct(value, obj, depth-1)
 
 	default:
-		encodeNative[uintptr](0, wafInvalidType, obj)
+		return errUnsupportedValue
 	}
+
+	return nil
 }
 
 func (encoder *encoder) encodeString(str string, obj *wafObject) {
@@ -195,7 +195,10 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *wafObject, depth 
 			continue
 		}
 
-		encoder.encode(value.Field(i), objElem, depth)
+		if err := encoder.encode(value.Field(i), objElem, depth); err != nil {
+			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
+			encodeNative[uintptr](0, wafInvalidType, objElem)
+		}
 
 		length++
 	}
@@ -226,7 +229,10 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int
 			continue
 		}
 
-		encoder.encode(iter.Value(), objElem, depth)
+		if err := encoder.encode(iter.Value(), objElem, depth); err != nil {
+			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
+			encodeNative[uintptr](0, wafInvalidType, objElem)
+		}
 		length++
 	}
 
@@ -283,9 +289,11 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *wafObject, depth i
 	for i := 0; currIndex < capacity && i < length; i++ {
 		objElem := &objArray[currIndex]
 
-		encoder.encode(value.Index(i), objElem, depth)
+		if err := encoder.encode(value.Index(i), objElem, depth); err != nil {
+			continue
+		}
 
-		// If the element is null or invalid, we have no map key to report so we can skip it
+		// If the element is null or invalid, we have no map key to report, so we can skip it
 		if objElem.IsUnusable() {
 			continue
 		}
