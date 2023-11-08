@@ -31,6 +31,8 @@ type Diagnostics struct {
 	Exclusions     *DiagnosticEntry
 	RulesOverrides *DiagnosticEntry
 	RulesData      *DiagnosticEntry
+	Processors     *DiagnosticEntry
+	Scanners       *DiagnosticEntry
 }
 
 // DiagnosticEntry stores the information - provided by the WAF - about loaded and failed rules
@@ -39,7 +41,8 @@ type DiagnosticEntry struct {
 	Addresses DiagnosticAddresses
 	Loaded    []string
 	Failed    []string
-	Errors    map[string][]string
+	Error     string              // If the entire entry was in error (e.g: invalid format)
+	Errors    map[string][]string // Item-level errors
 }
 
 // DiagnosticAddresses stores the information - provided by the WAF - about the known addresses and
