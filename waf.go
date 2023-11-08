@@ -31,6 +31,8 @@ type Diagnostics struct {
 	Exclusions     *DiagnosticEntry
 	RulesOverrides *DiagnosticEntry
 	RulesData      *DiagnosticEntry
+	Processors     *DiagnosticEntry
+	Scanners       *DiagnosticEntry
 }
 
 // DiagnosticEntry stores the information - provided by the WAF - about loaded and failed rules

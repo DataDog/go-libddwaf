@@ -59,6 +59,10 @@ func decodeDiagnostics(obj *wafObject) (*Diagnostics, error) {
 			diags.RulesData, err = decodeDiagnosticsEntry(objElem)
 		case "rules_override":
 			diags.RulesOverrides, err = decodeDiagnosticsEntry(objElem)
+		case "processor":
+			diags.Processors, err = decodeDiagnosticsEntry(objElem)
+		case "scanner":
+			diags.Scanners, err = decodeDiagnosticsEntry(objElem)
 		case "ruleset_version":
 			diags.Version = gostringSized(cast[byte](objElem.value), objElem.nbEntries)
 		default:
@@ -88,7 +92,7 @@ func decodeDiagnosticsEntry(obj *wafObject) (*DiagnosticEntry, error) {
 		switch key {
 		case "addresses":
 			entry.Addresses, err = decodeDiagnosticAddresses(objElem)
-		case "errors":
+		case "error":
 			entry.Errors, err = decodeErrors(objElem)
 		case "failed":
 			entry.Failed, err = decodeStringArray(objElem)
