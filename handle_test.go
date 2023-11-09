@@ -6,7 +6,6 @@
 package waf
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,7 +25,7 @@ func TestNewHandle(t *testing.T) {
 		waf.Close()
 	})
 
-	t.Run("rejects invalid WAF input", func(t *testing.T) {
+	t.Run("does not return error on partially invalid input", func(t *testing.T) {
 		for _, field := range []string{
 			"custom_rules",
 			"exclusions",
@@ -42,13 +41,11 @@ func TestNewHandle(t *testing.T) {
 				// And corrupt data for one particular field...
 				rules[field] = 1337.42
 
-				// Now ensure the WAF init rejects it appropriately
+				// Now ensure the WAF init does not err out (at least 1 rule is valid in this scenario)
 				waf, err := NewHandle(rules, "", "")
-				require.Error(t, err)
-				require.Equal(t, fmt.Sprintf("the WAF reported a top-level error: in %#v: bad cast, expected 'array', obtained 'float'", field), err.Error())
-				if waf != nil {
-					waf.Close()
-				}
+				require.NoError(t, err)
+				require.NotNil(t, waf)
+				waf.Close()
 			})
 		}
 	})

@@ -96,11 +96,6 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 		return nil, fmt.Errorf("could not decode the WAF diagnostics: %w", err)
 	}
 
-	if err = diags.TopLevelError(); err != nil {
-		defer wafLib.wafDestroy(cHandle)
-		return nil, err
-	}
-
 	return &Handle{
 		cHandle:     cHandle,
 		refCounter:  atomic.NewInt32(1), // We count the handle itself in the counter
