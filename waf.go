@@ -58,6 +58,7 @@ func (d *Diagnostics) TopLevelError() error {
 		errs = append(errs, fmt.Errorf("in %#v: %s", field, entry.Error))
 	}
 
+	// TODO: rely on errors.Join() once go1.20 is our min supported Go version
 	switch len(errs) {
 	case 0:
 		return nil
