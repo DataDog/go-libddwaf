@@ -14,18 +14,10 @@ type Addresses map[string]any
 // the built addresses and the builder is ready to be used again.
 type AddressesBuilder struct {
 	// support comes from the current Handle and represent all the addresses that can be ingested by the ruleset
-	support supportedAddresses
+	support SupportedAddresses
 
 	// addresses are the things built using the builder
 	addresses Addresses
-}
-
-// NewAddressesBuilder returns a new AddressesBuilder to build the addresses to be used by the WAF
-func NewAddressesBuilder(handle *Handle) *AddressesBuilder {
-	return &AddressesBuilder{
-		support:   handle.addresses,
-		addresses: make(Addresses),
-	}
 }
 
 // Flush returns the built addresses
@@ -190,13 +182,35 @@ func (builder *AddressesBuilder) GrpcRequestMetadata(metadata map[string][]strin
 	return builder.appendGrpcAddress(grpcServerRequestMetadata, metadata)
 }
 
-type supportedAddresses struct {
+// Persistent returns the addresses built by the builder as persistent addresses
+func (builder *AddressesBuilder) Persistent() RunAddressData {
+	return RunAddressData{
+		Persistent: builder.Flush(),
+	}
+}
+
+// Ephemeral returns the addresses built by the builder as ephemeral addresses
+func (builder *AddressesBuilder) Ephemeral() RunAddressData {
+	return RunAddressData{
+		Ephemeral: builder.Flush(),
+	}
+}
+
+// PersistantWithEphemeral returns the addresses built by the builder as persistent and ephemeral addresses
+func PersistentWithEphemeral(persistent *AddressesBuilder, ephemeral *AddressesBuilder) RunAddressData {
+	return RunAddressData{
+		Persistent: persistent.Flush(),
+		Ephemeral:  ephemeral.Flush(),
+	}
+}
+
+type SupportedAddresses struct {
 	http         map[string]struct{}
 	grpc         map[string]struct{}
 	notSupported map[string]struct{}
 }
 
-func newSupportedAddresses(addresses []string) (supportedAddresses supportedAddresses) {
+func newSupportedAddresses(addresses []string) (supportedAddresses SupportedAddresses) {
 	// Filter the supported addresses only
 	for _, addr := range addresses {
 		supported := false
@@ -217,17 +231,122 @@ func newSupportedAddresses(addresses []string) (supportedAddresses supportedAddr
 	return
 }
 
-func (addresses supportedAddresses) isSupported(addr string) bool {
+// IsEmptyHttp returns true if the HTTP addresses are empty
+func (addresses SupportedAddresses) IsEmptyHttp() bool {
+	return len(addresses.http) == 0
+}
+
+// IsEmptyGrpc returns true if the gRPC addresses are empty
+func (addresses SupportedAddresses) IsEmptyGrpc() bool {
+	return len(addresses.grpc) == 0
+}
+
+// IsEmpty returns true if the addresses are empty
+func (addresses SupportedAddresses) IsEmpty() bool {
+	return len(addresses.http) == 0 && len(addresses.grpc) == 0
+}
+
+// Partial supports returns true if some addresses are not supported
+func (addresses SupportedAddresses) Partial() bool {
+	return len(addresses.notSupported) > 0
+}
+
+// IsUserIdHttpSupported returns true if the HTTP user ID is supported by the current ruleset
+func (addresses SupportedAddresses) IsUserIdHttpSupported() bool {
+	return addresses.isSupportedHttp(userIDAddr)
+}
+
+// IsUserIdGrpcSupported returns true if the gRPC user ID is supported by the current ruleset
+func (addresses SupportedAddresses) IsUserIdGrpcSupported() bool {
+	return addresses.isSupportedGrpc(userIDAddr)
+}
+
+// IsClientIpHttpSupported returns true if the HTTP client IP is supported by the current ruleset
+func (addresses SupportedAddresses) IsClientIpHttpSupported() bool {
+	return addresses.isSupportedHttp(clientIPAddr)
+}
+
+// IsClientIpGrpcSupported returns true if the gRPC client IP is supported by the current ruleset
+func (addresses SupportedAddresses) IsClientIpGrpcSupported() bool {
+	return addresses.isSupportedGrpc(clientIPAddr)
+}
+
+// IsRequestMethodSupported returns true if the HTTP request method is supported by the current ruleset
+func (addresses SupportedAddresses) IsRequestMethodSupported() bool {
+	return addresses.isSupportedHttp(serverRequestMethodAddr)
+}
+
+// IsRequestRawUriSupported returns true if the HTTP request raw URI is supported by the current ruleset
+func (addresses SupportedAddresses) IsRequestRawUriSupported() bool {
+	return addresses.isSupportedHttp(serverRequestRawURIAddr)
+}
+
+// IsRequestHeadersNoCookiesSupported returns true if the HTTP request headers without the cookies is supported by the current ruleset
+func (addresses SupportedAddresses) IsRequestHeadersNoCookiesSupported() bool {
+	return addresses.isSupportedHttp(serverRequestHeadersNoCookiesAddr)
+}
+
+// IsRequestCookiesSupported returns true if the HTTP request cookies is supported by the current ruleset
+func (addresses SupportedAddresses) IsRequestCookiesSupported() bool {
+	return addresses.isSupportedHttp(serverRequestCookiesAddr)
+}
+
+// IsRequestQueryParamsSupported returns true if the HTTP request query parameters is supported by the current ruleset
+func (addresses SupportedAddresses) IsRequestQueryParamsSupported() bool {
+	return addresses.isSupportedHttp(serverRequestQueryAddr)
+}
+
+// IsRequestPathParamsSupported returns true if the HTTP request path parameters is supported by the current ruleset
+func (addresses SupportedAddresses) IsRequestPathParamsSupported() bool {
+	return addresses.isSupportedHttp(serverRequestPathParamsAddr)
+}
+
+// IsRequestBodySupported returns true if the HTTP request body is supported by the current ruleset
+func (addresses SupportedAddresses) IsRequestBodySupported() bool {
+	return addresses.isSupportedHttp(serverRequestBodyAddr)
+}
+
+// IsResponseStatusSupported returns true if the HTTP response status is supported by the current ruleset
+func (addresses SupportedAddresses) IsResponseStatusSupported() bool {
+	return addresses.isSupportedHttp(serverResponseStatusAddr)
+}
+
+// IsResponseBodySupported returns true if the HTTP response body is supported by the current ruleset
+func (addresses SupportedAddresses) IsResponseBodySupported() bool {
+	return addresses.isSupportedHttp(serverResponseBodyAddr)
+}
+
+// IsResponseHeadersNoCookiesSupported returns true if the HTTP response headers without the cookies is supported by the current ruleset
+func (addresses SupportedAddresses) IsResponseHeadersNoCookiesSupported() bool {
+	return addresses.isSupportedHttp(serverResponseHeadersNoCookiesAddr)
+}
+
+// IsResponseCookiesSupported returns true if the HTTP response cookies is supported by the current ruleset
+func (addresses SupportedAddresses) IsResponseCookiesSupported() bool {
+	return addresses.isSupportedHttp(serverResponseCookiesAddr)
+}
+
+// IsGrpcRequestMessageSupported returns true if the gRPC request message is supported by the current ruleset
+func (addresses SupportedAddresses) IsGrpcRequestMessageSupported() bool {
+	return addresses.isSupportedGrpc(grpcServerRequestMessage)
+}
+
+// IsGrpcRequestMetadataSupported returns true if the gRPC request metadata is supported by the current ruleset
+func (addresses SupportedAddresses) IsGrpcRequestMetadataSupported() bool {
+	return addresses.isSupportedGrpc(grpcServerRequestMetadata)
+}
+
+func (addresses SupportedAddresses) isSupported(addr string) bool {
 	_, ok := addresses.notSupported[addr]
 	return !ok
 }
 
-func (addresses supportedAddresses) isSupportedHttp(addr string) bool {
+func (addresses SupportedAddresses) isSupportedHttp(addr string) bool {
 	_, ok := addresses.http[addr]
 	return ok
 }
 
-func (addresses supportedAddresses) isSupportedGrpc(addr string) bool {
+func (addresses SupportedAddresses) isSupportedGrpc(addr string) bool {
 	_, ok := addresses.grpc[addr]
 	return ok
 }

@@ -39,7 +39,7 @@ type Handle struct {
 	diagnostics Diagnostics
 
 	// addresses are what is supported by the ruleset given to the handle. Further used in AddressesBuilder
-	addresses supportedAddresses
+	addresses SupportedAddresses
 }
 
 // NewHandle creates and returns a new instance of the WAF with the given security rules and configuration
@@ -88,7 +88,7 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 		cHandle:     cHandle,
 		refCounter:  atomic.NewInt32(1), // We count the handle itself in the counter
 		diagnostics: *diags,
-		addresses:   newSupportedAddresses(wafLib.wafRequiredAddresses(cHandle)),
+		addresses:   newSupportedAddresses(wafLib.wafKnownAddresses(cHandle)),
 	}, nil
 }
 
@@ -98,8 +98,16 @@ func (handle *Handle) Diagnostics() Diagnostics {
 }
 
 // Addresses returns the list of addresses the WAF rule is expecting.
-func (handle *Handle) Addresses() []string {
-	return wafLib.wafKnownAddresses(handle.cHandle)
+func (handle *Handle) Addresses() SupportedAddresses {
+	return handle.addresses
+}
+
+// NewAddressesBuilder returns a new AddressesBuilder to build the addresses to be used by the WAF
+func (handle *Handle) NewAddressesBuilder() *AddressesBuilder {
+	return &AddressesBuilder{
+		support:   handle.addresses,
+		addresses: make(Addresses),
+	}
 }
 
 // Update the ruleset of a WAF instance into a new handle on its own
