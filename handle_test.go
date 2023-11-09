@@ -13,6 +13,11 @@ import (
 )
 
 func TestNewHandle(t *testing.T) {
+	if supported, err := supportsTarget(); !supported || err != nil {
+		t.Skip("target is not supported by the WAF")
+		return
+	}
+
 	t.Run("accepts the valid ruleset", func(t *testing.T) {
 		rules := makeValidRuleset()
 		waf, err := NewHandle(rules, "", "")
