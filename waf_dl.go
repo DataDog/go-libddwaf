@@ -99,11 +99,15 @@ func (waf *wafDl) wafGetVersion() string {
 	return gostring(cast[byte](waf.syscall(waf.getVersion)))
 }
 
-func (waf *wafDl) wafInit(ruleset *wafObject, config *wafConfig, info *wafObject) wafHandle {
+// wafInit initializes a new WAF with the provided ruleset, configuration and info objects. A
+// cgoRefPool ensures that the provided input values are not moved or garbage collected by the Go
+// runtime during the WAF call.
+func (waf *wafDl) wafInit(ruleset *wafObject, config *wafConfig, info *wafObject, refs cgoRefPool) wafHandle {
 	handle := wafHandle(waf.syscall(waf.init, ptrToUintptr(ruleset), ptrToUintptr(config), ptrToUintptr(info)))
 	keepAlive(ruleset)
 	keepAlive(config)
 	keepAlive(info)
+	keepAlive(refs)
 	return handle
 }
 

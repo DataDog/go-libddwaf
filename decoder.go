@@ -112,13 +112,15 @@ func decodeDiagnosticsEntry(obj *wafObject) (*DiagnosticEntry, error) {
 	return &entry, nil
 }
 
-func decodeDiagnosticAddresses(obj *wafObject) (res DiagnosticAddresses, err error) {
+func decodeDiagnosticAddresses(obj *wafObject) (res *DiagnosticAddresses, err error) {
 	if !obj.isMap() {
 		return res, errInvalidObjectType
 	}
 	if obj.value == 0 && obj.nbEntries > 0 {
 		return res, errNilObjectPtr
 	}
+
+	res = &DiagnosticAddresses{}
 
 	for i := uint64(0); i < obj.nbEntries; i++ {
 		objElem := castWithOffset[wafObject](obj.value, i)

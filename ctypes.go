@@ -58,6 +58,11 @@ type wafObject struct {
 	// packed (apart from breaking all tracers of course)
 }
 
+// isInvalid determines whether this WAF Object has the invalid type (which is the 0-value).
+func (w *wafObject) isInvalid() bool {
+	return w._type == wafInvalidType
+}
+
 // isArray determines whether this WAF Object is an array or not.
 func (w *wafObject) isArray() bool {
 	return w._type == wafArrayType
