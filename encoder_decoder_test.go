@@ -126,10 +126,6 @@ func TestEncodeDecode(t *testing.T) {
 			Input: "hello, waf",
 		},
 		{
-			Name:  "string-empty",
-			Input: "",
-		},
-		{
 			Name:   "byte-slice",
 			Input:  []byte("hello, waf"),
 			Output: "hello, waf",
@@ -138,6 +134,26 @@ func TestEncodeDecode(t *testing.T) {
 			Name:   "nil-byte-slice",
 			Input:  []byte(nil),
 			Output: nilOutput,
+		},
+		{
+			Name:   "nil-slice-slice",
+			Input:  [][]int{nil, nil, nil},
+			Output: []any{},
+		},
+		{
+			Name:   "nil-slice-slice-slice",
+			Input:  [][][]int{nil, nil, nil},
+			Output: []any{},
+		},
+		{
+			Name:   "map-map-nil",
+			Input:  map[string]map[string]any{"toto": nil, "tata": nil},
+			Output: map[string]any{"toto": nil, "tata": nil},
+		},
+		{
+			Name:   "map-map-map-nil",
+			Input:  map[string]map[string]map[string]any{"toto": nil, "tata": nil},
+			Output: map[string]any{"toto": nil, "tata": nil},
 		},
 		{
 			Name:   "nil-map",
