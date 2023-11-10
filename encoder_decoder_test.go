@@ -267,40 +267,42 @@ func TestEncodeDecode(t *testing.T) {
 			DecodeError: errUnsupportedValue,
 		},
 	} {
-		if tc.Output == nil {
-			tc.Output = tc.Input
-		}
-
-		if tc.Output == nilOutput {
-			tc.Output = nil
-		}
-
-		encoder := newMaxEncoder()
-		encoded, err := encoder.Encode(tc.Input)
-
-		t.Run(tc.Name+"/assert", func(t *testing.T) {
-			if tc.EncodeError != nil {
-				require.Error(t, err, "expected an encoding error when encoding %v", tc.Input)
-				require.Equal(t, tc.EncodeError, err)
-				return
+		t.Run(tc.Name, func(t *testing.T) {
+			if tc.Output == nil {
+				tc.Output = tc.Input
 			}
 
-			require.NoError(t, err, "unexpected error when encoding: %v", err)
-			val, err := decodeObject(encoded)
-
-			if tc.DecodeError != nil {
-				require.Error(t, err, "expected a decoding error when decoding %v", tc.Input)
-				require.Equal(t, tc.DecodeError, err)
-				return
+			if tc.Output == nilOutput {
+				tc.Output = nil
 			}
 
-			require.NoError(t, err, "unexpected error when decoding: %v", err)
-			require.True(t, reflect.DeepEqual(tc.Output, val), "expected %v, got %v", tc.Output, val)
-		})
+			encoder := newMaxEncoder()
+			encoded, err := encoder.Encode(tc.Input)
 
-		t.Run(tc.Name+"/run", func(t *testing.T) {
-			wafTest(t, encoded)
-			keepAlive(encoder.cgoRefs)
+			t.Run("equal", func(t *testing.T) {
+				if tc.EncodeError != nil {
+					require.Error(t, err, "expected an encoding error when encoding %v", tc.Input)
+					require.Equal(t, tc.EncodeError, err)
+					return
+				}
+
+				require.NoError(t, err, "unexpected error when encoding: %v", err)
+				val, err := decodeObject(encoded)
+
+				if tc.DecodeError != nil {
+					require.Error(t, err, "expected a decoding error when decoding %v", tc.Input)
+					require.Equal(t, tc.DecodeError, err)
+					return
+				}
+
+				require.NoError(t, err, "unexpected error when decoding: %v", err)
+				require.True(t, reflect.DeepEqual(tc.Output, val), "expected %v, got %v", tc.Output, val)
+			})
+
+			t.Run("run", func(t *testing.T) {
+				wafTest(t, encoded)
+				keepAlive(encoder.cgoRefs)
+			})
 		})
 	}
 }
