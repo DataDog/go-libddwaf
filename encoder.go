@@ -293,7 +293,8 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *wafObject, depth i
 			continue
 		}
 
-		// If the element is null or invalid, we have no map key to report, so we can skip it
+		// If the element is null or invalid it has no impact on the waf execution, therefore we can skip its
+		// encoding. In this specific case we just overwrite it at the next loop iteration.
 		if objElem.IsUnusable() {
 			continue
 		}
