@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/hashicorp/go-multierror"
 )
 
 // UnsupportedTargetError is a wrapper error type helping to handle the error
@@ -49,28 +51,17 @@ func (d *Diagnostics) TopLevelError() error {
 		"scanners":       d.Scanners,
 	}
 
-	errs := make([]error, 0, len(fields))
+	var err *multierror.Error
 	for field, entry := range fields {
 		if entry == nil || entry.Error == "" {
 			// No entry or no error => we're all good.
 			continue
 		}
-		errs = append(errs, fmt.Errorf("in %#v: %s", field, entry.Error))
+		// TODO: rely on errors.Join() once go1.20 is our min supported Go version
+		err = multierror.Append(err, fmt.Errorf("in %#v: %s", field, entry.Error))
 	}
 
-	// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-	switch len(errs) {
-	case 0:
-		return nil
-	case 1:
-		return fmt.Errorf("the WAF reported a top-level error: %w", errs[0])
-	default:
-		err := fmt.Errorf("the WAF reported multiple top-level errors:\n%w", errs[0])
-		for _, e := range errs[1:] {
-			err = fmt.Errorf("%w\n%v", err, e)
-		}
-		return err
-	}
+	return err.ErrorOrNil()
 }
 
 // DiagnosticEntry stores the information - provided by the WAF - about loaded and failed rules
