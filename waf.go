@@ -63,7 +63,7 @@ type Result struct {
 
 // Encoder/Decoder errors
 var (
-	errMaxDepth          = errors.New("max depth reached")
+	errMaxDepthExceeded  = errors.New("max depth exceeded")
 	errUnsupportedValue  = errors.New("unsupported Go value")
 	errInvalidMapKey     = errors.New("invalid WAF object map key")
 	errNilObjectPtr      = errors.New("nil WAF object pointer")
