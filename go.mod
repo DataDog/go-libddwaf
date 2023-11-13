@@ -1,4 +1,4 @@
-module github.com/DataDog/go-libddwaf
+module github.com/DataDog/go-libddwaf/v2
 
 go 1.18
 
