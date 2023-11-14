@@ -1,4 +1,4 @@
-module github.com/DataDog/go-libddwaf
+module github.com/DataDog/go-libddwaf/v2
 
 go 1.18
 
@@ -18,4 +18,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-retract v1.6.0 // Breaking version, published too soon
+// Version where import paths were not changed to go-libddwaf/v2
+retract v2.0.0

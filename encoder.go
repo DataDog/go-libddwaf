@@ -61,6 +61,21 @@ func (encoder *encoder) Encode(data any) (*wafObject, error) {
 	return wo, nil
 }
 
+// EncodeAddresses takes a map of Go values and returns a wafObject pointer and an error.
+// The returned wafObject is the root of the tree of nested wafObjects representing the Go values.
+// This function is further optimized from Encode to take addresses as input and avoid further
+// errors in case the top-level map with addresses as keys is nil.
+// Since errors returned by Encode are not sent up between levels of the tree, this means that all errors come from the
+// top layer of encoding, which is the map of addresses. Hence, all errors should be developer errors since the map of
+// addresses is not user defined custom data.
+func (encoder *encoder) EncodeAddresses(addresses map[string]any) (*wafObject, error) {
+	if addresses == nil {
+		return nil, errUnsupportedValue
+	}
+
+	return encoder.Encode(addresses)
+}
+
 func encodeNative[T native](val T, t wafObjectType, obj *wafObject) {
 	obj._type = t
 	obj.value = (uintptr)(val)
