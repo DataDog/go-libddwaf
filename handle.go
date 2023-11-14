@@ -65,22 +65,21 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 
 	config := newConfig(&encoder.cgoRefs, keyObfuscatorRegex, valueObfuscatorRegex)
 	diagnosticsWafObj := new(wafObject)
-	defer func() {
-		if !diagnosticsWafObj.isInvalid() {
-			wafLib.wafObjectFree(diagnosticsWafObj)
-		}
-	}()
+	defer wafLib.wafObjectFree(diagnosticsWafObj)
 
 	cHandle := wafLib.wafInit(obj, config, diagnosticsWafObj, encoder.cgoRefs)
 	// Upon failure, the WAF may have produced some diagnostics to help signal what went wrong...
-	var diags *Diagnostics
+	var (
+		diags    *Diagnostics
+		diagsErr error
+	)
 	if !diagnosticsWafObj.isInvalid() {
-		diags, err = decodeDiagnostics(diagnosticsWafObj)
+		diags, diagsErr = decodeDiagnostics(diagnosticsWafObj)
 	}
 
 	if cHandle == 0 {
 		// WAF Failed initialization, report the best possible error...
-		if err == nil && diags != nil {
+		if diags != nil && diagsErr == nil {
 			// We were able to parse out some diagnostics from the WAF!
 			err = diags.TopLevelError()
 			if err != nil {
@@ -90,10 +89,10 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 		return nil, errors.New("could not instantiate the WAF")
 	}
 
-	// The WAF successfully initialized at this stage... err is the diagnostics decode error if any.
-	if err != nil {
+	// The WAF successfully initialized at this stage...
+	if diagsErr != nil {
 		wafLib.wafDestroy(cHandle)
-		return nil, fmt.Errorf("could not decode the WAF diagnostics: %w", err)
+		return nil, fmt.Errorf("could not decode the WAF diagnostics: %w", diagsErr)
 	}
 
 	return &Handle{
