@@ -18,7 +18,7 @@ func (waf *wafDl) wafGetVersion() string {
 	return ""
 }
 
-func (waf *wafDl) wafInit(obj *wafObject, config *wafConfig, info *wafObject) wafHandle {
+func (waf *wafDl) wafInit(obj *wafObject, config *wafConfig, info *wafObject, refs cgoRefPool) wafHandle {
 	return 0
 }
 

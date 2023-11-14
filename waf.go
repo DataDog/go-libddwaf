@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/hashicorp/go-multierror"
 )
 
 // UnsupportedTargetError is a wrapper error type helping to handle the error
@@ -35,14 +37,41 @@ type Diagnostics struct {
 	Scanners       *DiagnosticEntry
 }
 
+// TopLevelErrors returns the list of top-level errors reported by the WAF on any of the Diagnostics
+// entries, rolled up into a single error value. Returns nil if no top-level errors were reported.
+// Individual, item-level errors might still exist.
+func (d *Diagnostics) TopLevelError() error {
+	fields := map[string]*DiagnosticEntry{
+		"rules":          d.Rules,
+		"custom_rules":   d.CustomRules,
+		"exclusions":     d.Exclusions,
+		"rules_override": d.RulesOverrides,
+		"rules_data":     d.RulesData,
+		"processors":     d.Processors,
+		"scanners":       d.Scanners,
+	}
+
+	var err *multierror.Error
+	for field, entry := range fields {
+		if entry == nil || entry.Error == "" {
+			// No entry or no error => we're all good.
+			continue
+		}
+		// TODO: rely on errors.Join() once go1.20 is our min supported Go version
+		err = multierror.Append(err, fmt.Errorf("in %#v: %s", field, entry.Error))
+	}
+
+	return err.ErrorOrNil()
+}
+
 // DiagnosticEntry stores the information - provided by the WAF - about loaded and failed rules
 // for a specific entry in the WAF ruleset
 type DiagnosticEntry struct {
-	Addresses DiagnosticAddresses
-	Loaded    []string
-	Failed    []string
+	Addresses *DiagnosticAddresses
+	Loaded    []string            // Successfully loaded entity identifiers (or index:#)
+	Failed    []string            // Failed entity identifiers (or index:#)
 	Error     string              // If the entire entry was in error (e.g: invalid format)
-	Errors    map[string][]string // Item-level errors
+	Errors    map[string][]string // Item-level errors (map of error message to entity identifiers or index:#)
 }
 
 // DiagnosticAddresses stores the information - provided by the WAF - about the known addresses and
