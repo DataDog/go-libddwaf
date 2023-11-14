@@ -19,7 +19,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/internal/lib"
+	"github.com/DataDog/go-libddwaf/v2/internal/lib"
 	"github.com/stretchr/testify/require"
 )
 
@@ -500,6 +500,68 @@ func TestMatchingEphemeral(t *testing.T) {
 	require.Nil(t, res.Actions)
 
 	// Ephemeral address should still match, persistent shouldn't anymore
+	res, err = wafCtx.Run(runAddresses, time.Second)
+	require.NoError(t, err)
+	require.Len(t, res.Events, 1) // 1 ephemeral
+	require.Nil(t, res.Actions)
+
+	wafCtx.Close()
+	waf.Close()
+	// Using the WAF instance after it was closed leads to a nil WAF context
+	require.Nil(t, NewContext(waf))
+}
+
+func TestMatchingEphemeralOnly(t *testing.T) {
+	const (
+		input1 = "my.input.1"
+		input2 = "my.input.2"
+	)
+
+	waf, err := newDefaultHandle(newArachniTestRulePair(ruleInput{Address: input1}, ruleInput{Address: input2}))
+	require.NoError(t, err)
+	require.NotNil(t, waf)
+
+	addrs := waf.Addresses()
+	sort.Strings(addrs)
+	require.Equal(t, []string{input1, input2}, addrs)
+
+	wafCtx := NewContext(waf)
+	require.NotNil(t, wafCtx)
+
+	// Not matching because the address value doesn't match the rule
+	runAddresses := RunAddressData{
+		Ephemeral: map[string]interface{}{
+			input1: "go client",
+		},
+	}
+	res, err := wafCtx.Run(runAddresses, time.Second)
+	require.NoError(t, err)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
+
+	// Not matching because the address is not used by the rule
+	runAddresses = RunAddressData{
+		Ephemeral: map[string]interface{}{
+			"server.request.uri.raw": "something",
+		},
+	}
+	res, err = wafCtx.Run(runAddresses, time.Second)
+	require.NoError(t, err)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
+
+	// Not matching due to a timeout
+	runAddresses = RunAddressData{
+		Ephemeral: map[string]interface{}{
+			input1: "Arachni-1",
+		},
+	}
+	res, err = wafCtx.Run(runAddresses, 0)
+	require.Equal(t, ErrTimeout, err)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
+
+	// Matching
 	res, err = wafCtx.Run(runAddresses, time.Second)
 	require.NoError(t, err)
 	require.Len(t, res.Events, 1) // 1 ephemeral

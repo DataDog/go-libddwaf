@@ -63,6 +63,11 @@ func (w *wafObject) isInvalid() bool {
 	return w._type == wafInvalidType
 }
 
+// isNil determines whether this WAF Object is nil or not.
+func (w *wafObject) isNil() bool {
+	return w._type == wafNilType
+}
+
 // isArray determines whether this WAF Object is an array or not.
 func (w *wafObject) isArray() bool {
 	return w._type == wafArrayType
@@ -71,6 +76,12 @@ func (w *wafObject) isArray() bool {
 // isMap determines whether this WAF Object is a map or not.
 func (w *wafObject) isMap() bool {
 	return w._type == wafMapType
+}
+
+// IsUnusable returns true if the wafObject has no impact on the WAF execution
+// But we still need this kind of objects to forward map keys in case the value of the map is invalid
+func (wo *wafObject) IsUnusable() bool {
+	return wo._type == wafInvalidType || wo._type == wafNilType
 }
 
 type wafConfig struct {

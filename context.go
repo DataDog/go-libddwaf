@@ -85,27 +85,24 @@ func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (
 		context.totalOverallRuntimeNs.Add(uint64(dt.Nanoseconds()))
 	}()
 
-	persistentEncoder := encoder{
-		stringMaxSize:    wafMaxStringLength,
-		containerMaxSize: wafMaxContainerSize,
-		objectMaxDepth:   wafMaxContainerDepth,
-	}
-	persistentData, err := persistentEncoder.Encode(addressData.Persistent)
-	if err != nil {
-		return res, err
+	// At this point, the only error we can get is an error in case the top level object is a nil map, but this
+	// behaviour is expected since either persistent or ephemeral addresses are allowed to be null one at a time.
+	// In this case, EncodeAddresses will return nil contrary to Encode which will return an nil wafObject,
+	// which is what we need to send to ddwaf_run to signal that the address data is empty.
+	var persistentData *wafObject = nil
+	var ephemeralData *wafObject = nil
+	persistentEncoder := newLimitedEncoder()
+	ephemeralEncoder := newLimitedEncoder()
+	if addressData.Persistent != nil {
+		persistentData, _ = persistentEncoder.EncodeAddresses(addressData.Persistent)
 	}
 
+	if addressData.Ephemeral != nil {
+		ephemeralData, _ = ephemeralEncoder.EncodeAddresses(addressData.Ephemeral)
+
+	}
 	// The WAF releases ephemeral address data at the end of each run call, so we need not keep the Go values live beyond
 	// that in the same way we need for persistent data. We hence use a separate encoder.
-	ephemeralEncoder := encoder{
-		stringMaxSize:    wafMaxStringLength,
-		containerMaxSize: wafMaxContainerSize,
-		objectMaxDepth:   wafMaxContainerDepth,
-	}
-	ephemeralData, err := ephemeralEncoder.Encode(addressData.Ephemeral)
-	if err != nil {
-		return res, err
-	}
 
 	// ddwaf_run cannot run concurrently and the next append write on the context state so we need a mutex
 	context.mutex.Lock()

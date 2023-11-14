@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/DataDog/go-libddwaf/internal/noopfree"
+	"github.com/DataDog/go-libddwaf/v2/internal/noopfree"
 	"go.uber.org/atomic"
 )
 
