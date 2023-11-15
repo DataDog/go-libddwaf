@@ -5,13 +5,14 @@
 
 // Supported OS/Arch but unsupported Go version
 //               Supported OS              Supported Arch Bad Go Version Not manually disabled
-//go:build (linux || darwin || windows) && (amd64 || arm64) && go1.22 && !datadog.no_waf
+//go:build (linux || darwin) && (amd64 || arm64) && go1.22 && !datadog.no_waf
 
 package waf
 
 import (
-	"fmt"
 	"runtime"
 )
 
-var disabledWafErr = &WafDisabledError{fmt.Errorf("the Go version %s is not supported", runtime.Version())}
+func init() {
+	wafSupportErrors = append(wafSupportErrors, UnsupportedGoVersionError{runtime.Version()})
+}

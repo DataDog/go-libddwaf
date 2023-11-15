@@ -222,8 +222,3 @@ func resolveWafSymbols(handle uintptr) (symbols wafSymbols, err error) {
 
 	return
 }
-
-// Implement SupportsTarget()
-func supportsTarget() (bool, error) {
-	return true, nil
-}

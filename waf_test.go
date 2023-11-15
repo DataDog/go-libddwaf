@@ -45,6 +45,12 @@ func TestSupportsTarget(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestHealth(t *testing.T) {
+	supported, err := Health()
+	require.True(t, supported)
+	require.NoError(t, err)
+}
+
 func TestVersion(t *testing.T) {
 	// Ensures the library version matches the expected version...
 	require.Equal(t, lib.EmbeddedWAFVersion, Version())

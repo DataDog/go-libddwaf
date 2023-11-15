@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewHandle(t *testing.T) {
-	if supported, err := supportsTarget(); !supported || err != nil {
+	if supported, err := SupportsTarget(); !supported || err != nil {
 		t.Skip("target is not supported by the WAF")
 		return
 	}

@@ -10,8 +10,9 @@
 package waf
 
 import (
-	"fmt"
 	"runtime"
 )
 
-var disabledWafErr = &WafDisabledError{fmt.Errorf("the target operating-system %s or architecture %s are not supported", runtime.GOOS, runtime.GOARCH)}
+func init() {
+	wafSupportErrors = append(wafSupportErrors, UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
+}

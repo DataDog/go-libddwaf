@@ -9,7 +9,6 @@
 package waf_test
 
 import (
-	"errors"
 	"testing"
 
 	waf "github.com/DataDog/go-libddwaf/v2"
@@ -20,12 +19,16 @@ func TestLoad(t *testing.T) {
 	ok, err := waf.Load()
 	require.False(t, ok)
 	require.Error(t, err)
-	var expectedErr *waf.WafDisabledError
-	require.Truef(t, errors.As(err, &expectedErr), "unexpected error of type %[1]T: %[1]v", err)
 }
 
 func TestSupportsTarget(t *testing.T) {
 	supported, err := waf.SupportsTarget()
 	require.False(t, supported)
+	require.Error(t, err)
+}
+
+func TestHealth(t *testing.T) {
+	ok, err := waf.Health()
+	require.False(t, ok)
 	require.Error(t, err)
 }

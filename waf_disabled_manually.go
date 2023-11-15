@@ -8,8 +8,6 @@
 
 package waf
 
-import (
-	"fmt"
-)
-
-var disabledWafErr = &WafDisabledError{fmt.Errorf("the WAF has been manually disabled using the `datadog.no_waf` go build tag")}
+func init() {
+	wafManuallyDisabledErr = ManuallyDisabledError{}
+}

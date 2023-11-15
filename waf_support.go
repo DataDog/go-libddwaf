@@ -1,0 +1,73 @@
+package waf
+
+import (
+	"fmt"
+
+	"github.com/hashicorp/go-multierror"
+)
+
+var wafSupportErrors []error
+var wafManuallyDisabledErr error
+
+// UnsupportedOSArchError is a wrapper error type helping to handle the error
+// case of trying to execute this package when the OS or architecture is not supported.
+type UnsupportedOSArchError struct {
+	os   string
+	arch string
+}
+
+func (e UnsupportedOSArchError) Error() string {
+	return fmt.Sprintf("unsupported OS/Arch: %s/%s", e.os, e.arch)
+}
+
+// UnsupportedGoVersionError is a wrapper error type helping to handle the error
+// case of trying to execute this package when the Go version is not supported.
+type UnsupportedGoVersionError struct {
+	version string
+}
+
+func (e UnsupportedGoVersionError) Error() string {
+	return fmt.Sprintf("unsupported Go version: %s", e.version)
+}
+
+// ManuallyDisabledError is a wrapper error type helping to handle the error
+// case of trying to execute this package when the WAF has been manually disabled with
+// the `datadog.no_waf` go build tag.
+type ManuallyDisabledError struct {
+}
+
+func (e ManuallyDisabledError) Error() string {
+	return "the WAF has been manually disabled using the `datadog.no_waf` go build tag"
+}
+
+// SupportsTarget returns true and a nil error when the target host environment
+// is supported by this package and can be further used.
+// Otherwise, it returns false along with an error detailing why.
+func SupportsTarget() (bool, error) {
+	return len(wafSupportErrors) == 0, multierror.Append(nil, wafSupportErrors...).ErrorOrNil()
+}
+
+// Health returns true if the waf is usable, false otherwise. At the same time it can return an error
+// if the waf is not usable, but the error is not blocking if true is returned, otherwise it is.
+// The following conditions are checked:
+// - The Waf library has been loaded successfully (you need to call `Load()` first for this case to be taken into account)
+// - The Waf library has not been manually disabled with the `datadog.no_waf` go build tag
+// - The Waf library is not in an unsupported OS/Arch
+// - The Waf library is not in an unsupported Go version
+func Health() (bool, error) {
+
+	var err *multierror.Error
+	if wafErr != nil {
+		err = multierror.Append(err, wafErr)
+	}
+
+	if len(wafSupportErrors) > 0 {
+		err = multierror.Append(err, wafSupportErrors...)
+	}
+
+	if wafManuallyDisabledErr == nil {
+		err = multierror.Append(err, wafManuallyDisabledErr)
+	}
+
+	return (!doneWafOnce || wafLib != nil) && len(wafSupportErrors) == 0 && wafManuallyDisabledErr == nil, err.ErrorOrNil()
+}

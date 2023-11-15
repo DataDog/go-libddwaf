@@ -13,18 +13,6 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
-// WafDisabledError is a wrapper error type helping to handle the error
-// case of trying to execute this package on an unsupported target environment.
-type WafDisabledError struct {
-	error
-}
-
-// Unwrap the error and return it.
-// Required by errors.Is and errors.As functions.
-func (e *WafDisabledError) Unwrap() error {
-	return e.error
-}
-
 // Diagnostics stores the information - provided by the WAF - about WAF rules initialization.
 type Diagnostics struct {
 	Version        string
@@ -140,6 +128,7 @@ var (
 	// libddwaf's dlopen error if any
 	wafErr      error
 	openWafOnce sync.Once
+	doneWafOnce bool
 )
 
 // Load loads libddwaf's dynamic library. The dynamic library is opened only
@@ -155,7 +144,14 @@ var (
 // to remove temporary files. It is safe to continue using libddwaf in such
 // case.
 func Load() (ok bool, err error) {
+	if ok, err = Health(); !ok {
+		return false, err
+	}
+
 	openWafOnce.Do(func() {
+		defer func() {
+			doneWafOnce = true
+		}()
 		wafLib, wafErr = newWafDl()
 		if wafErr != nil {
 			return
@@ -164,13 +160,6 @@ func Load() (ok bool, err error) {
 	})
 
 	return wafLib != nil, wafErr
-}
-
-// SupportsTarget returns true and a nil error when the target host environment
-// is supported by this package and can be further used.
-// Otherwise, it returns false along with an error detailing why.
-func SupportsTarget() (bool, error) {
-	return supportsTarget()
 }
 
 var wafVersion string
