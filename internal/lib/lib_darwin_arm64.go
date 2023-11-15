@@ -3,7 +3,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build darwin && arm64 && !go1.22
+//go:build darwin && arm64 && !go1.22 && !datadog.no_waf
+
 package lib
 
 import _ "embed" // Needed for go:embed

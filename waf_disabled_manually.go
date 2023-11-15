@@ -3,9 +3,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Unsupported target OS or architecture on a supported Go version
-//            Unsupported OS        Unsupported Arch   Good Go Version Not manually disabled
-//go:build ((!linux && !darwin) || (!amd64 && !arm64)) && !go1.22 && !datadog.no_waf
+// Manually set datadog.no_waf build tag
+//go:build datadog.no_waf
 
 package waf
 

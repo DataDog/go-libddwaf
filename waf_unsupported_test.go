@@ -4,7 +4,7 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Build when the target OS or Arch are not supported
-//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.22
+//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.22 || datadog.no_waf
 
 package waf_test
 
@@ -20,7 +20,7 @@ func TestLoad(t *testing.T) {
 	ok, err := waf.Load()
 	require.False(t, ok)
 	require.Error(t, err)
-	var expectedErr *waf.UnsupportedTargetError
+	var expectedErr *waf.WafDisabledError
 	require.Truef(t, errors.As(err, &expectedErr), "unexpected error of type %[1]T: %[1]v", err)
 }
 

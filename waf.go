@@ -13,15 +13,15 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
-// UnsupportedTargetError is a wrapper error type helping to handle the error
+// WafDisabledError is a wrapper error type helping to handle the error
 // case of trying to execute this package on an unsupported target environment.
-type UnsupportedTargetError struct {
+type WafDisabledError struct {
 	error
 }
 
 // Unwrap the error and return it.
 // Required by errors.Is and errors.As functions.
-func (e *UnsupportedTargetError) Unwrap() error {
+func (e *WafDisabledError) Unwrap() error {
 	return e.error
 }
 
