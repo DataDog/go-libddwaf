@@ -33,8 +33,7 @@ func (e UnsupportedGoVersionError) Error() string {
 // ManuallyDisabledError is a wrapper error type helping to handle the error
 // case of trying to execute this package when the WAF has been manually disabled with
 // the `datadog.no_waf` go build tag.
-type ManuallyDisabledError struct {
-}
+type ManuallyDisabledError struct{}
 
 func (e ManuallyDisabledError) Error() string {
 	return "the WAF has been manually disabled using the `datadog.no_waf` go build tag"
@@ -55,10 +54,9 @@ func SupportsTarget() (bool, error) {
 // - The Waf library is not in an unsupported OS/Arch
 // - The Waf library is not in an unsupported Go version
 func Health() (bool, error) {
-
 	var err *multierror.Error
-	if wafErr != nil {
-		err = multierror.Append(err, wafErr)
+	if wafLoadErr != nil {
+		err = multierror.Append(err, wafLoadErr)
 	}
 
 	if len(wafSupportErrors) > 0 {
@@ -69,5 +67,5 @@ func Health() (bool, error) {
 		err = multierror.Append(err, wafManuallyDisabledErr)
 	}
 
-	return (!doneWafOnce || wafLib != nil) && len(wafSupportErrors) == 0 && wafManuallyDisabledErr == nil, err.ErrorOrNil()
+	return (wafLib != nil || wafLoadErr == nil) && len(wafSupportErrors) == 0 && wafManuallyDisabledErr == nil, err.ErrorOrNil()
 }

@@ -126,9 +126,8 @@ var (
 	// libddwaf's dynamic library handle and entrypoints
 	wafLib *wafDl
 	// libddwaf's dlopen error if any
-	wafErr      error
+	wafLoadErr  error
 	openWafOnce sync.Once
-	doneWafOnce bool
 )
 
 // Load loads libddwaf's dynamic library. The dynamic library is opened only
@@ -149,17 +148,14 @@ func Load() (ok bool, err error) {
 	}
 
 	openWafOnce.Do(func() {
-		defer func() {
-			doneWafOnce = true
-		}()
-		wafLib, wafErr = newWafDl()
-		if wafErr != nil {
+		wafLib, wafLoadErr = newWafDl()
+		if wafLoadErr != nil {
 			return
 		}
 		wafVersion = wafLib.wafGetVersion()
 	})
 
-	return wafLib != nil, wafErr
+	return wafLib != nil, wafLoadErr
 }
 
 var wafVersion string
