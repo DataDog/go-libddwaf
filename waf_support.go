@@ -14,28 +14,29 @@ import (
 // Errors used to report data using the Health function
 // Store all the errors related to why go-liddwaf is unavailable for the current target at runtime.
 var wafSupportErrors []error
+
 // Not nil if the build tag `datadog.no_waf` is set
 var wafManuallyDisabledErr error
 
 // UnsupportedOSArchError is a wrapper error type helping to handle the error
 // case of trying to execute this package when the OS or architecture is not supported.
 type UnsupportedOSArchError struct {
-	os   string
-	arch string
+	Os   string
+	Arch string
 }
 
 func (e UnsupportedOSArchError) Error() string {
-	return fmt.Sprintf("unsupported OS/Arch: %s/%s", e.os, e.arch)
+	return fmt.Sprintf("unsupported OS/Arch: %s/%s", e.Os, e.Arch)
 }
 
 // UnsupportedGoVersionError is a wrapper error type helping to handle the error
 // case of trying to execute this package when the Go version is not supported.
 type UnsupportedGoVersionError struct {
-	version string
+	Version string
 }
 
 func (e UnsupportedGoVersionError) Error() string {
-	return fmt.Sprintf("unsupported Go version: %s", e.version)
+	return fmt.Sprintf("unsupported Go version: %s", e.Version)
 }
 
 // ManuallyDisabledError is a wrapper error type helping to handle the error
