@@ -4,14 +4,14 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Build when the target OS or architecture are not supported
-//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.22
+//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.22 || datadog.no_waf
 
 package waf
 
 type wafDl struct{}
 
 func newWafDl() (dl *wafDl, err error) {
-	_, err := Health()
+	_, err = Health()
 	return nil, err
 }
 

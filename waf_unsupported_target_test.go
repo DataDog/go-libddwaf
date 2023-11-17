@@ -3,17 +3,23 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Build when the target OS or Arch are not supported
-//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.22 || datadog.no_waf
+//go:build (!linux && !darwin) || (!amd64 && !arm64)
 
 package waf_test
 
 import (
-	"testing"
-
 	waf "github.com/DataDog/go-libddwaf/v2"
 	"github.com/stretchr/testify/require"
+	"runtime"
+	"testing"
 )
+
+func TestSupportsTarget(t *testing.T) {
+	supported, err := waf.SupportsTarget()
+	require.False(t, supported)
+	require.Error(t, err)
+	require.ErrorIs(t, err, waf.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
+}
 
 func TestLoad(t *testing.T) {
 	ok, err := waf.Load()
@@ -21,15 +27,8 @@ func TestLoad(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSupportsTarget(t *testing.T) {
-	supported, err := waf.SupportsTarget()
-	require.False(t, supported)
-	require.Error(t, err)
-}
-
 func TestHealth(t *testing.T) {
 	ok, err := waf.Health()
 	require.False(t, ok)
-	// TODO: finer-grain error checking of all the different error possibilities (unsupported go version, unsupported target, disabled, etc.)
 	require.Error(t, err)
 }
