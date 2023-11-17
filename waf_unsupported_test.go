@@ -30,5 +30,6 @@ func TestSupportsTarget(t *testing.T) {
 func TestHealth(t *testing.T) {
 	ok, err := waf.Health()
 	require.False(t, ok)
+	// TODO: finer-grain error checking of all the different error possibilities (unsupported go version, unsupported target, disabled, etc.)
 	require.Error(t, err)
 }

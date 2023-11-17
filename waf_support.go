@@ -6,7 +6,10 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
+// Errors used to report data using the Health function
+// Store all the errors related to why go-liddwaf is unavailable for the current target at runtime.
 var wafSupportErrors []error
+// Not nil if the build tag `datadog.no_waf` is set
 var wafManuallyDisabledErr error
 
 // UnsupportedOSArchError is a wrapper error type helping to handle the error

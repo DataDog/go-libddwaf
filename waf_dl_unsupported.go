@@ -11,7 +11,8 @@ package waf
 type wafDl struct{}
 
 func newWafDl() (dl *wafDl, err error) {
-	return nil, nil
+	_, err := Health()
+	return nil, err
 }
 
 func (waf *wafDl) wafGetVersion() string {
