@@ -4,14 +4,15 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Build when the target OS or architecture are not supported
-//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.22
+//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.22 || datadog.no_waf
 
 package waf
 
 type wafDl struct{}
 
 func newWafDl() (dl *wafDl, err error) {
-	return nil, unsupportedTargetErr
+	_, err = Health()
+	return nil, err
 }
 
 func (waf *wafDl) wafGetVersion() string {
@@ -48,11 +49,4 @@ func (waf *wafDl) wafObjectFree(obj *wafObject) {
 
 func (waf *wafDl) wafRun(context wafContext, persistentData, ephemeralData *wafObject, result *wafResult, timeout uint64) wafReturnCode {
 	return wafErrInternal
-}
-
-// Implement SupportsTarget()
-func supportsTarget() (bool, error) {
-	// TODO: provide finer-grained unsupported target error message giving the
-	//    exact reason why
-	return false, unsupportedTargetErr
 }

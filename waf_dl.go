@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build (linux || darwin) && (amd64 || arm64) && !go1.22
+//go:build (linux || darwin) && (amd64 || arm64) && !go1.22 && !datadog.no_waf
 
 package waf
 
@@ -221,9 +221,4 @@ func resolveWafSymbols(handle uintptr) (symbols wafSymbols, err error) {
 	}
 
 	return
-}
-
-// Implement SupportsTarget()
-func supportsTarget() (bool, error) {
-	return true, nil
 }

@@ -3,13 +3,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build darwin && amd64 && !go1.22 && !datadog.no_waf
+// Manually set datadog.no_waf build tag
+//go:build datadog.no_waf
 
-package lib
+package waf
 
-import _ "embed" // Needed for go:embed
-
-//go:embed darwin-amd64/libddwaf.dylib
-var libddwaf []byte
-
-const embedNamePattern = "libddwaf-*.dylib"
+func init() {
+	wafManuallyDisabledErr = ManuallyDisabledError{}
+}

@@ -22,7 +22,6 @@ func TestTryCall(t *testing.T) {
 			// panic called with an error
 			err := tryCall(func() error {
 				panic(myPanicErr)
-				return myErr
 			})
 			require.Error(t, err)
 			var panicErr *PanicError
@@ -35,7 +34,6 @@ func TestTryCall(t *testing.T) {
 			str := "woops"
 			err := tryCall(func() error {
 				panic(str)
-				return myErr
 			})
 			require.Error(t, err)
 			var panicErr *PanicError
@@ -48,7 +46,6 @@ func TestTryCall(t *testing.T) {
 			var i int64 = 42
 			err := tryCall(func() error {
 				panic(i)
-				return myErr
 			})
 			require.Error(t, err)
 			var panicErr *PanicError

@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runs-on: [ macos-13, macos-12, macos-11, ubuntu-22.04, ubuntu-20.04, windows-latest ]
+        runs-on: [ macos-13, macos-12, macos-11, ubuntu-22.04, ubuntu-20.04 ]
         go-version: [ "1.21", "1.20", "1.19" ]
         cgo_enabled: [ "0", "1" ] # test it compiles with and without cgo
         include:
@@ -30,7 +30,6 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
-
       - name: go test
         shell: bash
         run: |
@@ -38,6 +37,30 @@ jobs:
           env GOBIN=$PWD go install gotest.tools/gotestsum@latest
           # Run the tests with gotestsum
           env ${{ matrix.env }} CGO_ENABLED=${{ matrix.cgo_enabled }} ./gotestsum -- -v -count=10 -shuffle=on ./...
+
+  disabled:
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: [ windows-latest, ubuntu-latest, macos-13 ]
+        go-args: [ "-tags datadog.no_waf", "-tags go1.22" ]
+        include:
+          - runs-on: windows-latest
+            go-args: ""
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: 'stable' # get latest stable version from https://github.com/actions/go-versions/blob/main/versions-manifest.json
+          cache: true
+      - name: go test
+        shell: bash
+        run: |
+          # Install gotestsum
+          env GOBIN=$PWD go install gotest.tools/gotestsum@latest
+          # Run the tests with gotestsum
+          ./gotestsum -- -v ${{ matrix.go-tags }} -shuffle=on ./...
 
   # Same tests but on the official golang container for linux
   golang-linux-container:

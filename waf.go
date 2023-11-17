@@ -13,18 +13,6 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
-// UnsupportedTargetError is a wrapper error type helping to handle the error
-// case of trying to execute this package on an unsupported target environment.
-type UnsupportedTargetError struct {
-	error
-}
-
-// Unwrap the error and return it.
-// Required by errors.Is and errors.As functions.
-func (e *UnsupportedTargetError) Unwrap() error {
-	return e.error
-}
-
 // Diagnostics stores the information - provided by the WAF - about WAF rules initialization.
 type Diagnostics struct {
 	Version        string
@@ -138,7 +126,7 @@ var (
 	// libddwaf's dynamic library handle and entrypoints
 	wafLib *wafDl
 	// libddwaf's dlopen error if any
-	wafErr      error
+	wafLoadErr  error
 	openWafOnce sync.Once
 )
 
@@ -155,22 +143,19 @@ var (
 // to remove temporary files. It is safe to continue using libddwaf in such
 // case.
 func Load() (ok bool, err error) {
+	if ok, err = Health(); !ok {
+		return false, err
+	}
+
 	openWafOnce.Do(func() {
-		wafLib, wafErr = newWafDl()
-		if wafErr != nil {
+		wafLib, wafLoadErr = newWafDl()
+		if wafLoadErr != nil {
 			return
 		}
 		wafVersion = wafLib.wafGetVersion()
 	})
 
-	return wafLib != nil, wafErr
-}
-
-// SupportsTarget returns true and a nil error when the target host environment
-// is supported by this package and can be further used.
-// Otherwise, it returns false along with an error detailing why.
-func SupportsTarget() (bool, error) {
-	return supportsTarget()
+	return wafLib != nil, wafLoadErr
 }
 
 var wafVersion string

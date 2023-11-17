@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build (amd64 || arm64) && (linux || darwin) && !go1.22
+//go:build (amd64 || arm64) && (linux || darwin) && !go1.22 && !datadog.no_waf
 
 package waf
 
@@ -41,6 +41,12 @@ func TestLoad(t *testing.T) {
 
 func TestSupportsTarget(t *testing.T) {
 	supported, err := SupportsTarget()
+	require.True(t, supported)
+	require.NoError(t, err)
+}
+
+func TestHealth(t *testing.T) {
+	supported, err := Health()
 	require.True(t, supported)
 	require.NoError(t, err)
 }
