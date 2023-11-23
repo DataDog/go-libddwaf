@@ -19,11 +19,25 @@ for (const { nilaway } of Object.values(json)) {
 function annotate(pos, message) {
   const [file, line, col] = pos.split(':', 3);
   const relative = path.relative(process.cwd(), file);
-  console.log(`::warning file=${relative},line=${line},col=${col},title=NilAway::${escapeSpecial(message)}`);
+
+  let title = 'NilAway';
+  message = stripAnsi(message);
+
+  const match = /^error: ([a-z0-9\s]+)\./im.exec(message);
+  if (match != null) {
+    title = match[1]; // E.g: "Potential nil panic detected"
+    message = message.substring(match[0].length).trim();
+  }
+
+  console.log(`::warning file=${relative},line=${line},col=${col},title=${title}::${escapeSpecial(message)}`);
 }
 
 function escapeSpecial(text) {
   return text.replace(/%/g, '%25')
     .replace(/\r/g, '%0D')
     .replace(/\n/g, '%0A');
+}
+
+function stripAnsi(text) {
+  return text.replace(/\u{001B}\[\d+(?:;\d+)?m/gmu, '');
 }
