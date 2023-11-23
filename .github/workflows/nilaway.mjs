@@ -10,8 +10,13 @@ const jsonReportPath = process.argv[2];
 const text = await fs.readFile(jsonReportPath, 'utf-8');
 const json = JSON.parse(text);
 
+const dedup = new Set();
 for (const { nilaway } of Object.values(json)) {
   for (const { posn, message } of nilaway) {
+    if (dedup.has(`${posn}\0${message}`)) {
+      continue;
+    }
+    dedup.add(`${posn}\0${message}`);
     annotate(posn, message);
   }
 }
