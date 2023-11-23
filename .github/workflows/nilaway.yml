@@ -14,9 +14,7 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version: oldstable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts
+      - uses: actions/setup-node@v4 # Used by a small script to create GitHub PR annotations
       - name: Install go.uber.org/nilaway/cmd/nilaway
         run: go install go.uber.org/nilaway/cmd/nilaway@latest
       - name: Run nilaway
