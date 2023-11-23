@@ -7,7 +7,7 @@
 
 package lib
 
-import bin "github.com/DataDog/go-libddwaf/v2/internal/lib/darwin-amd64"
+import bin "github.com/DataDog/go-libddwaf/v2/internal/lib/linux-arm64"
 
 var libddwaf = bin.Libddwaf
 

@@ -12,14 +12,6 @@ import (
 	"os"
 
 	_ "embed"
-
-	// Do not remove the following imports which allow supporting package
-	// vendoring by properly copying all the files needed by CGO: the libddwaf
-	// header file and the static libraries.
-	_ "github.com/DataDog/go-libddwaf/v2/internal/lib/darwin-amd64"
-	_ "github.com/DataDog/go-libddwaf/v2/internal/lib/darwin-arm64"
-	_ "github.com/DataDog/go-libddwaf/v2/internal/lib/linux-amd64"
-	_ "github.com/DataDog/go-libddwaf/v2/internal/lib/linux-arm64"
 )
 
 //go:embed .version
