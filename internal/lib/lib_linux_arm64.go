@@ -7,9 +7,8 @@
 
 package lib
 
-import _ "embed" // Needed for go:embed
+import bin "github.com/DataDog/go-libddwaf/v2/internal/lib/darwin-amd64"
 
-//go:embed linux-arm64/libddwaf.so
-var libddwaf []byte
+var libddwaf = bin.Libddwaf
 
 const embedNamePattern = "libddwaf-*.so"

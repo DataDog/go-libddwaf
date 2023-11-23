@@ -5,5 +5,7 @@
 
 package vendor
 
-// This file is there to make sure "go mod vendor" does not drop those directories, as it otherwise removes
-// any directiory that contains no ".go" files.
+import _ "embed" // Needed for go:embed
+
+//go:embed libddwaf.dylib
+var Libddwaf []byte
