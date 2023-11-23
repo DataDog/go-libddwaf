@@ -1,0 +1,25 @@
+name: Nil panic analysis
+on:
+  pull_request: {}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  nil-away:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: oldstable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts
+      - name: Install go.uber.org/nilaway/cmd/nilaway
+        run: go install go.uber.org/nilaway/cmd/nilaway@latest
+      - name: Run nilaway
+        run: nilaway -json ./... > ${{ runner.temp }}/nilaway.json
+      - name: Add issue markers to the PR
+        run: node .github/workflows/nilaway.mjs '${{ runner.temp }}/nilaway.json'
