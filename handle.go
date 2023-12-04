@@ -15,8 +15,8 @@ import (
 
 // Handle represents an instance of the WAF for a given ruleset.
 type Handle struct {
-	// Instance of the WAF
-	cHandle wafHandle
+	// diagnostics holds information about rules initialization
+	diagnostics Diagnostics
 
 	// Lock-less reference counter avoiding blocking calls to the Close() method
 	// while WAF contexts are still using the WAF handle. Instead, we let the
@@ -30,8 +30,8 @@ type Handle struct {
 	// block the request handlers for the time of the security rules update.
 	refCounter *atomic.Int32
 
-	// diagnostics holds information about rules initialization
-	diagnostics Diagnostics
+	// Instance of the WAF
+	cHandle wafHandle
 }
 
 // NewHandle creates and returns a new instance of the WAF with the given security rules and configuration
@@ -110,7 +110,6 @@ func (handle *Handle) Addresses() []string {
 // Update the ruleset of a WAF instance into a new handle on its own
 // the previous handle still needs to be closed manually
 func (handle *Handle) Update(newRules any) (*Handle, error) {
-
 	encoder := newMaxEncoder()
 	obj, err := encoder.Encode(newRules)
 	if err != nil {
@@ -139,8 +138,9 @@ func (handle *Handle) Update(newRules any) (*Handle, error) {
 
 // Close puts the handle in termination state, when all the contexts are closed the handle will be destroyed
 func (handle *Handle) Close() {
-	if handle.addRefCounter(-1) > 0 {
-		// There are still Contexts that are not closed
+	if handle.addRefCounter(-1) != 0 {
+		// Either the counter is still positive (this Handle is still referenced), or it had previously
+		// reached 0 and some other call has done the cleanup already.
 		return
 	}
 
@@ -156,19 +156,28 @@ func (handle *Handle) retain() bool {
 	return handle.addRefCounter(1) > 0
 }
 
-// addRefCounter add x to Handle.refCounter.
-// It relies on a CAS spin-loop implementation in order to avoid changing the
-// counter when 0 has been reached.
+// addRefCounter adds x to Handle.refCounter. The return valid indicates whether the refCounter reached 0 as part of
+// this call or not, which can be used to perform "only-once" activities:
+// - result > 0    => the Handle is still usable
+// - result == 0   => the handle is no longer usable, ref counter reached 0 as part of this call
+// - result == -1  => the handle is no longer usable, ref counter was already 0 previously
 func (handle *Handle) addRefCounter(x int32) int32 {
+	// We use a CAS loop to avoid setting the refCounter to a negative value.
 	for {
 		current := handle.refCounter.Load()
 		if current <= 0 {
-			// The object was released
-			return 0
+			// The object had already been released
+			return -1
 		}
 
 		next := current + x
 		if swapped := handle.refCounter.CompareAndSwap(current, next); swapped {
+			if next < 0 {
+				// Somehow, the counter got negative, which should never happen if
+				// `addRefCount` is called only with +1 or -1. In any case, we return 0
+				// to signifiy we reached 0 for the first time right now.
+				return 0
+			}
 			return next
 		}
 	}

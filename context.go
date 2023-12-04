@@ -16,22 +16,18 @@ import (
 // when calling it multiple times to run its rules every time new addresses
 // become available. Each request must have its own Context.
 type Context struct {
-	// Instance of the WAF
-	handle   *Handle
-	cContext wafContext
-	// cgoRefs is used to retain go references to WafObjects until the context is destroyed.
-	// As per libddwaf documentation, WAF Objects must be alive during all the context lifetime
-	cgoRefs cgoRefPool
-	// Mutex protecting the use of cContext which is not thread-safe and cgoRefs.
-	mutex sync.Mutex
+	handle *Handle // Instance of the WAF
+
+	cgoRefs  cgoRefPool // Used to retain go data referenced by WAF Objects the context holds
+	cContext wafContext // The C ddwaf_context pointer
 
 	// Stats
-	// Cumulated internal WAF run time - in nanoseconds - for this context.
-	totalRuntimeNs atomic.Uint64
-	// Cumulated overall run time - in nanoseconds - for this context.
-	totalOverallRuntimeNs atomic.Uint64
-	// Cumulated timeout count for this context.
-	timeoutCount atomic.Uint64
+	totalRuntimeNs        atomic.Uint64 // Cumulative internal WAF run time - in nanoseconds - for this context.
+	totalOverallRuntimeNs atomic.Uint64 // Cumulative overall run time - in nanoseconds - for this context.
+	timeoutCount          atomic.Uint64 // Cumulative timeout count for this context.
+
+	// Mutex protecting the use of cContext which is not thread-safe and cgoRefs.
+	mutex sync.Mutex
 }
 
 // NewContext returns a new WAF context of to the given WAF handle.
