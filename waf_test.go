@@ -825,9 +825,6 @@ func TestConcurrency(t *testing.T) {
 		wafCtx := NewContext(waf)
 		require.NotNil(t, wafCtx)
 
-		waf.Close()
-		require.Greater(t, waf.refCounter.Load(), int32(0))
-
 		var startBarrier, stopBarrier sync.WaitGroup
 		startBarrier.Add(1)
 		stopBarrier.Add(nbUsers + 1)
@@ -852,6 +849,14 @@ func TestConcurrency(t *testing.T) {
 				}
 			}()
 		}
+
+		go func() {
+			startBarrier.Wait()
+			defer stopBarrier.Done()
+
+			time.Sleep(time.Microsecond)
+			waf.Close()
+		}()
 
 		startBarrier.Done()
 		stopBarrier.Wait()
