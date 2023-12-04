@@ -817,6 +817,47 @@ func TestConcurrency(t *testing.T) {
 		// The test mustn't crash and ref-counter must be 0
 		require.Zero(t, waf.refCounter.Load())
 	})
+
+	t.Run("concurrent-context-use-destroy", func(t *testing.T) {
+		waf, err := newDefaultHandle(testArachniRule)
+		require.NoError(t, err)
+
+		wafCtx := NewContext(waf)
+		require.NotNil(t, wafCtx)
+
+		waf.Close()
+		require.Greater(t, waf.refCounter.Load(), int32(0))
+
+		var startBarrier, stopBarrier sync.WaitGroup
+		startBarrier.Add(1)
+		stopBarrier.Add(nbUsers + 1)
+
+		data := map[string]any{
+			"server.request.headers.no_cookies": map[string][]string{
+				"user-agent": {"Arachni/test"},
+			},
+		}
+
+		for n := 0; n < nbUsers; n++ {
+			n := n
+			go func() {
+				startBarrier.Wait()
+				defer stopBarrier.Done()
+
+				time.Sleep(time.Microsecond)
+				if n%2 == 0 {
+					wafCtx.Run(RunAddressData{Ephemeral: data}, time.Second)
+				} else {
+					wafCtx.Close()
+				}
+			}()
+		}
+
+		startBarrier.Done()
+		stopBarrier.Wait()
+
+		require.Zero(t, waf.refCounter.Load())
+	})
 }
 
 func TestRunError(t *testing.T) {
