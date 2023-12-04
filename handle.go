@@ -162,12 +162,14 @@ func (handle *Handle) retain() bool {
 func (handle *Handle) addRefCounter(x int32) int32 {
 	for {
 		current := handle.refCounter.Load()
-		if current == 0 {
+		if current <= 0 {
 			// The object was released
 			return 0
 		}
-		if swapped := handle.refCounter.CompareAndSwap(current, current+x); swapped {
-			return current + x
+
+		next := current + x
+		if swapped := handle.refCounter.CompareAndSwap(current, next); swapped {
+			return next
 		}
 	}
 }
