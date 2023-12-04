@@ -173,12 +173,11 @@ func (context *Context) Close() {
 	defer context.mutex.Unlock()
 
 	wafLib.wafContextDestroy(context.cContext)
-	context.handle.Close() // Reduce the reference counter of the Handle.
+	keepAlive(context.cgoRefs)   // Keep the Go pointer references until the end of the context
+	defer context.handle.Close() // Reduce the reference counter of the Handle.
 
-	// Keep the Go pointer references until the end of the context
-	keepAlive(context.cgoRefs)
-	// The context is no longer used so we can try releasing the Go pointer references asap by nulling them
-	context.cgoRefs = cgoRefPool{}
+	context.cgoRefs = cgoRefPool{} // The data in context.cgoRefs is no longer needed, explicitly release
+	context.cContext = 0           // Makes it easy to spot use-after-free/double-free issues
 }
 
 // TotalRuntime returns the cumulated WAF runtime across various run calls within the same WAF context.

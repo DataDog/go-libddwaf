@@ -145,6 +145,8 @@ func (handle *Handle) Close() {
 	}
 
 	wafLib.wafDestroy(handle.cHandle)
+	handle.diagnostics = Diagnostics{} // Data in diagnostics may no longer be valid (e.g: strings from libddwaf)
+	handle.cHandle = 0                 // Makes it easy to spot use-after-free/double-free issues
 }
 
 // retain increments the reference counter of this Handle. Returns true if the
