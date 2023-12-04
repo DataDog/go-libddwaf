@@ -41,13 +41,13 @@ type Context struct {
 // or the WAF context couldn't be created.
 func NewContext(handle *Handle) *Context {
 	// Handle has been released
-	if handle.addRefCounter(1) == 0 {
+	if !handle.retain() {
 		return nil
 	}
 
 	cContext := wafLib.wafContextInit(handle.cHandle)
 	if cContext == 0 {
-		handle.addRefCounter(-1)
+		handle.Close() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
 		return nil
 	}
 
@@ -120,12 +120,9 @@ func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (
 	return
 }
 
+// run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
+// context appropriately around this call.
 func (context *Context) run(persistentData, ephemeralData *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) (Result, error) {
-	// RLock the handle to safely get read access to the WAF handle and prevent concurrent changes of it
-	// such as a rules-data update.
-	context.handle.mutex.RLock()
-	defer context.handle.mutex.RUnlock()
-
 	result := new(wafResult)
 	defer wafLib.wafResultFree(result)
 
@@ -172,7 +169,12 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (res Result, err erro
 
 // Close calls handle.closeContext which calls ddwaf_context_destroy and maybe also close the handle if it in termination state.
 func (context *Context) Close() {
-	defer context.handle.closeContext(context)
+	context.mutex.Lock()
+	defer context.mutex.Unlock()
+
+	wafLib.wafContextDestroy(context.cContext)
+	context.handle.Close() // Reduce the reference counter of the Handle.
+
 	// Keep the Go pointer references until the end of the context
 	keepAlive(context.cgoRefs)
 	// The context is no longer used so we can try releasing the Go pointer references asap by nulling them

@@ -8,7 +8,6 @@ package waf
 import (
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/DataDog/go-libddwaf/v2/internal/noopfree"
 	"go.uber.org/atomic"
@@ -30,10 +29,6 @@ type Handle struct {
 	// efficiently update the security rules concurrently, without having to
 	// block the request handlers for the time of the security rules update.
 	refCounter *atomic.Int32
-
-	// RWMutex protecting the R/W accesses to the internal rules data (stored
-	// in the handle).
-	mutex sync.RWMutex
 
 	// diagnostics holds information about rules initialization
 	diagnostics Diagnostics
@@ -142,14 +137,6 @@ func (handle *Handle) Update(newRules any) (*Handle, error) {
 	}, nil
 }
 
-// closeContext calls ddwaf_context_destroy and eventually ddwaf_destroy on the handle
-func (handle *Handle) closeContext(context *Context) {
-	wafLib.wafContextDestroy(context.cContext)
-	if handle.addRefCounter(-1) == 0 {
-		wafLib.wafDestroy(handle.cHandle)
-	}
-}
-
 // Close puts the handle in termination state, when all the contexts are closed the handle will be destroyed
 func (handle *Handle) Close() {
 	if handle.addRefCounter(-1) > 0 {
@@ -158,6 +145,13 @@ func (handle *Handle) Close() {
 	}
 
 	wafLib.wafDestroy(handle.cHandle)
+}
+
+// retain increments the reference counter of this Handle. Returns true if the
+// Handle is still valid, false if it is no longer usable. Calls to retain()
+// must be balanced with calls to Close() in order to avoid leaking Handles.
+func (handle *Handle) retain() bool {
+	return handle.addRefCounter(1) > 0
 }
 
 // addRefCounter add x to Handle.refCounter.
