@@ -151,9 +151,17 @@ func (handle *Handle) Close() {
 
 // retain increments the reference counter of this Handle. Returns true if the
 // Handle is still valid, false if it is no longer usable. Calls to retain()
-// must be balanced with calls to Close() in order to avoid leaking Handles.
+// must be balanced with calls to release() in order to avoid leaking Handles.
 func (handle *Handle) retain() bool {
 	return handle.addRefCounter(1) > 0
+}
+
+// retain decrements the reference counter of this Handle, possibly causing it
+// to be completely closed (if no other reference exist to it). The Handle
+// should not be used after release() has been called (unless retain has been
+// called again before then).
+func (handle *Handle) release() {
+	handle.Close()
 }
 
 // addRefCounter adds x to Handle.refCounter. The return valid indicates whether the refCounter reached 0 as part of

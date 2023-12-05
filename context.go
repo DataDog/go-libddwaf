@@ -43,7 +43,7 @@ func NewContext(handle *Handle) *Context {
 
 	cContext := wafLib.wafContextInit(handle.cHandle)
 	if cContext == 0 {
-		handle.Close() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
+		handle.release() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
 		return nil
 	}
 
