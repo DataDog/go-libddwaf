@@ -143,6 +143,10 @@ func (context *Context) run(persistentData, ephemeralData *wafObject, timeout ti
 func unwrapWafResult(ret wafReturnCode, result *wafResult) (res Result, err error) {
 	if result.timeout > 0 {
 		err = ErrTimeout
+	} else {
+		// Derivatives can be generated even if no security event gets detected, so we decode them as long as the WAF
+		// didn't timeout
+		res.Derivatives, err = decodeMap(&result.derivatives)
 	}
 
 	if ret == wafOK {
@@ -166,7 +170,6 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (res Result, err erro
 		}
 	}
 
-	res.Derivatives, err = decodeMap(&result.derivatives)
 	return res, err
 }
 
