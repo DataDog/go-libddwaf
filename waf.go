@@ -15,7 +15,6 @@ import (
 
 // Diagnostics stores the information - provided by the WAF - about WAF rules initialization.
 type Diagnostics struct {
-	Version        string
 	Rules          *DiagnosticEntry
 	CustomRules    *DiagnosticEntry
 	Exclusions     *DiagnosticEntry
@@ -23,6 +22,7 @@ type Diagnostics struct {
 	RulesData      *DiagnosticEntry
 	Processors     *DiagnosticEntry
 	Scanners       *DiagnosticEntry
+	Version        string
 }
 
 // TopLevelErrors returns the list of top-level errors reported by the WAF on any of the Diagnostics
@@ -56,10 +56,10 @@ func (d *Diagnostics) TopLevelError() error {
 // for a specific entry in the WAF ruleset
 type DiagnosticEntry struct {
 	Addresses *DiagnosticAddresses
+	Errors    map[string][]string // Item-level errors (map of error message to entity identifiers or index:#)
+	Error     string              // If the entire entry was in error (e.g: invalid format)
 	Loaded    []string            // Successfully loaded entity identifiers (or index:#)
 	Failed    []string            // Failed entity identifiers (or index:#)
-	Error     string              // If the entire entry was in error (e.g: invalid format)
-	Errors    map[string][]string // Item-level errors (map of error message to entity identifiers or index:#)
 }
 
 // DiagnosticAddresses stores the information - provided by the WAF - about the known addresses and

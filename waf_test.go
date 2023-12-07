@@ -817,6 +817,67 @@ func TestConcurrency(t *testing.T) {
 		// The test mustn't crash and ref-counter must be 0
 		require.Zero(t, waf.refCounter.Load())
 	})
+
+	t.Run("concurrent-context-use-destroy", func(t *testing.T) {
+		// This test validates that the WAF Context can be used from multiple
+		// threads, with mixed calls to `ddwaf_run` and `ddwaf_context_destroy`,
+		// which are not thread-safe.
+
+		waf, err := newDefaultHandle(testArachniRule)
+		require.NoError(t, err)
+
+		wafCtx := NewContext(waf)
+		require.NotNil(t, wafCtx)
+
+		var startBarrier, stopBarrier sync.WaitGroup
+		startBarrier.Add(1)
+		stopBarrier.Add(nbUsers + 1)
+
+		data := map[string]any{
+			"server.request.headers.no_cookies": map[string][]string{
+				"user-agent": {"Arachni/test"},
+			},
+		}
+
+		for n := 0; n < nbUsers; n++ {
+			n := n
+			go func() {
+				startBarrier.Wait()
+				defer stopBarrier.Done()
+
+				// A microsecond sleep gives us some scheduler-backed order of execution randomization
+				time.Sleep(time.Microsecond)
+
+				// Half of these goroutines will try to use wafCtx.Run(...), while the other half will try
+				// to use wafCtx.Close(). The expected outcome is that exactly one call to wafCtx.Close()
+				// effectively releases the WAF context, and between 0 and N calls to wafCtx.Run(...) are
+				// done (those that land after `wafCtx.Close()` happened will be silent no-ops).
+				if n%2 == 0 {
+					wafCtx.Run(RunAddressData{Ephemeral: data}, time.Second)
+				} else {
+					wafCtx.Close()
+				}
+			}()
+		}
+
+		go func() {
+			startBarrier.Wait()
+			defer stopBarrier.Done()
+
+			// A microsecond sleep gives us some scheduler-backed order of execution randomization
+			time.Sleep(time.Microsecond)
+
+			// We also asynchronously release the WAF handle, which is fine to do as the WAF context is
+			// still in use, as the WAF handle has a reference counter guarding it's destruction.
+			waf.Close()
+		}()
+
+		startBarrier.Done()
+		stopBarrier.Wait()
+
+		// Verify the WAF Handle was properly released.
+		require.Zero(t, waf.refCounter.Load())
+	})
 }
 
 func TestRunError(t *testing.T) {

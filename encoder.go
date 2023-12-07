@@ -20,10 +20,10 @@ import (
 // reference now or in the future, are stored and referenced in the `cgoRefs` field. The user MUST leverage
 // `keepAlive()` with it according to its ddwaf use-case.
 type encoder struct {
+	cgoRefs          cgoRefPool
 	containerMaxSize int
 	stringMaxSize    int
 	objectMaxDepth   int
-	cgoRefs          cgoRefPool
 }
 
 type native interface {

@@ -8,7 +8,6 @@ package waf
 import (
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/DataDog/go-libddwaf/v2/internal/noopfree"
 	"go.uber.org/atomic"
@@ -16,8 +15,8 @@ import (
 
 // Handle represents an instance of the WAF for a given ruleset.
 type Handle struct {
-	// Instance of the WAF
-	cHandle wafHandle
+	// diagnostics holds information about rules initialization
+	diagnostics Diagnostics
 
 	// Lock-less reference counter avoiding blocking calls to the Close() method
 	// while WAF contexts are still using the WAF handle. Instead, we let the
@@ -31,12 +30,8 @@ type Handle struct {
 	// block the request handlers for the time of the security rules update.
 	refCounter *atomic.Int32
 
-	// RWMutex protecting the R/W accesses to the internal rules data (stored
-	// in the handle).
-	mutex sync.RWMutex
-
-	// diagnostics holds information about rules initialization
-	diagnostics Diagnostics
+	// Instance of the WAF
+	cHandle wafHandle
 }
 
 // NewHandle creates and returns a new instance of the WAF with the given security rules and configuration
@@ -115,7 +110,6 @@ func (handle *Handle) Addresses() []string {
 // Update the ruleset of a WAF instance into a new handle on its own
 // the previous handle still needs to be closed manually
 func (handle *Handle) Update(newRules any) (*Handle, error) {
-
 	encoder := newMaxEncoder()
 	obj, err := encoder.Encode(newRules)
 	if err != nil {
@@ -142,36 +136,56 @@ func (handle *Handle) Update(newRules any) (*Handle, error) {
 	}, nil
 }
 
-// closeContext calls ddwaf_context_destroy and eventually ddwaf_destroy on the handle
-func (handle *Handle) closeContext(context *Context) {
-	wafLib.wafContextDestroy(context.cContext)
-	if handle.addRefCounter(-1) == 0 {
-		wafLib.wafDestroy(handle.cHandle)
-	}
-}
-
 // Close puts the handle in termination state, when all the contexts are closed the handle will be destroyed
 func (handle *Handle) Close() {
-	if handle.addRefCounter(-1) > 0 {
-		// There are still Contexts that are not closed
+	if handle.addRefCounter(-1) != 0 {
+		// Either the counter is still positive (this Handle is still referenced), or it had previously
+		// reached 0 and some other call has done the cleanup already.
 		return
 	}
 
 	wafLib.wafDestroy(handle.cHandle)
+	handle.diagnostics = Diagnostics{} // Data in diagnostics may no longer be valid (e.g: strings from libddwaf)
+	handle.cHandle = 0                 // Makes it easy to spot use-after-free/double-free issues
 }
 
-// addRefCounter add x to Handle.refCounter.
-// It relies on a CAS spin-loop implementation in order to avoid changing the
-// counter when 0 has been reached.
+// retain increments the reference counter of this Handle. Returns true if the
+// Handle is still valid, false if it is no longer usable. Calls to retain()
+// must be balanced with calls to release() in order to avoid leaking Handles.
+func (handle *Handle) retain() bool {
+	return handle.addRefCounter(1) > 0
+}
+
+// release decrements the reference counter of this Handle, possibly causing it
+// to be completely closed if no other reference to it exist.
+func (handle *Handle) release() {
+	handle.Close()
+}
+
+// addRefCounter adds x to Handle.refCounter. The return valid indicates whether the refCounter reached 0 as part of
+// this call or not, which can be used to perform "only-once" activities:
+// - result > 0    => the Handle is still usable
+// - result == 0   => the handle is no longer usable, ref counter reached 0 as part of this call
+// - result == -1  => the handle is no longer usable, ref counter was already 0 previously
 func (handle *Handle) addRefCounter(x int32) int32 {
+	// We use a CAS loop to avoid setting the refCounter to a negative value.
 	for {
 		current := handle.refCounter.Load()
-		if current == 0 {
-			// The object was released
-			return 0
+		if current <= 0 {
+			// The object had already been released
+			return -1
 		}
-		if swapped := handle.refCounter.CompareAndSwap(current, current+x); swapped {
-			return current + x
+
+		next := current + x
+		if swapped := handle.refCounter.CompareAndSwap(current, next); swapped {
+			if next < 0 {
+				// TODO(romain.marcadier): somehow signal unexpected behavior to the
+				// caller (panic? error?). We currently clamp to 0 in order to avoid
+				// causing a customer program crash, but this is the symptom of a bug
+				// and should be investigated (however this clamping hides the issue).
+				return 0
+			}
+			return next
 		}
 	}
 }
