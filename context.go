@@ -163,14 +163,17 @@ func unwrapWafResult(ret wafReturnCode, result *wafResult) (res Result, err erro
 	return res, err
 }
 
-// Close calls handle.closeContext which calls ddwaf_context_destroy and maybe also close the handle if it in termination state.
+// Close the underlying `ddwaf_context` and releases the associated internal
+// data. Also decreases the reference count of the `ddwaf_hadnle` which created
+// this context, possibly releasing it completely (if this was the last context
+// created from this handle & it was released by its creator).
 func (context *Context) Close() {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
 	wafLib.wafContextDestroy(context.cContext)
-	keepAlive(context.cgoRefs)   // Keep the Go pointer references until the end of the context
-	defer context.handle.Close() // Reduce the reference counter of the Handle.
+	keepAlive(context.cgoRefs)     // Keep the Go pointer references until the end of the context
+	defer context.handle.release() // Reduce the reference counter of the Handle.
 
 	context.cgoRefs = cgoRefPool{} // The data in context.cgoRefs is no longer needed, explicitly release
 	context.cContext = 0           // Makes it easy to spot use-after-free/double-free issues

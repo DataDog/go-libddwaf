@@ -156,10 +156,8 @@ func (handle *Handle) retain() bool {
 	return handle.addRefCounter(1) > 0
 }
 
-// retain decrements the reference counter of this Handle, possibly causing it
-// to be completely closed (if no other reference exist to it). The Handle
-// should not be used after release() has been called (unless retain has been
-// called again before then).
+// release decrements the reference counter of this Handle, possibly causing it
+// to be completely closed if no other reference to it exist.
 func (handle *Handle) release() {
 	handle.Close()
 }
@@ -181,9 +179,10 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 		next := current + x
 		if swapped := handle.refCounter.CompareAndSwap(current, next); swapped {
 			if next < 0 {
-				// Somehow, the counter got negative, which should never happen if
-				// `addRefCount` is called only with +1 or -1. In any case, we return 0
-				// to signifiy we reached 0 for the first time right now.
+				// TODO(romain.marcadier): somehow signal unexpected behavior to the
+				// caller (panic? error?). We currently clamp to 0 in order to avoid
+				// causing a customer program crash, but this is the symptom of a bug
+				// and should be investigated (however this clamping hides the issue).
 				return 0
 			}
 			return next
