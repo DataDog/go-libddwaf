@@ -4,7 +4,7 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Manually set datadog.no_waf build tag
-//go:build datadog.no_waf
+//go:build datadog.no_waf && (linux || darwin) && (amd64 || arm64) && !go1.22
 
 package waf
 

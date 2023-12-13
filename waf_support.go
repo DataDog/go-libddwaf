@@ -7,6 +7,7 @@ package waf
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/hashicorp/go-multierror"
 )
@@ -31,12 +32,10 @@ func (e UnsupportedOSArchError) Error() string {
 
 // UnsupportedGoVersionError is a wrapper error type helping to handle the error
 // case of trying to execute this package when the Go version is not supported.
-type UnsupportedGoVersionError struct {
-	Version string
-}
+type UnsupportedGoVersionError struct{}
 
 func (e UnsupportedGoVersionError) Error() string {
-	return fmt.Sprintf("unsupported Go version: %s", e.Version)
+	return fmt.Sprintf("unsupported Go version: %s", runtime.Version())
 }
 
 // ManuallyDisabledError is a wrapper error type helping to handle the error

@@ -8,9 +8,10 @@
 package waf_test
 
 import (
+	"testing"
+
 	waf "github.com/DataDog/go-libddwaf/v2"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestSupportsTarget(t *testing.T) {
