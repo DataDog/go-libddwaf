@@ -118,7 +118,6 @@ jobs:
             -eDD_APPSEC_WAF_TIMEOUT="${DD_APPSEC_WAF_TIMEOUT}"                  \
             -eGODEBUG="${{ matrix.go-debug }}"                                  \
             -eGOEXPERIMENT="${{ matrix.go-experiment }}"                        \
-            -eLD_DEBUG=all                                                      \
             "golang:${{ matrix.go-version }}-${{ matrix.base }}"
       - name: Install alpine requirements
         if: matrix.base == 'alpine' && matrix.cgo-enabled == '1'
