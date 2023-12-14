@@ -111,7 +111,7 @@ jobs:
         run: |-
           docker run --name gha-${{ github.run_id }} --rm -di                   \
             --platform="linux/${{ matrix.arch }}"                               \
-            -v "${HOME}/go/pkg/mod:/root/go/pkg/mod"                            \
+            -v "${HOME}/go/pkg/mod:/go/pkg/mod"                                 \
             -v "$PWD:$PWD"                                                      \
             -w "$PWD"                                                           \
             -eCGO_ENABLED="${{ matrix.cgo-enabled }}"                           \
@@ -121,14 +121,18 @@ jobs:
             -eLD_DEBUG=all                                                      \
             "golang:${{ matrix.go-version }}-${{ matrix.base }}"
       - name: Install alpine requirements
-        if: matrix.base == 'alpine'
+        if: matrix.base == 'alpine' && matrix.cgo-enabled == '1'
         run: |-
           docker exec -i gha-${{ github.run_id }}                               \
             apk add gcc musl-dev libc6-compat
+      - name: Install gotestsum
+        run: |-
+          docker exec -i gha-${{ github.run_id }}                               \
+            go install gotest.tools/gotestsum@latest
       - name: go test
         run: |-
           docker exec -i gha-${{ github.run_id }}                               \
-            go test -v -count=10 -shuffle=on -tags='${{ matrix.go-tags }}' ./...
+            gotestsum -- -v -count=10 -shuffle=on -tags='${{ matrix.go-tags }}' ./...
       - name: Stop container
         if: always() && steps.container.outcome == 'success'
         run: |-
