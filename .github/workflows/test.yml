@@ -43,10 +43,15 @@ jobs:
       fail-fast: false
       matrix:
         runs-on: [ windows-latest, ubuntu-latest, macos-13 ]
-        go-args: [ "-tags datadog.no_waf", "-tags go1.22" ]
-        include:
-          - runs-on: windows-latest
-            go-args: ""
+        go-version: [ "", "-tags go1.22" ]
+        waf-disabled: [ "", "-tags datadog.no_waf" ]
+        exclude:
+          - runs-on: ubuntu-latest
+            go-version: ""
+            waf-disabled: ""
+          - runs-on: macos-13
+            go-version: ""
+            waf-disabled: ""
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v3
@@ -60,7 +65,7 @@ jobs:
           # Install gotestsum
           env GOBIN=$PWD go install gotest.tools/gotestsum@latest
           # Run the tests with gotestsum
-          ./gotestsum -- -v ${{ matrix.go-tags }} -shuffle=on ./...
+          ./gotestsum -- -v ${{ matrix.waf-disabled }} ${{ matrix.go-version }} -shuffle=on ./...
 
   # Same tests but on the official golang container for linux
   golang-linux-container:
