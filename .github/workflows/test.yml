@@ -73,7 +73,7 @@ jobs:
           - 'go1.22'                # Too recent go version (purego compatibility uncertain)
           - 'datadog.no_waf,go1.22' # Explicitly disabled & too recent go version (purego compatibility uncertain)
         include:
-          # gocheck2 is configrued differently in go1.21 than in previous versions
+          # gocheck2 is configured differently in go1.21 than in previous versions
           - go-version: 1.21
             go-experiment: cgocheck2
           - go-version: 1.20
