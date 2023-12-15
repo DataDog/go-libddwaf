@@ -130,6 +130,7 @@ jobs:
             -eDD_APPSEC_WAF_TIMEOUT="${DD_APPSEC_WAF_TIMEOUT}"                  \
             -eGODEBUG="${{ matrix.go-debug }}"                                  \
             -eGOEXPERIMENT="${{ matrix.go-experiment }}"                        \
+            -eGOMODCACHE="/go/pkg/mod"                                          \
             "${{ format(matrix.image, matrix.go-version) }}"
       - name: Install alpine requirements
         if: endsWith(matrix.image, '-alpine') && matrix.cgo-enabled == '1'
@@ -148,7 +149,9 @@ jobs:
       - name: go test
         run: |-
           docker exec -i gha-${{ github.run_id }}                               \
-            gotestsum -- -v -count=10 -shuffle=on -tags='${{ matrix.go-tags }}' ./...
+            go run gotest.tools/gotestsum@latest --                             \
+              -v -count=10 -shuffle=on -tags='${{ matrix.go-tags }}'             \
+              ./...
       - name: Stop container
         if: always() && steps.container.outcome == 'success'
         run: |-
