@@ -10,9 +10,9 @@ package waf
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/DataDog/go-libddwaf/v2/internal/lib"
+	"github.com/DataDog/go-libddwaf/v2/internal/log"
 	"github.com/ebitengine/purego"
 )
 
@@ -93,24 +93,8 @@ func newWafDl() (dl *wafDl, err error) {
 		if symErr != nil {
 			return
 		}
-		var logLevel ddwafLogLevel
-		switch strings.ToLower(val) {
-		case "trace":
-			logLevel = ddwafLogLevelTrace
-		case "debug":
-			logLevel = ddwafLogLevelDebug
-		case "info":
-			logLevel = ddwafLogLevelInfo
-		case "warn":
-			logLevel = ddwafLogLevelWarning
-		case "error":
-			logLevel = ddwafLogLevelError
-		case "off":
-			logLevel = ddwafLogLevelOff
-		default:
-			logLevel = ddwafLogLevelOff
-		}
-		dl.syscall(setLogSym, ddwafLogCallback, uintptr(logLevel))
+		logLevel := log.LevelNamed(val)
+		dl.syscall(setLogSym, log.CallbackFunctionPointer(), uintptr(logLevel))
 	}
 
 	return
