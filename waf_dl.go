@@ -10,6 +10,7 @@ package waf
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/DataDog/go-libddwaf/v2/internal/lib"
 	"github.com/ebitengine/purego"
@@ -85,6 +86,31 @@ func newWafDl() (dl *wafDl, err error) {
 			err = fmt.Errorf("%w; along with an error while releasing the shared libddwaf library: %v", err, closeErr)
 		}
 		return
+	}
+
+	if val := os.Getenv("DD_WAF_LOG_LEVEL"); val != "" {
+		setLogSym, symErr := purego.Dlsym(handle, "ddwaf_set_log_cb")
+		if symErr != nil {
+			return
+		}
+		var logLevel ddwafLogLevel
+		switch strings.ToLower(val) {
+		case "trace":
+			logLevel = ddwafLogLevelTrace
+		case "debug":
+			logLevel = ddwafLogLevelDebug
+		case "info":
+			logLevel = ddwafLogLevelInfo
+		case "warn":
+			logLevel = ddwafLogLevelWarning
+		case "error":
+			logLevel = ddwafLogLevelError
+		case "off":
+			logLevel = ddwafLogLevelOff
+		default:
+			logLevel = ddwafLogLevelOff
+		}
+		dl.syscall(setLogSym, ddwafLogCallback, uintptr(logLevel))
 	}
 
 	return

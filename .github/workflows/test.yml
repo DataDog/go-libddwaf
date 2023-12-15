@@ -21,8 +21,12 @@ jobs:
           - env:
               GODEBUG=cgocheck=2
           - go-version: "1.21"
-            env:
+            env: |-
               GOEXPERIMENT=cgocheck2
+          - go-version: "1.21"
+            env: |- # Also test with DD_WAF_LOG_LEVEL set
+              GOEXPERIMENT=cgocheck2
+              DD_WAF_LOG_LEVEL=trace
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v3
