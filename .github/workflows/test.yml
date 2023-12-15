@@ -100,10 +100,10 @@ jobs:
           # Prune inexistant build images (debian buster is on LTS but won't get new go version images)
           - go-version: '1.21'
             image: golang:{0}-buster
-          # The amazonlinux:2 variant is only relevant for the default go version yum ships
+          # The amazonlinux:2 variant is only relevant for the default go version yum ships (currently 1.20)
           - go-version: '1.19'
             image: amazonlinux:2
-          - go-version: '1.20'
+          - go-version: '1.21'
             image: amazonlinux:2
     name: linux/${{ matrix.arch }} ${{ format(matrix.image, matrix.go-version) }} cgo=${{ matrix.cgo-enabled }} tags=${{ matrix.go-tags }}
     runs-on: ubuntu-latest
