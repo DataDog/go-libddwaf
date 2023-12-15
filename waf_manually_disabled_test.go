@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build datadog.no_waf && (linux || darwin) && (amd64 || arm64) && !go1.22
+//go:build datadog.no_waf
 
 package waf_test
 
@@ -14,15 +14,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLoad(t *testing.T) {
-	ok, err := waf.Load()
-	require.False(t, ok)
-	require.Error(t, err)
-}
+func TestManuallyDisabled(t *testing.T) {
+	t.Run("TestLoad", func(t *testing.T) {
+		ok, err := waf.Load()
+		require.False(t, ok)
+		require.Error(t, err)
+	})
 
-func TestHealth(t *testing.T) {
-	ok, err := waf.Health()
-	require.False(t, ok)
-	require.Error(t, err)
-	require.ErrorIs(t, err, waf.ManuallyDisabledError{})
+	t.Run("TestHealth", func(t *testing.T) {
+		ok, err := waf.Health()
+		require.False(t, ok)
+		require.Error(t, err)
+		require.ErrorIs(t, err, waf.ManuallyDisabledError{})
+	})
 }

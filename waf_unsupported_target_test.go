@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build ((!linux && !darwin) || (!amd64 && !arm64)) && !go1.22
+//go:build (!linux && !darwin) || (!amd64 && !arm64)
 
 package waf_test
 
@@ -15,21 +15,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSupportsTarget(t *testing.T) {
-	supported, err := waf.SupportsTarget()
-	require.False(t, supported)
-	require.Error(t, err)
-	require.ErrorIs(t, err, waf.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
-}
+func TestUnsupportedPlatform(t *testing.T) {
 
-func TestLoad(t *testing.T) {
-	ok, err := waf.Load()
-	require.False(t, ok)
-	require.Error(t, err)
-}
+	t.Run("SupportsTarget", func(t *testing.T) {
+		supported, err := waf.SupportsTarget()
+		require.False(t, supported)
+		require.Error(t, err)
+		require.ErrorIs(t, err, waf.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
+	})
 
-func TestHealth(t *testing.T) {
-	ok, err := waf.Health()
-	require.False(t, ok)
-	require.Error(t, err)
+	t.Run("Load", func(t *testing.T) {
+		ok, err := waf.Load()
+		require.False(t, ok)
+		require.Error(t, err)
+	})
+
+	t.Run("Health", func(t *testing.T) {
+		ok, err := waf.Health()
+		require.False(t, ok)
+		require.Error(t, err)
+	})
 }

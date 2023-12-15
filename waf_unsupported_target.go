@@ -5,7 +5,7 @@
 
 // Unsupported target OS or architecture
 //            Unsupported OS        Unsupported Arch
-//go:build ((!linux && !darwin) || (!amd64 && !arm64)) && !go1.22
+//go:build (!linux && !darwin) || (!amd64 && !arm64)
 
 package waf
 
