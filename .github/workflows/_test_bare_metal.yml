@@ -53,6 +53,9 @@ jobs:
           gotestsum -- -v -count=10 -shuffle=on -tags='${{ matrix.go-tags }}' ./...
         env:
           CGO_ENABLED: ${{ matrix.cgo-enabled }}
+          # libddwaf's DEBUG is pretty spammy, and higher log levels don't happen in normal operations... and log
+          # overhead can make tests time out if we don't filter out DEBUG to reduce thrash!
+          DD_APPSEC_WAF_LOG_FILTER: "@ waf[.]cpp:"
           DD_APPSEC_WAF_LOG_LEVEL: ${{ matrix.dd-appsec-waf-log-level }}
           DD_APPSEC_WAF_TIMEOUT: 5s
           GODEBUG: ${{ matrix.go-debug }}

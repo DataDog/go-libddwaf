@@ -8,6 +8,8 @@ package log
 import (
 	"fmt"
 	"log"
+	"os"
+	"regexp"
 	"strings"
 )
 
@@ -63,6 +65,33 @@ func (l Level) String() string {
 	}
 }
 
+var filter *regexp.Regexp
+
 func logMessage(level Level, function, file string, line uint, message string) {
-	log.Printf("[%-5s] libddwaf @ %s:%d (%s): %s\n", level, file, line, function, message)
+	entry := fmt.Sprintf("[%s] libddwaf @ %s:%d (%s): %s", level, file, line, function, message)
+
+	if filter != nil && !filter.MatchString(entry) {
+		return
+	}
+
+	log.Println(entry)
+}
+
+const EnvVarLogLevel = "DD_APPSEC_WAF_LOG_LEVEL"
+
+func init() {
+	const envVarFilter = "DD_APPSEC_WAF_LOG_FILTER"
+
+	if val := os.Getenv(EnvVarLogLevel); val == "" {
+		// No log level configured, don't even attempt parsing the regexp.
+		return
+	}
+
+	if val := os.Getenv(envVarFilter); val != "" {
+		var err error
+		filter, err = regexp.Compile(val)
+		if err != nil {
+			log.Fatalf("invalid %s value: %v", envVarFilter, err)
+		}
+	}
 }

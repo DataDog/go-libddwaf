@@ -75,6 +75,7 @@ jobs:
             -v "$PWD:$PWD"                                                      \
             -w "$PWD"                                                           \
             -eCGO_ENABLED="${{ matrix.cgo-enabled }}"                           \
+            -eDD_APPSEC_WAF_LOG_FILTER="@ waf[.]cpp:" \
             -eDD_APPSEC_WAF_LOG_LEVEL="${{ matrix.dd-appsec-waf-log-level }}"   \
             -eDD_APPSEC_WAF_TIMEOUT="${DD_APPSEC_WAF_TIMEOUT}"                  \
             -eGODEBUG="${{ matrix.go-debug }}"                                  \
