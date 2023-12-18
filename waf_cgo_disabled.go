@@ -3,7 +3,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Unsupported Go versions (>=)
+// The Go build tag "appsec" was introduced to avoid having CGO_ENABLED=0 breaking changes
+// due to purego's dynamic link against libdl.so, which is not expected when CGO is disabled. 
 //go:build !cgo && !appsec
 
 package waf
