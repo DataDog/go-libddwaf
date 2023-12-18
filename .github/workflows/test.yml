@@ -40,6 +40,8 @@ jobs:
             go-tags: go1.22
           - go-version: '1.19'
             go-tags: datadog.no_waf,go1.22
+          - cgo-enabled: 1
+            go-tags: "appsec"
     name: ${{ matrix.runs-on }} go${{ matrix.go-version }} cgo=${{ matrix.cgo-enabled }} tags=${{ matrix.go-tags }}
     runs-on: ${{ matrix.runs-on }}
     steps:
@@ -107,6 +109,8 @@ jobs:
             image: amazonlinux:2
           - go-version: '1.21'
             image: amazonlinux:2
+          - cgo-enabled: 1
+            go-tags: "appsec"
     name: linux/${{ matrix.arch }} ${{ format(matrix.image, matrix.go-version) }} cgo=${{ matrix.cgo-enabled }} tags=${{ matrix.go-tags }}
     runs-on: ubuntu-latest
     steps:
