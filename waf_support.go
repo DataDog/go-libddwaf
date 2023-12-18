@@ -38,6 +38,12 @@ func (e UnsupportedGoVersionError) Error() string {
 	return fmt.Sprintf("unsupported Go version: %s", runtime.Version())
 }
 
+type CgoDisabledError struct{}
+
+func (e CgoDisabledError) Error() string {
+	return "the WAF is disabled by default when CGO is disabled, to enable it you can still use the build tag `appsec`"
+}
+
 // ManuallyDisabledError is a wrapper error type helping to handle the error
 // case of trying to execute this package when the WAF has been manually disabled with
 // the `datadog.no_waf` go build tag.

@@ -20,6 +20,7 @@ jobs:
           - ''                      # Default behavior
           - 'datadog.no_waf'        # Explicitly disabled WAF
           - 'go1.22'                # Too recent go version (purego compatibility uncertain)
+          - 'appsec'                # Legacy build tag to enable appsec when cgo is disabled
           - 'datadog.no_waf,go1.22' # Explicitly disabled & too recent go version (purego compatibility uncertain)
         include:
           # gocheck2 is configured differently in go1.21 than in previous versions
@@ -78,6 +79,7 @@ jobs:
           - ''                      # Default behavior
           - 'datadog.no_waf'        # Explicitly disabled WAF
           - 'go1.22'                # Too recent go version (purego compatibility uncertain)
+          - 'appsec'                # Legacy build tag to enable appsec when cgo is disabled
           - 'datadog.no_waf,go1.22' # Explicitly disabled & too recent go version (purego compatibility uncertain)
         include:
           # gocheck2 is configured differently in go1.21 than in previous versions
