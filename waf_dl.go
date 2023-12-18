@@ -88,7 +88,7 @@ func newWafDl() (dl *wafDl, err error) {
 		return
 	}
 
-	if val := os.Getenv("DD_WAF_LOG_LEVEL"); val != "" {
+	if val := os.Getenv("DD_APPSEC_WAF_LOG_LEVEL"); val != "" {
 		setLogSym, symErr := purego.Dlsym(handle, "ddwaf_set_log_cb")
 		if symErr != nil {
 			return

@@ -8,27 +8,31 @@
 package waf_test
 
 import (
-	waf "github.com/DataDog/go-libddwaf/v2"
-	"github.com/stretchr/testify/require"
 	"runtime"
 	"testing"
+
+	waf "github.com/DataDog/go-libddwaf/v2"
+	"github.com/stretchr/testify/require"
 )
 
-func TestSupportsTarget(t *testing.T) {
-	supported, err := waf.SupportsTarget()
-	require.False(t, supported)
-	require.Error(t, err)
-	require.ErrorIs(t, err, waf.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
-}
+func TestUnsupportedPlatform(t *testing.T) {
 
-func TestLoad(t *testing.T) {
-	ok, err := waf.Load()
-	require.False(t, ok)
-	require.Error(t, err)
-}
+	t.Run("SupportsTarget", func(t *testing.T) {
+		supported, err := waf.SupportsTarget()
+		require.False(t, supported)
+		require.Error(t, err)
+		require.ErrorIs(t, err, waf.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
+	})
 
-func TestHealth(t *testing.T) {
-	ok, err := waf.Health()
-	require.False(t, ok)
-	require.Error(t, err)
+	t.Run("Load", func(t *testing.T) {
+		ok, err := waf.Load()
+		require.False(t, ok)
+		require.Error(t, err)
+	})
+
+	t.Run("Health", func(t *testing.T) {
+		ok, err := waf.Health()
+		require.False(t, ok)
+		require.Error(t, err)
+	})
 }

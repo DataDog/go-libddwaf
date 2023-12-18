@@ -8,10 +8,6 @@
 
 package waf
 
-import (
-	"runtime"
-)
-
 func init() {
-	wafSupportErrors = append(wafSupportErrors, UnsupportedGoVersionError{runtime.Version()})
+	wafSupportErrors = append(wafSupportErrors, UnsupportedGoVersionError{})
 }
