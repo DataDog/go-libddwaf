@@ -53,7 +53,7 @@ jobs:
             image: amazonlinux:2
           - go-version: '1.21'
             image: amazonlinux:2
-    name: ${{ format(matrix.image, matrix.go-version) }} ${{ matrix.arch }} ${{ fromJSON('{"0":"noCGO","1":"CGO"}')[matrix.cgo-enabled] }} tags=${{ matrix.go-tags }} waf-log-level=${{ matrix.dd-appsec-waf-log-level || 'OFF' }}
+    name: ${{ format(matrix.image, matrix.go-version) }} ${{ matrix.arch }} ${{ matrix.cgo-enabled == '1' && 'CGO' || 'noCGO' }} tags=${{ matrix.go-tags != '' && matrix.go-tags || '∅' }} waf-log-level=${{ matrix.dd-appsec-waf-log-level || 'OFF' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
