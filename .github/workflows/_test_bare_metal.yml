@@ -1,0 +1,59 @@
+name: Test (Bare Metal)
+on:
+  workflow_call: # This is called by test.yml
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: [ macos-13, macos-12, macos-11, ubuntu-22.04, ubuntu-20.04, windows-latest ]
+        go-version: [ "1.21", "1.20", "1.19" ]
+        cgo-enabled: [ "0", "1" ] # test it compiles with and without cgo
+        go-tags:
+          - ''                      # Default behavior
+          - 'datadog.no_waf'        # Explicitly disabled WAF
+          - 'go1.22'                # Too recent go version (purego compatibility uncertain)
+          - 'datadog.no_waf,go1.22' # Explicitly disabled & too recent go version (purego compatibility uncertain)
+        include:
+          # gocheck2 is configured differently in go1.21 than in previous versions
+          - go-version: '1.21'
+            go-experiment: cgocheck2
+          - go-version: '1.20'
+            go-debug: cgocheck=2
+          - go-version: '1.19'
+            go-debug: cgocheck=2
+          # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go, without any particular tag)
+          - go-version: '1.21'
+            go-tags: ''
+            dd-appsec-waf-log-level: TRACE
+        exclude:
+          # Prune redundant checks (the go-next test needs only run once per platform)
+          - go-version: '1.20'
+            go-tags: go1.22
+          - go-version: '1.20'
+            go-tags: datadog.no_waf,go1.22
+          - go-version: '1.19'
+            go-tags: go1.22
+          - go-version: '1.19'
+            go-tags: datadog.no_waf,go1.22
+    name: ${{ matrix.runs-on }} go${{ matrix.go-version }} cgo=${{ matrix.cgo-enabled }} tags=${{ matrix.go-tags }}
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+      - name: go test
+        shell: bash
+        run: |-
+          gotestsum -- -v -count=10 -shuffle=on -tags='${{ matrix.go-tags }}' ./...
+        env:
+          CGO_ENABLED: ${{ matrix.cgo-enabled }}
+          DD_APPSEC_WAF_LOG_LEVEL: ${{ matrix.dd-appsec-waf-log-level }}
+          DD_APPSEC_WAF_TIMEOUT: 5s
+          GODEBUG: ${{ matrix.go-debug }}
+          GOEXPERIMENT: ${{ matrix.go-experiment }}
