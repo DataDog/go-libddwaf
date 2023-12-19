@@ -14,7 +14,10 @@ jobs:
           - ''                      # Default behavior
           - 'datadog.no_waf'        # Explicitly disabled WAF
           - 'go1.22'                # Too recent go version (purego compatibility uncertain)
+          - 'appsec'                # Legacy build tag to enable appsec when cgo is disabled
+          - 'appsec,datadog.no_waf' # An awkward combination that must nevertheless compile
           - 'datadog.no_waf,go1.22' # Explicitly disabled & too recent go version (purego compatibility uncertain)
+          - 'appsec,go1.22'         # Explicitly enabled w/o cgo & too recent go version (purego compatibility uncertain)
         include:
           # gocheck2 is configured differently in go1.21 than in previous versions
           - go-version: '1.21'
@@ -33,6 +36,11 @@ jobs:
             go-tags: go1.22
           - go-version: '1.19'
             go-tags: datadog.no_waf,go1.22
+          # Prune redundant checks (the appsec build tag is only relevant with cgo-enabled=0)
+          - cgo-enabled: 1
+            go-tags: "appsec"
+          - cgo-enabled: 1
+            go-tags: "appsec,go1.22"
     name: ${{ matrix.runs-on }} go${{ matrix.go-version }} ${{ matrix.cgo-enabled == '1' && 'CGO' || 'noCGO' }} tags=${{  matrix.go-tags != '' && matrix.go-tags || '∅'  }} waf-log-level=${{ matrix.dd-appsec-waf-log-level || 'OFF' }}
     runs-on: ${{ matrix.runs-on }}
     steps:
