@@ -3,7 +3,7 @@ module github.com/DataDog/go-libddwaf/v2
 go 1.19
 
 require (
-	github.com/ebitengine/purego v0.5.0
+	github.com/ebitengine/purego v0.5.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.4
