@@ -282,7 +282,7 @@ func (t target) embedSourceFilename() string {
 }
 
 func (t target) buildConstraintDirective() string {
-	return fmt.Sprintf("//go:build %s && %s && !%s && !datadog.no_waf", t.os, t.arch, goVersionUnsupported)
+	return fmt.Sprintf("//go:build %s && %s && !%s && !datadog.no_waf && (cgo || appsec)", t.os, t.arch, goVersionUnsupported)
 }
 
 func (t target) tempFilePatternStatement() string {
