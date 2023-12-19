@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/DataDog/go-libddwaf/v2/internal/lib"
+	"github.com/DataDog/go-libddwaf/v2/internal/log"
 	"github.com/ebitengine/purego"
 )
 
@@ -85,6 +86,15 @@ func newWafDl() (dl *wafDl, err error) {
 			err = fmt.Errorf("%w; along with an error while releasing the shared libddwaf library: %v", err, closeErr)
 		}
 		return
+	}
+
+	if val := os.Getenv(log.EnvVarLogLevel); val != "" {
+		setLogSym, symErr := purego.Dlsym(handle, "ddwaf_set_log_cb")
+		if symErr != nil {
+			return
+		}
+		logLevel := log.LevelNamed(val)
+		dl.syscall(setLogSym, log.CallbackFunctionPointer(), uintptr(logLevel))
 	}
 
 	return

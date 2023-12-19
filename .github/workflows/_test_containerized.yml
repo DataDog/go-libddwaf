@@ -34,6 +34,10 @@ jobs:
             go-debug: cgocheck=2
           - go-version: '1.19'
             go-debug: cgocheck=2
+          # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go, without any particular tag)
+          - go-version: '1.21'
+            go-tags: ''
+            dd-appsec-waf-log-level: TRACE
         exclude:
           # Prune redundant checks (the go-next test needs only run once per platform)
           - go-version: '1.20'
@@ -79,6 +83,8 @@ jobs:
             -v "$PWD:$PWD"                                                      \
             -w "$PWD"                                                           \
             -eCGO_ENABLED="${{ matrix.cgo-enabled }}"                           \
+            -eDD_APPSEC_WAF_LOG_FILTER="@ waf[.]cpp:" \
+            -eDD_APPSEC_WAF_LOG_LEVEL="${{ matrix.dd-appsec-waf-log-level }}"   \
             -eDD_APPSEC_WAF_TIMEOUT="5s"                                        \
             -eGODEBUG="${{ matrix.go-debug }}"                                  \
             -eGOEXPERIMENT="${{ matrix.go-experiment }}"                        \
