@@ -29,7 +29,7 @@ jobs:
           # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go, without any particular tag)
           - go-version: '1.21'
             go-tags: ''
-            dd-appsec-waf-log-level: TRACE
+            waf-log-level: TRACE
         exclude:
           # Prune redundant checks (the go-next test needs only run once per platform)
           - go-version: '1.20'
@@ -45,7 +45,7 @@ jobs:
             go-tags: "appsec"
           - cgo-enabled: 1
             go-tags: "appsec,go1.22"
-    name: ${{ matrix.runs-on }} go${{ matrix.go-version }} ${{ matrix.cgo-enabled == '1' && 'CGO' || 'noCGO' }} tags=${{  matrix.go-tags != '' && matrix.go-tags || '∅'  }} waf-log-level=${{ matrix.dd-appsec-waf-log-level || 'OFF' }}
+    name: ${{ matrix.runs-on }} go${{ matrix.go-version }} ${{ matrix.cgo-enabled == '1' && 'CGO' || 'noCGO' }} tags=${{  matrix.go-tags != '' && matrix.go-tags || '∅'  }} waf-log-level=${{ matrix.waf-log-level || 'OFF' }}
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v3
@@ -64,7 +64,7 @@ jobs:
           # libddwaf's DEBUG is pretty spammy, and higher log levels don't happen in normal operations... and log
           # overhead can make tests time out if we don't filter out DEBUG to reduce thrash!
           DD_APPSEC_WAF_LOG_FILTER: "@ waf[.]cpp:"
-          DD_APPSEC_WAF_LOG_LEVEL: ${{ matrix.dd-appsec-waf-log-level }}
+          DD_APPSEC_WAF_LOG_LEVEL: ${{ matrix.waf-log-level }}
           DD_APPSEC_WAF_TIMEOUT: 5s
           GODEBUG: ${{ matrix.go-debug }}
           GOEXPERIMENT: ${{ matrix.go-experiment }}
