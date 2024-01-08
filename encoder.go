@@ -120,7 +120,7 @@ func isValueNil(value reflect.Value) bool {
 }
 
 const (
-	measureOnlyDepth = 128
+	measureOnlyDepth = wafMaxContainerDepth
 )
 
 func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) (int, error) {
