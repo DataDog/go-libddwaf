@@ -109,13 +109,6 @@ type wafResult struct {
 	total_runtime uint64
 }
 
-type wafRulesetInfo struct {
-	loaded  uint16
-	failed  uint16
-	errors  wafObject
-	version uintptr // char *
-}
-
 // wafHandle is a forward declaration in ddwaf.h header
 // We basically don't need to modify it, only to give it to the waf
 type wafHandle uintptr
@@ -191,10 +184,6 @@ func ptrToUintptr[T any](arg *T) uintptr {
 
 func sliceToUintptr[T any](arg []T) uintptr {
 	return (*reflect.SliceHeader)(unsafe.Pointer(&arg)).Data
-}
-
-func stringToUintptr(arg string) uintptr {
-	return (*reflect.StringHeader)(unsafe.Pointer(&arg)).Data
 }
 
 // keepAlive() globals
