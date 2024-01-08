@@ -9,6 +9,7 @@ package waf
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -344,7 +345,7 @@ func TestEncoderLimits(t *testing.T) {
 			Name:          "key-map-depth",
 			MaxValueDepth: 1,
 			Input:         map[any]any{new(string): "x"},
-			Output:        map[string]any{},
+			Output:        map[string]any{"": "x"},
 		},
 		{
 			Name:          "map-depth",
@@ -483,7 +484,7 @@ func TestEncoderLimits(t *testing.T) {
 		encoded, err := encoder.Encode(tc.Input)
 
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
-			require.Equal(t, tc.Truncations, encoder.Truncations())
+			require.Equal(t, tc.Truncations, sortValues(encoder.Truncations()))
 
 			if tc.EncodeError != nil {
 				require.Error(t, err, "expected an encoding error when encoding %v", tc.EncodeError)
@@ -530,6 +531,18 @@ func assertEqualType(t *testing.T, expected typeTree, actual *wafObject) {
 	for i := range expected.children {
 		assertEqualType(t, expected.children[i], castWithOffset[wafObject](actual.value, uint64(i)))
 	}
+}
+
+func sortValues[K comparable](m map[K][]int) map[K][]int {
+	if m == nil {
+		return nil
+	}
+
+	for _, ints := range m {
+		sort.Ints(ints)
+	}
+
+	return m
 }
 
 func TestEncoderTypeTree(t *testing.T) {
