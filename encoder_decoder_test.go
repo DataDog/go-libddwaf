@@ -316,6 +316,7 @@ func TestEncoderLimits(t *testing.T) {
 		MaxValueDepth      any
 		MaxContainerLength any
 		MaxStringLength    any
+		Truncations        map[TruncationReason][]int
 		EncodeError        error
 		DecodeError        error
 	}{
@@ -324,6 +325,7 @@ func TestEncoderLimits(t *testing.T) {
 			MaxValueDepth: 1,
 			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
 			Output:        []any{uint64(1), uint64(2), uint64(3), uint64(4)},
+			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
 		},
 		{
 			Name:          "array-depth",
@@ -336,6 +338,7 @@ func TestEncoderLimits(t *testing.T) {
 			MaxValueDepth: 0,
 			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
 			EncodeError:   errMaxDepthExceeded,
+			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
 		},
 		{
 			Name:          "key-map-depth",
@@ -348,6 +351,7 @@ func TestEncoderLimits(t *testing.T) {
 			MaxValueDepth: 1,
 			Input:         map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
 			Output:        map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": nil},
+			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
 			DecodeError:   errUnsupportedValue,
 		},
 		{
@@ -361,12 +365,14 @@ func TestEncoderLimits(t *testing.T) {
 			MaxValueDepth: 0,
 			Input:         map[string]any{},
 			EncodeError:   errMaxDepthExceeded,
+			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {1}},
 		},
 		{
 			Name:          "struct-depth",
 			MaxValueDepth: 0,
 			Input:         struct{}{},
 			EncodeError:   errMaxDepthExceeded,
+			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {1}},
 		},
 		{
 			Name:          "struct-depth",
@@ -379,6 +385,7 @@ func TestEncoderLimits(t *testing.T) {
 				"F0": "F0",
 				"F1": nil,
 			},
+			Truncations: map[TruncationReason][]int{ObjectTooDeep: {2}},
 			DecodeError: errUnsupportedValue,
 		},
 		{
@@ -392,6 +399,7 @@ func TestEncoderLimits(t *testing.T) {
 				"F0": "F0",
 				"F1": nil,
 			},
+			Truncations: map[TruncationReason][]int{ObjectTooDeep: {2}},
 			DecodeError: errUnsupportedValue,
 		},
 		{
@@ -399,18 +407,21 @@ func TestEncoderLimits(t *testing.T) {
 			MaxContainerLength: 3,
 			Input:              []any{uint64(1), uint64(2), uint64(3), uint64(4), uint64(5)},
 			Output:             []any{uint64(1), uint64(2), uint64(3)},
+			Truncations:        map[TruncationReason][]int{ContainerTooLarge: {5}},
 		},
 		{
 			Name:               "array-max-length-with-invalid",
 			MaxContainerLength: 3,
 			Input:              []any{make(chan any), uint64(1), uint64(2), uint64(3), uint64(4), uint64(5)},
 			Output:             []any{uint64(1), uint64(2), uint64(3)},
+			Truncations:        map[TruncationReason][]int{ContainerTooLarge: {6}},
 		},
 		{
 			Name:               "array-max-length-with-invalid",
 			MaxContainerLength: 3,
 			Input:              []any{uint64(1), uint64(2), uint64(3), uint64(4), uint64(5), make(chan any)},
 			Output:             []any{uint64(1), uint64(2), uint64(3)},
+			Truncations:        map[TruncationReason][]int{ContainerTooLarge: {6}},
 		},
 		{
 			Name:               "struct-max-length",
@@ -420,9 +431,9 @@ func TestEncoderLimits(t *testing.T) {
 				F1 string
 				F2 string
 			}{F0: "", F1: "", F2: ""},
-			Output: map[string]any{"F0": "", "F1": ""},
+			Output:      map[string]any{"F0": "", "F1": ""},
+			Truncations: map[TruncationReason][]int{ContainerTooLarge: {3}},
 		},
-
 		{
 			Name:               "struct-max-length-with-invalid",
 			MaxContainerLength: 2,
@@ -431,19 +442,24 @@ func TestEncoderLimits(t *testing.T) {
 				F1 string
 				F2 chan any
 			}{F0: "", F1: "", F2: make(chan any)},
-			Output: map[string]any{"F0": "", "F1": ""},
+			Output:      map[string]any{"F0": "", "F1": ""},
+			Truncations: map[TruncationReason][]int{ContainerTooLarge: {3}},
 		},
 		{
 			Name:            "string-max-length",
 			MaxStringLength: 3,
 			Input:           "123456789",
 			Output:          "123",
+			Truncations:     map[TruncationReason][]int{StringTooLong: {9}},
 		},
 		{
 			Name:            "string-max-length-truncation-leading-to-same-map-keys",
 			MaxStringLength: 1,
-			Input:           map[string]string{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": "v5"},
+			Input:           map[string]string{"k1": "v11", "k222": "v2222", "k33333": "v333333", "k4444444": "v44444444", "k555555555": "v5555555555"},
 			Output:          map[string]any{"k": "v"},
+			Truncations: map[TruncationReason][]int{
+				StringTooLong: {2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+			},
 		},
 	} {
 		maxValueDepth := 99999
@@ -467,6 +483,8 @@ func TestEncoderLimits(t *testing.T) {
 		encoded, err := encoder.Encode(tc.Input)
 
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
+			require.Equal(t, tc.Truncations, encoder.Truncations())
+
 			if tc.EncodeError != nil {
 				require.Error(t, err, "expected an encoding error when encoding %v", tc.EncodeError)
 				require.Equal(t, tc.EncodeError, err)
