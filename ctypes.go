@@ -20,27 +20,27 @@ const (
 type wafReturnCode int32
 
 const (
-	wafErrInternal        wafReturnCode = -3
-	wafErrInvalidObject                 = -2
-	wafErrInvalidArgument               = -1
-	wafOK                               = 0
-	wafMatch                            = 1
+	wafErrInternal wafReturnCode = iota - 3
+	wafErrInvalidObject
+	wafErrInvalidArgument
+	wafOK
+	wafMatch
 )
 
 // wafObjectType is an enum in C which has the size of DWORD.
 // But DWORD is 4 bytes in amd64 and arm64 so uint32 it is.
 type wafObjectType uint32
 
+const wafInvalidType wafObjectType = 0
 const (
-	wafInvalidType wafObjectType = 0
-	wafIntType                   = 1 << 0
-	wafUintType                  = 1 << 1
-	wafStringType                = 1 << 2
-	wafArrayType                 = 1 << 3
-	wafMapType                   = 1 << 4
-	wafBoolType                  = 1 << 5
-	wafFloatType                 = 1 << 6
-	wafNilType                   = 1 << 7
+	wafIntType wafObjectType = 1 << iota
+	wafUintType
+	wafStringType
+	wafArrayType
+	wafMapType
+	wafBoolType
+	wafFloatType
+	wafNilType
 )
 
 type wafObject struct {
