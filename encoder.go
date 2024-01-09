@@ -126,13 +126,17 @@ const (
 func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) (int, error) {
 	kind := value.Kind()
 
-	for value.IsValid() && (kind == reflect.Interface || kind == reflect.Pointer) && !value.IsNil() {
-		// 		Pointer and interfaces are not taken into account, we only recurse on them
+	// Pointer and interfaces are not taken into account, we only recurse on them, but limit to 8 indirections
+	for limit := 8; limit >= 0 && value.IsValid() && (kind == reflect.Interface || kind == reflect.Pointer) && !value.IsNil(); limit-- {
 		value = value.Elem()
 		kind = value.Kind()
 	}
 
 	maxDepth := encoder.objectMaxDepth - depth
+	if kind == reflect.Interface || kind == reflect.Pointer {
+		// The pointer indirected more than 8 times, it might be circular.
+		return maxDepth, errMaxDepthExceeded
+	}
 
 	switch {
 	// Terminal cases (leaves of the tree)
