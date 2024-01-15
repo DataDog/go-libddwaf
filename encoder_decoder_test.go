@@ -8,6 +8,7 @@
 package waf
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"testing"
@@ -309,6 +310,8 @@ func TestEncodeDecode(t *testing.T) {
 }
 
 func TestEncoderLimits(t *testing.T) {
+	var selfPointer any
+	selfPointer = &selfPointer // This now points to itself!
 
 	for _, tc := range []struct {
 		Name               string
@@ -461,6 +464,16 @@ func TestEncoderLimits(t *testing.T) {
 			Truncations: map[TruncationReason][]int{
 				StringTooLong: {2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
 			},
+		},
+		{
+			Name:   "self-recursive-map-key",
+			Input:  map[any]any{selfPointer: ":bomb:"},
+			Output: map[string]any{},
+		},
+		{
+			Name:        "self-recursive-map-value",
+			Input:       map[string]any{"bomb": selfPointer},
+			DecodeError: errUnsupportedValue,
 		},
 	} {
 		maxValueDepth := 99999
@@ -761,5 +774,40 @@ func TestDecoder(t *testing.T) {
 
 		keepAlive(e.cgoRefs.arrayRefs)
 		keepAlive(e.cgoRefs.stringRefs)
+	})
+}
+
+func TestResolvePointer(t *testing.T) {
+	t.Run("is nil-safe", func(t *testing.T) {
+		val := reflect.ValueOf((*string)(nil))
+		res, kind := resolvePointer(val)
+		require.Equal(t, reflect.Pointer, kind)
+		require.Equal(t, val, res)
+	})
+
+	t.Run("is safe with recursive pointers", func(t *testing.T) {
+		var s any
+		s = &s // Now s points to itself!
+
+		res, kind := resolvePointer(reflect.ValueOf(s))
+		require.True(t, kind == reflect.Pointer || kind == reflect.Interface)
+		require.True(t, res == reflect.ValueOf(s) || res == reflect.ValueOf(s).Elem())
+	})
+}
+
+func TestDepthOf(t *testing.T) {
+	t.Run("is safe with self-referecing structs", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		defer cancel()
+
+		type selfReferencing struct {
+			Array []any
+		}
+		obj := selfReferencing{Array: make([]any, 1)}
+		obj.Array[0] = &obj // Obj now has a field that indirectly references itself
+
+		depth, err := depthOf(ctx, reflect.ValueOf(obj))
+		require.Greater(t, depth, 0)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
 	})
 }
