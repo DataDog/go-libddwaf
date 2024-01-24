@@ -16,7 +16,7 @@ jobs:
           # RPM-based image
           - amazonlinux:2 # pretty popular on AWS workloads
         arch: [ amd64 ] # arm64 is manually included until github provides runners and to avoid long qemu exec times
-        go-version: [ "1.22rc", "1.21", "1.20", "1.19" ]
+        go-version: [ "1.22rc1", "1.21", "1.20", "1.19" ]
         cgo-enabled: [ "0", "1" ] # test it compiles with and without cgo
         go-tags:
           - ''                      # Default behavior
@@ -39,8 +39,9 @@ jobs:
             go-tags: ''
             waf-log-level: TRACE
             waf-timeout: 30s # Increase the timeout (especially in QEMU emulated modes)
+          # Test arm64 on a subset of the matrix for now to make it quicker to run due to qemu
           - arch: arm64
-            image: golang:alpine
+            image: golang:{0}-alpine
 
         exclude:
           # Prune redundant checks (the go-next test needs only run once per platform)
