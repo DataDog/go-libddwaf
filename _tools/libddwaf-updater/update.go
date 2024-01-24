@@ -31,7 +31,7 @@ var (
 )
 
 const (
-	goVersionUnsupported = "go1.22"
+	goVersionUnsupported = "go1.23"
 )
 
 func main() {
