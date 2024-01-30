@@ -8,7 +8,7 @@ jobs:
       fail-fast: false
       matrix:
         runs-on: [ macos-13, macos-12, macos-11, ubuntu-22.04, ubuntu-20.04, windows-latest ]
-        go-version: [ "1.22-rc.2", "1.21", "1.20" ]
+        go-version: [ "1.22-rc.1", "1.21", "1.20" ]
         cgo-enabled: [ "0", "1" ] # test it compiles with and without cgo
         go-tags:
           - ''                      # Default behavior
@@ -22,7 +22,7 @@ jobs:
           # gocheck2 is configured differently in go1.21 than in previous versions
           - go-version: '1.21'
             go-experiment: cgocheck2
-          - go-version: '1.22-rc.2'
+          - go-version: '1.22-rc.1'
             go-experiment: cgocheck2
           - go-version: '1.20'
             go-debug: cgocheck=2
