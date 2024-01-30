@@ -15,7 +15,7 @@ jobs:
           - golang:{0}-buster
           # RPM-based image
           - amazonlinux:2 # pretty popular on AWS workloads
-        arch: [ amd64, arm64 ] # arm64 is manually included until github provides runners and to avoid long qemu exec times
+        arch: [ amd64, arm64 ]
         go-version: [ "1.22rc2", "1.21", "1.20" ]
         cgo-enabled: [ "0", "1" ] # test it compiles with and without cgo
         go-tags:
@@ -74,7 +74,7 @@ jobs:
     name: ${{ toJSON(matrix) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/cache@v3
         with:
           path: ~/go/pkg/mod

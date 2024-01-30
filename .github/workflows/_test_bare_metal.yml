@@ -45,11 +45,11 @@ jobs:
             go-tags: "appsec"
           - cgo-enabled: 1
             go-tags: "appsec,go1.23"
-    name: ${{ matrix.runs-on }} go${{ matrix.go-version }} ${{ matrix.cgo-enabled == '1' && 'CGO' || 'noCGO' }} tags=${{  matrix.go-tags != '' && matrix.go-tags || '∅'  }} waf-log-level=${{ matrix.waf-log-level || 'OFF' }}
+    name: ${{ toJSON(matrix) }}
     runs-on: ${{ matrix.runs-on }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
