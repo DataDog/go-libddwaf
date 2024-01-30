@@ -16,7 +16,7 @@ jobs:
           # RPM-based image
           - amazonlinux:2 # pretty popular on AWS workloads
         arch: [ amd64, arm64 ] # arm64 is manually included until github provides runners and to avoid long qemu exec times
-        go-version: [ "1.22rc1", "1.21", "1.20" ]
+        go-version: [ "1.22rc2", "1.21", "1.20" ]
         cgo-enabled: [ "0", "1" ] # test it compiles with and without cgo
         go-tags:
           - ''                      # Default behavior
@@ -30,12 +30,12 @@ jobs:
           # gocheck2 is configured differently in go1.21 than in previous versions
           - go-version: '1.21'
             go-experiment: cgocheck2
-          - go-version: '1.22'
+          - go-version: '1.22rc2'
             go-experiment: cgocheck2
           - go-version: '1.20'
             go-debug: cgocheck=2
           # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go, without any particular tag)
-          - go-version: '1.21'
+          - go-version: '1.22rc2'
             go-tags: ''
             waf-log-level: TRACE
             waf-timeout: 30s # Increase the timeout (especially in QEMU emulated modes)
@@ -64,12 +64,12 @@ jobs:
           - go-version: '1.21'
             image: golang:{0}-buster
            # Prune inexistant build images (debian buster is on LTS but won't get new go version images)
-          - go-version: '1.22rc1'
+          - go-version: '1.22rc2'
             image: golang:{0}-buster
           # The amazonlinux:2 variant is only relevant for the default go version yum ships (currently 1.20)
           - go-version: '1.21'
             image: amazonlinux:2
-          - go-version: '1.22'
+          - go-version: '1.22rc2'
             image: amazonlinux:2
     name: ${{ toJSON(matrix) }}
     runs-on: ubuntu-latest
