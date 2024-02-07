@@ -64,21 +64,16 @@ func newMaxEncoder() encoder {
 // The returned wafObject is the root of the tree of nested wafObjects representing the Go value.
 // The only error case is if the top-level object is "Unusable" which means that the data is nil or a non-data type
 // like a function or a channel.
-func (encoder *encoder) Encode(data any) (*wafObject, error) {
+func (encoder *encoder) Encode(data any) (wo *wafObject, err error) {
 	value := reflect.ValueOf(data)
-	wo := &wafObject{}
+	wo = &wafObject{}
 
-	defer func() {
-		if encoder.truncations[ObjectTooDeep] != nil {
-			encoder.measureObjectDepth(value)
-		}
-	}()
-
-	if err := encoder.encode(value, wo, encoder.objectMaxDepth); err != nil {
-		return nil, err
+	err = encoder.encode(value, wo, encoder.objectMaxDepth)
+	if len(encoder.truncations[ObjectTooDeep]) != 0 {
+		encoder.measureObjectDepth(value)
 	}
 
-	return wo, nil
+	return
 }
 
 // Truncations returns all truncations that happened since the last call to `Truncations()`, and clears the internal
@@ -134,13 +129,14 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) e
 		return errTooManyIndirections
 	}
 
+	// Measure-only runs for leaves
+	if obj == nil && kind != reflect.Array && kind != reflect.Slice && kind != reflect.Map && kind != reflect.Struct {
+		// Nothing to do, we were only here to measure object depth!
+		return nil
+	}
+
 	switch {
 	// Terminal cases (leaves of the tree)
-
-	//		Measure-only runs for leaves
-	case obj == nil && kind != reflect.Array && kind != reflect.Slice && kind != reflect.Map && kind != reflect.Struct:
-		// Nothing to do, we were only here to measure object depth!
-
 	//		Is invalid type: nil interfaces for example, cannot be used to run any reflect method or it's susceptible to panic
 	case !value.IsValid() || kind == reflect.Invalid:
 		return errUnsupportedValue
@@ -170,7 +166,7 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) e
 
 	// 		All recursive cases can only execute if the depth is superior to 0.
 	case depth <= 0:
-		// Record that there was a truncation, the measuring will happen separately.
+		// Record that there was a truncation; we will try to measure the actual depth of the object afterwards.
 		encoder.addTruncation(ObjectTooDeep, -1)
 		return errMaxDepthExceeded
 
@@ -250,7 +246,7 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *wafObject, depth 
 
 		objElem := &objArray[length]
 		// If the Map key is of unsupported type, skip it
-		encoder.encodeMapKey(fieldName, objElem)
+		encoder.encodeMapKeyFromString(fieldName, objElem)
 
 		if err := encoder.encode(value.Field(i), objElem, depth); err != nil {
 			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
@@ -284,7 +280,7 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int
 		}
 
 		objElem := &objArray[length]
-		if err := encoder.encodeMapKeyFromValue(iter.Key(), objElem); err != nil {
+		if err := encoder.encodeMapKey(iter.Key(), objElem); err != nil {
 			continue
 		}
 
@@ -300,10 +296,10 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *wafObject, depth int
 	obj.nbEntries = uint64(length)
 }
 
-// encodeMapKeyFromValue takes a reflect.Value and a wafObject and returns a wafObject ready to be considered a map key
-// We use the function cgoRefPool.AllocWafMapKey to store the key in the wafObject. But first we need
-// to grab the real underlying value by recursing through the pointer and interface values.
-func (encoder *encoder) encodeMapKeyFromValue(value reflect.Value, obj *wafObject) error {
+// encodeMapKey takes a reflect.Value and a wafObject and returns a wafObject ready to be considered a map entry. We use
+// the function cgoRefPool.AllocWafMapKey to store the key in the wafObject. But first we need to grab the real
+// underlying value by recursing through the pointer and interface values.
+func (encoder *encoder) encodeMapKey(value reflect.Value, obj *wafObject) error {
 	value, kind := resolvePointer(value)
 
 	var keyStr string
@@ -318,13 +314,13 @@ func (encoder *encoder) encodeMapKeyFromValue(value reflect.Value, obj *wafObjec
 		return errInvalidMapKey
 	}
 
-	encoder.encodeMapKey(keyStr, obj)
+	encoder.encodeMapKeyFromString(keyStr, obj)
 	return nil
 }
 
-// encodeMapKey takes a string and a wafObject and sets the map key attribute on the wafObject to the supplied string.
-// The key may be truncated if it exceeds the maximum string size allowed by the encoder.
-func (encoder *encoder) encodeMapKey(keyStr string, obj *wafObject) {
+// encodeMapKeyFromString takes a string and a wafObject and sets the map key attribute on the wafObject to the supplied
+// string. The key may be truncated if it exceeds the maximum string size allowed by the encoder.
+func (encoder *encoder) encodeMapKeyFromString(keyStr string, obj *wafObject) {
 	size := len(keyStr)
 	if size > encoder.stringMaxSize {
 		keyStr = keyStr[:encoder.stringMaxSize]
@@ -394,58 +390,48 @@ func (encoder *encoder) measureObjectDepth(obj reflect.Value) {
 
 // depthOf returns the depth of the provided object. This is 0 for scalar values,
 // such as strings.
-func depthOf(ctx context.Context, obj reflect.Value) (int, error) {
-	if err := ctx.Err(); err != nil {
+func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
+	if err = ctx.Err(); err != nil {
 		// Timed out, won't go any deeper
 		return 0, err
 	}
 
 	obj, kind := resolvePointer(obj)
 
+	//TODO: Remove this once Go 1.21 is the minimum supported version (it adds `builtin.max`)
+	max := func(x, y int) int {
+		if x > y {
+			return x
+		}
+		return y
+	}
+
+	var itemDepth int
 	switch kind {
 	case reflect.Array, reflect.Slice:
 		if obj.Type() == reflect.TypeOf([]byte(nil)) {
 			// We treat byte slices as strings
 			return 0, nil
 		}
-		maxItemDepth := 0
-		var (
-			itemDepth int
-			err       error
-		)
 		for i := 0; i < obj.Len(); i++ {
 			itemDepth, err = depthOf(ctx, obj.Index(i))
-			if itemDepth > maxItemDepth {
-				maxItemDepth = itemDepth
-			}
+			depth = max(depth, itemDepth)
 			if err != nil {
 				break
 			}
 		}
-		return maxItemDepth + 1, err
+		return depth + 1, err
 	case reflect.Map:
-		maxValueDepth := 0
-		var (
-			valueDepth int
-			err        error
-		)
 		for iter := obj.MapRange(); iter.Next(); {
-			valueDepth, err = depthOf(ctx, iter.Value())
-			if valueDepth > maxValueDepth {
-				maxValueDepth = valueDepth
-			}
+			itemDepth, err = depthOf(ctx, iter.Value())
+			depth = max(depth, itemDepth)
 			if err != nil {
 				break
 			}
 		}
-		return maxValueDepth + 1, err
+		return depth + 1, err
 	case reflect.Struct:
-		maxFieldDepth := 0
 		typ := obj.Type()
-		var (
-			fieldDepth int
-			err        error
-		)
 		for i := 0; i < obj.NumField(); i++ {
 			fieldType := typ.Field(i)
 			_, usable := getFieldNameFromType(fieldType)
@@ -453,15 +439,13 @@ func depthOf(ctx context.Context, obj reflect.Value) (int, error) {
 				continue
 			}
 
-			fieldDepth, err = depthOf(ctx, obj.Field(i))
-			if fieldDepth > maxFieldDepth {
-				maxFieldDepth = fieldDepth
-			}
+			itemDepth, err = depthOf(ctx, obj.Field(i))
+			depth = max(depth, itemDepth)
 			if err != nil {
 				break
 			}
 		}
-		return maxFieldDepth + 1, err
+		return depth + 1, err
 	default:
 		return 0, nil
 	}
