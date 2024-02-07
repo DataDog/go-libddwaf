@@ -35,7 +35,11 @@ const (
 )
 
 func main() {
-	force := os.Args[1] == "--force"
+	force := false 
+	
+	if len(os.Args) >= 2 {
+		force = os.Args[1] == "--force"
+	}
 
 	gh := github.NewClient(nil)
 
