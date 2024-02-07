@@ -80,11 +80,12 @@ type Result struct {
 
 // Encoder/Decoder errors
 var (
-	errMaxDepthExceeded  = errors.New("max depth exceeded")
-	errUnsupportedValue  = errors.New("unsupported Go value")
-	errInvalidMapKey     = errors.New("invalid WAF object map key")
-	errNilObjectPtr      = errors.New("nil WAF object pointer")
-	errInvalidObjectType = errors.New("invalid type encountered when decoding")
+	errMaxDepthExceeded    = errors.New("max depth exceeded")
+	errUnsupportedValue    = errors.New("unsupported Go value")
+	errInvalidMapKey       = errors.New("invalid WAF object map key")
+	errNilObjectPtr        = errors.New("nil WAF object pointer")
+	errInvalidObjectType   = errors.New("invalid type encountered when decoding")
+	errTooManyIndirections = errors.New("too many indirections")
 )
 
 // RunError the WAF can return when running it.
