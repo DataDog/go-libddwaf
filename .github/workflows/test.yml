@@ -21,7 +21,7 @@ jobs:
     uses: DataDog/dd-trace-go/.github/workflows/smoke-tests.yml@main
     with:
       ref: main
-      go-libddwaf-ref: ${{ inputs.ref || github.sha }}
+      go-libddwaf-ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
   # A simple join target to simplify setting up branch protection settings in GH.
   done:
