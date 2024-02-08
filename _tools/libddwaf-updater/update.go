@@ -35,8 +35,8 @@ const (
 )
 
 func main() {
-	force := false 
-	
+	force := false
+
 	if len(os.Args) >= 2 {
 		force = os.Args[1] == "--force"
 	}
@@ -193,7 +193,7 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, assets map[str
 			if !tgt.primary {
 				continue
 			}
-			destPath = path.Join(rootDir, "include", name)
+			destPath = path.Join(rootDir, "internal", "log", name)
 			foundHdr = true
 		default:
 			continue
