@@ -1,6 +1,10 @@
 name: Test
 on:
   workflow_dispatch: # manually
+    inputs:
+      ref:
+        description: 'The branch or tag to test'
+        default: 'main'
   schedule: # nightly
     - cron: "0 0 * * *"
   pull_request: # on pull requests touching appsec files
@@ -13,6 +17,11 @@ jobs:
     uses: ./.github/workflows/_test_bare_metal.yml
   containerized:
     uses: ./.github/workflows/_test_containerized.yml
+  smoke-tests:
+    uses: DataDog/dd-trace-go/.github/workflows/smoke-tests.yml@main
+    with:
+      ref: main
+      go-libddwaf-ref: ${{ inputs.ref || github.ref }}
 
   # A simple join target to simplify setting up branch protection settings in GH.
   done:
@@ -21,6 +30,7 @@ jobs:
     needs:
       - bare-metal
       - containerized
+      - smoke-tests
     steps:
       - name: Done
         run: echo "Done!"
