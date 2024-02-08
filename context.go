@@ -70,6 +70,7 @@ func (d RunAddressData) isEmpty() bool {
 // matches as a JSON string (usually opaquely used) along with the corresponding actions in any. In case of an error,
 // matches and actions can still be returned, for instance in the case of a timeout error. Errors can be tested against
 // the RunError type.
+// Struct fields having the tag `ddwaf:ignore` will not be encoded and sent to the WAF
 func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (res Result, err error) {
 	if addressData.isEmpty() {
 		return

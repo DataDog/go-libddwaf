@@ -40,6 +40,11 @@ const (
 	ObjectTooDeep
 )
 
+const (
+	AppsecFieldTag            = "ddwaf"
+	AppsecFieldTagValueIgnore = "ignore"
+)
+
 type native interface {
 	int64 | uint64 | uintptr
 }
@@ -159,8 +164,11 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) e
 	//		Strings
 	case kind == reflect.String: // string type
 		encoder.encodeString(value.String(), obj)
-	case value.Type() == reflect.TypeOf([]byte(nil)): // byte array -> string
-		encoder.encodeString(string(value.Bytes()), obj)
+
+	case value.Type() == reflect.TypeOf([]byte(nil)):
+		// Byte Arrays are skipped voluntarily because they are often used
+		// to do partial parsing which leads to false positives
+		return nil
 
 	// Containers (internal nodes of the tree)
 
@@ -240,7 +248,9 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *wafObject, depth 
 
 		fieldType := typ.Field(i)
 		fieldName, usable := getFieldNameFromType(fieldType)
-		if !usable {
+		if tag, ok := fieldType.Tag.Lookup(AppsecFieldTag); !usable || ok && tag == AppsecFieldTagValueIgnore {
+			// Either the struct field is ignored by json marshaling so can we,
+			// 		or the field was explicitly set with `ddwaf:ignore`
 			continue
 		}
 

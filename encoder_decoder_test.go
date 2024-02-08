@@ -128,9 +128,9 @@ func TestEncodeDecode(t *testing.T) {
 			Input: "hello, waf",
 		},
 		{
-			Name:   "byte-slice",
-			Input:  []byte("hello, waf"),
-			Output: "hello, waf",
+			Name:        "byte-slice",
+			Input:       []byte("hello, waf"),
+			DecodeError: errUnsupportedValue,
 		},
 		{
 			Name:   "nil-byte-slice",
@@ -254,6 +254,23 @@ func TestEncodeDecode(t *testing.T) {
 			},
 		},
 		{
+			Name: "struct-with-ignored-values",
+			Input: struct {
+				Public  string `ddwaf:"ignore"`
+				private string
+				a       string
+				A       string
+			}{
+				Public:  "Public",
+				private: "private",
+				a:       "a",
+				A:       "A",
+			},
+			Output: map[string]any{
+				"A": "A",
+			},
+		},
+		{
 			Name: "struct-with-unsupported-values",
 			Input: struct {
 				Public  string
@@ -267,6 +284,19 @@ func TestEncodeDecode(t *testing.T) {
 				A:       make(chan any),
 			},
 			DecodeError: errUnsupportedValue,
+		},
+		{
+			Name: "struct-with-unsupported-ignored-values",
+			Input: struct {
+				Public string
+				A      chan any `ddwaf:"ignore"`
+			}{
+				Public: "Public",
+				A:      make(chan any),
+			},
+			Output: map[string]any{
+				"Public": "Public",
+			},
 		},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
