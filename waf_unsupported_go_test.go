@@ -8,6 +8,7 @@
 package waf_test
 
 import (
+	"runtime"
 	"testing"
 
 	waf "github.com/DataDog/go-libddwaf/v2"
@@ -19,7 +20,7 @@ func TestUnsupportedGoRuntime(t *testing.T) {
 		supported, err := waf.SupportsTarget()
 		require.False(t, supported)
 		require.Error(t, err)
-		require.ErrorIs(t, err, waf.UnsupportedGoVersionError{})
+		require.ErrorIs(t, err, waf.UnsupportedGoVersionError{runtime.Version()})
 	})
 
 	t.Run("TestLoad", func(t *testing.T) {

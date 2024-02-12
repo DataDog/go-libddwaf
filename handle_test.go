@@ -3,6 +3,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
+//go:build (amd64 || arm64) && (linux || darwin) && !go1.23 && !datadog.no_waf && (cgo || appsec)
+
 package waf
 
 import (
