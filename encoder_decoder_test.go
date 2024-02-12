@@ -9,6 +9,7 @@ package waf
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"sort"
 	"testing"
@@ -130,6 +131,11 @@ func TestEncodeDecode(t *testing.T) {
 		{
 			Name:        "byte-slice",
 			Input:       []byte("hello, waf"),
+			DecodeError: errUnsupportedValue,
+		},
+		{
+			Name:        "json-raw",
+			Input:       json.RawMessage("hello, waf"),
 			DecodeError: errUnsupportedValue,
 		},
 		{
@@ -260,11 +266,13 @@ func TestEncodeDecode(t *testing.T) {
 				private string
 				a       string
 				A       string
+				partial json.RawMessage
 			}{
 				Public:  "Public",
 				private: "private",
 				a:       "a",
 				A:       "A",
+				partial: json.RawMessage("test"),
 			},
 			Output: map[string]any{
 				"A": "A",
