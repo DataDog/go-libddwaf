@@ -165,7 +165,7 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafObject, depth int) e
 	case kind == reflect.String: // string type
 		encoder.encodeString(value.String(), obj)
 
-	case value.Type() == reflect.TypeOf([]byte(nil)):
+	case (kind == reflect.Array || kind == reflect.Slice) && value.Type().Elem().Kind() == reflect.Uint8:
 		// Byte Arrays are skipped voluntarily because they are often used
 		// to do partial parsing which leads to false positives
 		return nil
