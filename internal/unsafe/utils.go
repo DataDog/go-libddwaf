@@ -46,6 +46,14 @@ func Cast[T any](ptr uintptr) *T {
 	return (*T)(*(*stdUnsafe.Pointer)(stdUnsafe.Pointer(&ptr)))
 }
 
+type Native interface {
+	~byte | ~float64 | ~float32 | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~bool | ~uintptr
+}
+
+func CastNative[N Native, T Native](ptr *N) *T {
+	return (*T)(*(*stdUnsafe.Pointer)(stdUnsafe.Pointer(&ptr)))
+}
+
 // NativeToUintptr is a helper used by populate WafObject values
 // with Go values
 func NativeToUintptr[T any](x T) uintptr {

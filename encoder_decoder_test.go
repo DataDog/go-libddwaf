@@ -140,7 +140,7 @@ func TestEncodeDecode(t *testing.T) {
 		{
 			Name:        "json-raw",
 			Input:       json.RawMessage("hello, waf"),
-			DecodeError: errUnsupportedValue,
+			DecodeError: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:   "nil-byte-slice",
