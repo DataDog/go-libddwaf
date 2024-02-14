@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/DataDog/go-libddwaf/v2/internal/noopfree"
 	"go.uber.org/atomic"
 )
 
@@ -203,7 +202,7 @@ func newConfig(cgoRefs *cgoRefPool, keyObfuscatorRegex string, valueObfuscatorRe
 			valueRegex: cgoRefs.AllocCString(valueObfuscatorRegex),
 		},
 		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
-		freeFn: noopfree.NoopFreeFn,
+		freeFn: 0,
 	}
 	return config
 }
