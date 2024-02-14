@@ -6,41 +6,18 @@
 package bindings
 
 import (
-	"fmt"
+	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
 	"reflect"
 	"runtime"
 
 	"github.com/pkg/errors"
 )
 
-// PanicError is an error type wrapping a recovered panic value that happened
-// during a function call. Such error must be considered unrecoverable and be
-// used to try to gracefully abort. Keeping using this package after such an
-// error is unreliable and the caller must rather stop using the library.
-// Examples include safety checks errors.
-type PanicError struct {
-	// The recovered panic error while executing the function `in`.
-	Err error
-	// The function symbol name that was given to `tryCall()`.
-	in string
-}
-
-func newPanicError(in func() error, err error) *PanicError {
-	return &PanicError{
-		in:  runtime.FuncForPC(reflect.ValueOf(in).Pointer()).Name(),
+func newPanicError(in func() error, err error) *wafErrors.PanicError {
+	return &wafErrors.PanicError{
+		In:  runtime.FuncForPC(reflect.ValueOf(in).Pointer()).Name(),
 		Err: err,
 	}
-}
-
-// Unwrap the error and return it.
-// Required by errors.Is and errors.As functions.
-func (e *PanicError) Unwrap() error {
-	return e.Err
-}
-
-// Error returns the error string representation.
-func (e *PanicError) Error() string {
-	return fmt.Sprintf("panic while executing %s: %#+v", e.in, e.Err)
 }
 
 // tryCall calls function `f` and recovers from any panic occurring while it
