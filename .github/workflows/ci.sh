@@ -9,11 +9,13 @@ eval $(go env)
 
 case $GOVERSION in
     *1.20*|*1.19* )
-        export GODEBUG=cgocheck=2
+        CGOCHECK="GODEBUG=cgocheck=2"
         ;;
     *)
-        export GOEXPERIMENT=cgocheck2
+        CGOCHECK="GOEXPERIMENT=cgocheck2"
 esac
+
+GOTESTSUM_COMMAND="go run gotest.tools/gotestsum@v1.11.0 -- -shuffle=on -v"
 
 # Return true if the current OS is not Windows
 WAF_ENABLED=$([ "$GOOS" = "windows" ] && echo false || echo true)
@@ -29,13 +31,17 @@ run() {
     test_tags="$2,$GOOS,$GOARCH"
     cgo=$(case "$2" in *"cgo"*) echo 1;; *) echo 0;; esac)
 
-    set -x
-    CGO_ENABLED=$cgo go run gotest.tools/gotestsum@v1.11.0 -- -v -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
-    set +x
+    echo "Running matrix "$test_tags" where the WAF is" "$($waf_enabled && echo "supported" || echo "not supported")" "..."
+    env CGO_ENABLED=$cgo $GOTESTSUM_COMMAND -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
 
-    # Do multiple runs in parralel only in case the WAF is enabled
     if $waf_enabled; then
-       CGO_ENABLED=$cgo go run gotest.tools/gotestsum@v1.11.0 -- -v -shuffle=on -parallel $((nproc / 4)) -count="$nproc" -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+        if [ "$cgo" = "1" ]; then
+            echo "Running again with cgocheck enabled..."
+            env "$CGOCHECK" CGO_ENABLED=1 $GOTESTSUM_COMMAND -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+        fi
+
+        echo "Running again $nproc times in parralel"
+        env CGO_ENABLED=$cgo $GOTESTSUM_COMMAND -parallel $((nproc / 4)) -count="$nproc" -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
     fi
 }
 
