@@ -1,6 +1,6 @@
 #!/bin/sh -e
 
-export DD_APPSEC_WAF_TIMEOUT=1m
+export DD_APPSEC_WAF_TIMEOUT=10m
 export DD_APPSEC_WAF_LOG_FILTER="@ waf[.]cpp:"
 
 # Read all go env and os variables as shell variables
