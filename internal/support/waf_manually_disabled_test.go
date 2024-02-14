@@ -8,6 +8,7 @@
 package support_test
 
 import (
+	"github.com/DataDog/go-libddwaf/v2/errors"
 	"testing"
 
 	waf "github.com/DataDog/go-libddwaf/v2"
@@ -25,6 +26,6 @@ func TestManuallyDisabled(t *testing.T) {
 		ok, err := waf.Health()
 		require.False(t, ok)
 		require.Error(t, err)
-		require.ErrorIs(t, err, waf.ManuallyDisabledError{})
+		require.ErrorIs(t, err, errors.ManuallyDisabledError{})
 	})
 }

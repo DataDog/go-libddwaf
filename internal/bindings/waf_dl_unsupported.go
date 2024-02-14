@@ -8,44 +8,44 @@
 
 package bindings
 
-type wafDl struct{}
+type WafDl struct{}
 
-func newWafDl() (dl *wafDl, err error) {
+func NewWafDl() (dl *WafDl, err error) {
 	return nil, nil
 }
 
-func (waf *wafDl) wafGetVersion() string {
+func (waf *WafDl) WafGetVersion() string {
 	return ""
 }
 
-func (waf *wafDl) wafInit(obj *WafObject, config *WafConfig, info *WafObject) WafHandle {
+func (waf *WafDl) WafInit(obj *WafObject, config *WafConfig, info *WafObject) WafHandle {
 	return 0
 }
 
-func (waf *wafDl) wafUpdate(handle WafHandle, ruleset *WafObject, info *WafObject) WafHandle {
+func (waf *WafDl) WafUpdate(handle WafHandle, ruleset *WafObject, info *WafObject) WafHandle {
 	return 0
 }
 
-func (waf *wafDl) wafDestroy(handle WafHandle) {
+func (waf *WafDl) WafDestroy(handle WafHandle) {
 }
 
-func (waf *wafDl) wafKnownAddresses(handle WafHandle) []string {
+func (waf *WafDl) WafKnownAddresses(handle WafHandle) []string {
 	return nil
 }
 
-func (waf *wafDl) WafContextInit(handle WafHandle) WafContext {
+func (waf *WafDl) WafContextInit(handle WafHandle) WafContext {
 	return 0
 }
 
-func (waf *wafDl) WafContextDestroy(context WafContext) {
+func (waf *WafDl) WafContextDestroy(context WafContext) {
 }
 
-func (waf *wafDl) wafResultFree(result *WafResult) {
+func (waf *WafDl) WafResultFree(result *WafResult) {
 }
 
-func (waf *wafDl) wafObjectFree(obj *WafObject) {
+func (waf *WafDl) WafObjectFree(obj *WafObject) {
 }
 
-func (waf *wafDl) wafRun(context WafContext, persistentData, ephemeralData *WafObject, result *WafResult, timeout uint64) WafReturnCode {
+func (waf *WafDl) WafRun(context WafContext, persistentData, ephemeralData *WafObject, result *WafResult, timeout uint64) WafReturnCode {
 	return WafErrInternal
 }

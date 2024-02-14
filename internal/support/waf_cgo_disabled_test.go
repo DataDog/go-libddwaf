@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	waf "github.com/DataDog/go-libddwaf/v2"
+	"github.com/DataDog/go-libddwaf/v2/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,7 +20,7 @@ func TestCgoDisabled(t *testing.T) {
 		supported, err := waf.SupportsTarget()
 		require.False(t, supported)
 		require.Error(t, err)
-		require.ErrorIs(t, err, waf.CgoDisabledError{})
+		require.ErrorIs(t, err, errors.CgoDisabledError{})
 	})
 
 	t.Run("TestLoad", func(t *testing.T) {

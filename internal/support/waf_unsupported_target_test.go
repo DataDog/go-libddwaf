@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	waf "github.com/DataDog/go-libddwaf/v2"
+	"github.com/DataDog/go-libddwaf/v2/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,7 +22,7 @@ func TestUnsupportedPlatform(t *testing.T) {
 		supported, err := waf.SupportsTarget()
 		require.False(t, supported)
 		require.Error(t, err)
-		require.ErrorIs(t, err, waf.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
+		require.ErrorIs(t, err, errors.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
 	})
 
 	t.Run("Load", func(t *testing.T) {
