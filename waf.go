@@ -6,9 +6,11 @@
 package waf
 
 import (
-	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v2/internal/support"
 
 	"github.com/hashicorp/go-multierror"
 )
@@ -78,54 +80,11 @@ type Result struct {
 	Actions     []string
 }
 
-// Encoder/Decoder errors
-var (
-	errMaxDepthExceeded    = errors.New("max depth exceeded")
-	errUnsupportedValue    = errors.New("unsupported Go value")
-	errInvalidMapKey       = errors.New("invalid WAF object map key")
-	errNilObjectPtr        = errors.New("nil WAF object pointer")
-	errInvalidObjectType   = errors.New("invalid type encountered when decoding")
-	errTooManyIndirections = errors.New("too many indirections")
-)
-
-// RunError the WAF can return when running it.
-type RunError int
-
-// Errors the WAF can return when running it.
-const (
-	ErrInternal RunError = iota + 1
-	ErrInvalidObject
-	ErrInvalidArgument
-	ErrTimeout
-	ErrOutOfMemory
-	ErrEmptyRuleAddresses
-)
-
-// Error returns the string representation of the RunError.
-func (e RunError) Error() string {
-	switch e {
-	case ErrInternal:
-		return "internal waf error"
-	case ErrTimeout:
-		return "waf timeout"
-	case ErrInvalidObject:
-		return "invalid waf object"
-	case ErrInvalidArgument:
-		return "invalid waf argument"
-	case ErrOutOfMemory:
-		return "out of memory"
-	case ErrEmptyRuleAddresses:
-		return "empty rule addresses"
-	default:
-		return fmt.Sprintf("unknown waf error %d", e)
-	}
-}
-
 // Globally dlopen() libddwaf only once because several dlopens (eg. in tests)
 // aren't supported by macOS.
 var (
 	// libddwaf's dynamic library handle and entrypoints
-	wafLib *wafDl
+	wafLib *bindings.WafDl
 	// libddwaf's dlopen error if any
 	wafLoadErr  error
 	openWafOnce sync.Once
@@ -149,11 +108,11 @@ func Load() (ok bool, err error) {
 	}
 
 	openWafOnce.Do(func() {
-		wafLib, wafLoadErr = newWafDl()
+		wafLib, wafLoadErr = bindings.NewWafDl()
 		if wafLoadErr != nil {
 			return
 		}
-		wafVersion = wafLib.wafGetVersion()
+		wafVersion = wafLib.WafGetVersion()
 	})
 
 	return wafLib != nil, wafLoadErr
@@ -182,4 +141,38 @@ func (r *Result) HasDerivatives() bool {
 // HasActions return true if the result holds at least 1 action
 func (r *Result) HasActions() bool {
 	return len(r.Actions) > 0
+}
+
+// SupportsTarget returns true and a nil error when the target host environment
+// is supported by this package and can be further used.
+// Otherwise, it returns false along with an error detailing why.
+func SupportsTarget() (bool, error) {
+	wafSupportErrors := support.WafSupportErrors()
+	return len(wafSupportErrors) == 0, multierror.Append(nil, wafSupportErrors...).ErrorOrNil()
+}
+
+// Health returns true if the waf is usable, false otherwise. At the same time it can return an error
+// if the waf is not usable, but the error is not blocking if true is returned, otherwise it is.
+// The following conditions are checked:
+// - The Waf library has been loaded successfully (you need to call `Load()` first for this case to be taken into account)
+// - The Waf library has not been manually disabled with the `datadog.no_waf` go build tag
+// - The Waf library is not in an unsupported OS/Arch
+// - The Waf library is not in an unsupported Go version
+func Health() (bool, error) {
+	var err *multierror.Error
+	if wafLoadErr != nil {
+		err = multierror.Append(err, wafLoadErr)
+	}
+
+	wafSupportErrors := support.WafSupportErrors()
+	if len(wafSupportErrors) > 0 {
+		err = multierror.Append(err, wafSupportErrors...)
+	}
+
+	wafManuallyDisabledErr := support.WafManuallyDisabledError()
+	if wafManuallyDisabledErr != nil {
+		err = multierror.Append(err, wafManuallyDisabledErr)
+	}
+
+	return (wafLib != nil || wafLoadErr == nil) && len(wafSupportErrors) == 0 && wafManuallyDisabledErr == nil, err.ErrorOrNil()
 }

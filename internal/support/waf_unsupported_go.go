@@ -3,11 +3,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Manually set datadog.no_waf build tag
-//go:build datadog.no_waf
+// Unsupported Go versions (>=)
+//go:build go1.23
 
-package waf
+package support
+
+import "github.com/DataDog/go-libddwaf/v2/errors"
+
+import "runtime"
 
 func init() {
-	wafManuallyDisabledErr = ManuallyDisabledError{}
+	wafSupportErrors = append(wafSupportErrors, errors.UnsupportedGoVersionError{})
 }

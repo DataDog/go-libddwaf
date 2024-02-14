@@ -5,7 +5,7 @@
 
 //go:build !cgo && !appsec
 
-package waf_test
+package support_test
 
 import (
 	"testing"

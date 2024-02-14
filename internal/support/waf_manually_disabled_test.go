@@ -3,36 +3,28 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build (!linux && !darwin) || (!amd64 && !arm64)
+//go:build datadog.no_waf
 
-package waf_test
+package support_test
 
 import (
-	"runtime"
 	"testing"
 
 	waf "github.com/DataDog/go-libddwaf/v2"
 	"github.com/stretchr/testify/require"
 )
 
-func TestUnsupportedPlatform(t *testing.T) {
-
-	t.Run("SupportsTarget", func(t *testing.T) {
-		supported, err := waf.SupportsTarget()
-		require.False(t, supported)
-		require.Error(t, err)
-		require.ErrorIs(t, err, waf.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
-	})
-
-	t.Run("Load", func(t *testing.T) {
+func TestManuallyDisabled(t *testing.T) {
+	t.Run("TestLoad", func(t *testing.T) {
 		ok, err := waf.Load()
 		require.False(t, ok)
 		require.Error(t, err)
 	})
 
-	t.Run("Health", func(t *testing.T) {
+	t.Run("TestHealth", func(t *testing.T) {
 		ok, err := waf.Health()
 		require.False(t, ok)
 		require.Error(t, err)
+		require.ErrorIs(t, err, waf.ManuallyDisabledError{})
 	})
 }

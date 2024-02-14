@@ -5,7 +5,7 @@
 
 //go:build go1.23
 
-package waf_test
+package support_test
 
 import (
 	"runtime"

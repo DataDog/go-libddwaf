@@ -15,10 +15,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DataDog/go-libddwaf/v2/errors"
+	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+
 	"github.com/stretchr/testify/require"
 )
 
-func wafTest(t *testing.T, obj *wafObject) {
+func wafTest(t *testing.T, obj *bindings.WafObject) {
 	// Pass the encoded value to the WAF to make sure it doesn't return an error
 	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
 	require.NoError(t, err)
@@ -131,7 +135,7 @@ func TestEncodeDecode(t *testing.T) {
 		{
 			Name:        "byte-slice",
 			Input:       []byte("hello, waf"),
-			DecodeError: errUnsupportedValue,
+			DecodeError: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:        "json-raw",
@@ -189,7 +193,7 @@ func TestEncodeDecode(t *testing.T) {
 		{
 			Name:        "invalid-interface-value",
 			Input:       nil,
-			EncodeError: errUnsupportedValue,
+			EncodeError: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:   "nil-str-pointer-value",
@@ -210,12 +214,12 @@ func TestEncodeDecode(t *testing.T) {
 			Name:        "unsupported",
 			Input:       func() {},
 			Output:      func() {},
-			EncodeError: errUnsupportedValue,
+			EncodeError: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:        "map-nested-unsupported",
 			Input:       map[string]any{"1": func() {}},
-			DecodeError: errUnsupportedValue,
+			DecodeError: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:  "slice",
@@ -291,7 +295,7 @@ func TestEncodeDecode(t *testing.T) {
 				a:       "a",
 				A:       make(chan any),
 			},
-			DecodeError: errUnsupportedValue,
+			DecodeError: errors.ErrUnsupportedValue,
 		},
 		{
 			Name: "struct-with-unsupported-ignored-values",
@@ -341,7 +345,7 @@ func TestEncodeDecode(t *testing.T) {
 
 			t.Run("run", func(t *testing.T) {
 				wafTest(t, encoded)
-				keepAlive(encoder.cgoRefs)
+				unsafe.KeepAlive(encoder.cgoRefs)
 			})
 		})
 	}
@@ -379,7 +383,7 @@ func TestEncoderLimits(t *testing.T) {
 			Name:          "array-depth",
 			MaxValueDepth: 0,
 			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
-			EncodeError:   errMaxDepthExceeded,
+			EncodeError:   errors.ErrMaxDepthExceeded,
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
 		},
 		{
@@ -394,7 +398,7 @@ func TestEncoderLimits(t *testing.T) {
 			Input:         map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
 			Output:        map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": nil},
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
-			DecodeError:   errUnsupportedValue,
+			DecodeError:   errors.ErrUnsupportedValue,
 		},
 		{
 			Name:          "map-depth",
@@ -406,14 +410,14 @@ func TestEncoderLimits(t *testing.T) {
 			Name:          "map-depth",
 			MaxValueDepth: 0,
 			Input:         map[string]any{},
-			EncodeError:   errMaxDepthExceeded,
+			EncodeError:   errors.ErrMaxDepthExceeded,
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {1}},
 		},
 		{
 			Name:          "struct-depth",
 			MaxValueDepth: 0,
 			Input:         struct{}{},
-			EncodeError:   errMaxDepthExceeded,
+			EncodeError:   errors.ErrMaxDepthExceeded,
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {1}},
 		},
 		{
@@ -428,7 +432,7 @@ func TestEncoderLimits(t *testing.T) {
 				"F1": nil,
 			},
 			Truncations: map[TruncationReason][]int{ObjectTooDeep: {2}},
-			DecodeError: errUnsupportedValue,
+			DecodeError: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:          "struct-max-depth",
@@ -442,7 +446,7 @@ func TestEncoderLimits(t *testing.T) {
 				"F1": nil,
 			},
 			Truncations: map[TruncationReason][]int{ObjectTooDeep: {2}},
-			DecodeError: errUnsupportedValue,
+			DecodeError: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:               "array-max-length",
@@ -511,7 +515,7 @@ func TestEncoderLimits(t *testing.T) {
 		{
 			Name:        "self-recursive-map-value",
 			Input:       map[string]any{"bomb": selfPointer},
-			DecodeError: errUnsupportedValue,
+			DecodeError: errors.ErrUnsupportedValue,
 		},
 	} {
 		maxValueDepth := 99999
@@ -563,29 +567,29 @@ func TestEncoderLimits(t *testing.T) {
 
 		t.Run(tc.Name+"/run", func(t *testing.T) {
 			wafTest(t, encoded)
-			keepAlive(encoder.cgoRefs)
+			unsafe.KeepAlive(encoder.cgoRefs)
 		})
 	}
 }
 
 type typeTree struct {
-	_type    wafObjectType
+	_type    bindings.WafObjectType
 	children []typeTree
 }
 
-func assertEqualType(t *testing.T, expected typeTree, actual *wafObject) {
-	require.Equal(t, expected._type, actual._type, "expected type %v, got type %v", expected._type, actual._type)
+func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WafObject) {
+	require.Equal(t, expected._type, actual.Type, "expected type %v, got type %v", expected._type, actual.Type)
 
-	if expected._type != wafMapType && expected._type != wafArrayType {
+	if expected._type != bindings.WafMapType && expected._type != bindings.WafArrayType {
 		return
 	}
 
-	if uint64(len(expected.children)) != actual.nbEntries {
-		t.Fatalf("expected len %v, got len %v", len(expected.children), actual.nbEntries)
+	if uint64(len(expected.children)) != actual.NbEntries {
+		t.Fatalf("expected len %v, got len %v", len(expected.children), actual.NbEntries)
 	}
 
 	for i := range expected.children {
-		assertEqualType(t, expected.children[i], castWithOffset[wafObject](actual.value, uint64(i)))
+		assertEqualType(t, expected.children[i], unsafe.CastWithOffset[bindings.WafObject](actual.Value, uint64(i)))
 	}
 }
 
@@ -612,47 +616,47 @@ func TestEncoderTypeTree(t *testing.T) {
 		{
 			Name:  "unsupported type",
 			Input: make(chan struct{}),
-			Error: errUnsupportedValue,
+			Error: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:   "nil-byte-slice",
 			Input:  []byte(nil),
-			Output: typeTree{_type: wafNilType},
+			Output: typeTree{_type: bindings.WafNilType},
 		},
 		{
 			Name:   "nil-map",
 			Input:  map[string]any(nil),
-			Output: typeTree{_type: wafNilType},
+			Output: typeTree{_type: bindings.WafNilType},
 		},
 		{
 			Name:  "invalid-interface-value",
 			Input: nil,
-			Error: errUnsupportedValue,
+			Error: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:   "nil-str-pointer-value",
 			Input:  (*string)(nil),
-			Output: typeTree{_type: wafNilType},
+			Output: typeTree{_type: bindings.WafNilType},
 		},
 		{
 			Name:   "nil-int-pointer-value",
 			Input:  (*int)(nil),
-			Output: typeTree{_type: wafNilType},
+			Output: typeTree{_type: bindings.WafNilType},
 		},
 		{
 			Name:  "unsupported",
 			Input: func() {},
-			Error: errUnsupportedValue,
+			Error: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:  "unsupported",
 			Input: make(chan struct{}),
-			Error: errUnsupportedValue,
+			Error: errors.ErrUnsupportedValue,
 		},
 		{
 			Name:   "slice-having-unsupported-values",
 			Input:  []any{33.12345, func() {}, "ok", 27, nil},
-			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafFloatType}, {_type: wafStringType}, {_type: wafIntType}}},
+			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafFloatType}, {_type: bindings.WafStringType}, {_type: bindings.WafIntType}}},
 		},
 		{
 			Name: "struct-with-nil-values",
@@ -667,7 +671,7 @@ func TestEncoderTypeTree(t *testing.T) {
 				a:       "a",
 				A:       nil,
 			},
-			Output: typeTree{_type: wafMapType, children: []typeTree{{_type: wafStringType}, {_type: wafNilType}}},
+			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafNilType}}},
 		},
 		{
 			Name: "struct-with-invalid-values",
@@ -682,32 +686,32 @@ func TestEncoderTypeTree(t *testing.T) {
 				a:       "a",
 				A:       make(chan any),
 			},
-			Output: typeTree{_type: wafMapType, children: []typeTree{{_type: wafStringType}, {_type: wafInvalidType}}},
+			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafInvalidType}}},
 		},
 		{
 			Name:   "unsupported-array-values",
 			Input:  []any{"supported", func() {}, "supported", make(chan struct{})},
-			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafStringType}, {_type: wafStringType}}},
+			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafStringType}}},
 		},
 		{
 			Name:   "unsupported-array-values",
 			Input:  []any{"supported", func() {}, "supported", make(chan struct{})},
-			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafStringType}, {_type: wafStringType}}},
+			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafStringType}}},
 		},
 		{
 			Name:   "unsupported-array-values",
 			Input:  []any{func() {}, "supported", make(chan struct{}), "supported"},
-			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafStringType}, {_type: wafStringType}}},
+			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafStringType}}},
 		},
 		{
 			Name:   "unsupported-array-values",
 			Input:  []any{func() {}, "supported", make(chan struct{}), "supported"},
-			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafStringType}, {_type: wafStringType}}},
+			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafStringType}}},
 		},
 		{
 			Name:   "unsupported-array-values",
 			Input:  []any{func() {}, make(chan struct{}), "supported"},
-			Output: typeTree{_type: wafArrayType, children: []typeTree{{_type: wafStringType}}},
+			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafStringType}}},
 		},
 		{
 			Name: "unsupported-map-key-types",
@@ -719,7 +723,7 @@ func TestEncoderTypeTree(t *testing.T) {
 				(*string)(nil):        1,
 				make(chan struct{}):   1,
 			},
-			Output: typeTree{_type: wafMapType, children: []typeTree{{_type: wafIntType}}},
+			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafIntType}}},
 		},
 		{
 			Name: "unsupported-map-key-types",
@@ -730,7 +734,7 @@ func TestEncoderTypeTree(t *testing.T) {
 				(*string)(nil):        1,
 				make(chan struct{}):   1,
 			},
-			Output: typeTree{_type: wafMapType},
+			Output: typeTree{_type: bindings.WafMapType},
 		},
 		{
 			Name: "unsupported-map-values",
@@ -738,7 +742,7 @@ func TestEncoderTypeTree(t *testing.T) {
 				"k0": func() {},
 				"k2": make(chan struct{}),
 			},
-			Output: typeTree{_type: wafMapType, children: []typeTree{{_type: wafInvalidType}, {_type: wafInvalidType}}},
+			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafInvalidType}, {_type: bindings.WafInvalidType}}},
 		},
 		{
 			Name: "nil-map-values",
@@ -747,7 +751,7 @@ func TestEncoderTypeTree(t *testing.T) {
 				"k1": (*string)(nil),
 				"k2": (*int)(nil),
 			},
-			Output: typeTree{_type: wafMapType, children: []typeTree{{_type: wafNilType}, {_type: wafNilType}, {_type: wafNilType}}},
+			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafNilType}, {_type: bindings.WafNilType}, {_type: bindings.WafNilType}}},
 		},
 	} {
 		encoder := newMaxEncoder()
@@ -765,7 +769,7 @@ func TestEncoderTypeTree(t *testing.T) {
 
 		t.Run(tc.Name+"/run", func(t *testing.T) {
 			wafTest(t, encoded)
-			keepAlive(encoder.cgoRefs)
+			unsafe.KeepAlive(encoder.cgoRefs)
 		})
 	}
 }
@@ -774,7 +778,7 @@ func TestEncoderTypeTree(t *testing.T) {
 func TestDecoder(t *testing.T) {
 	t.Run("Errors", func(t *testing.T) {
 		e := newMaxEncoder()
-		objBuilder := func(value any) *wafObject {
+		objBuilder := func(value any) *bindings.WafObject {
 			encoded, err := e.Encode(value)
 			require.NoError(t, err, "Encoding object failed")
 			return encoded
@@ -815,8 +819,8 @@ func TestDecoder(t *testing.T) {
 			})
 		}
 
-		keepAlive(e.cgoRefs.arrayRefs)
-		keepAlive(e.cgoRefs.stringRefs)
+		unsafe.KeepAlive(e.cgoRefs.arrayRefs)
+		unsafe.KeepAlive(e.cgoRefs.stringRefs)
 	})
 }
 

@@ -9,6 +9,11 @@ import (
 	"errors"
 	"fmt"
 
+	errors2 "github.com/DataDog/go-libddwaf/v2/errors"
+	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+
+	"github.com/DataDog/go-libddwaf/v2/internal/noopfree"
 	"go.uber.org/atomic"
 )
 
@@ -30,7 +35,7 @@ type Handle struct {
 	refCounter *atomic.Int32
 
 	// Instance of the WAF
-	cHandle wafHandle
+	cHandle bindings.WafHandle
 }
 
 // NewHandle creates and returns a new instance of the WAF with the given security rules and configuration
@@ -58,16 +63,16 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	}
 
 	config := newConfig(&encoder.cgoRefs, keyObfuscatorRegex, valueObfuscatorRegex)
-	diagnosticsWafObj := new(wafObject)
-	defer wafLib.wafObjectFree(diagnosticsWafObj)
+	diagnosticsWafObj := new(bindings.WafObject)
+	defer wafLib.WafObjectFree(diagnosticsWafObj)
 
-	cHandle := wafLib.wafInit(obj, config, diagnosticsWafObj, encoder.cgoRefs)
+	cHandle := wafLib.WafInit(obj, config, diagnosticsWafObj)
 	// Upon failure, the WAF may have produced some diagnostics to help signal what went wrong...
 	var (
 		diags    *Diagnostics
 		diagsErr error
 	)
-	if !diagnosticsWafObj.isInvalid() {
+	if !diagnosticsWafObj.IsInvalid() {
 		diags, diagsErr = decodeDiagnostics(diagnosticsWafObj)
 	}
 
@@ -85,9 +90,11 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 
 	// The WAF successfully initialized at this stage...
 	if diagsErr != nil {
-		wafLib.wafDestroy(cHandle)
+		wafLib.WafDestroy(cHandle)
 		return nil, fmt.Errorf("could not decode the WAF diagnostics: %w", diagsErr)
 	}
+
+	unsafe.KeepAlive(encoder.cgoRefs)
 
 	return &Handle{
 		cHandle:     cHandle,
@@ -103,7 +110,7 @@ func (handle *Handle) Diagnostics() Diagnostics {
 
 // Addresses returns the list of addresses the WAF rule is expecting.
 func (handle *Handle) Addresses() []string {
-	return wafLib.wafKnownAddresses(handle.cHandle)
+	return wafLib.WafKnownAddresses(handle.cHandle)
 }
 
 // Update the ruleset of a WAF instance into a new handle on its own
@@ -115,15 +122,15 @@ func (handle *Handle) Update(newRules any) (*Handle, error) {
 		return nil, fmt.Errorf("could not encode the WAF ruleset into a WAF object: %w", err)
 	}
 
-	diagnosticsWafObj := new(wafObject)
+	diagnosticsWafObj := new(bindings.WafObject)
 
-	cHandle := wafLib.wafUpdate(handle.cHandle, obj, diagnosticsWafObj)
-	keepAlive(encoder.cgoRefs)
+	cHandle := wafLib.WafUpdate(handle.cHandle, obj, diagnosticsWafObj)
+	unsafe.KeepAlive(encoder.cgoRefs)
 	if cHandle == 0 {
 		return nil, errors.New("could not update the WAF instance")
 	}
 
-	defer wafLib.wafObjectFree(diagnosticsWafObj)
+	defer wafLib.WafObjectFree(diagnosticsWafObj)
 
 	if err != nil { // Something is very wrong
 		return nil, fmt.Errorf("could not decode the WAF ruleset errors: %w", err)
@@ -143,7 +150,7 @@ func (handle *Handle) Close() {
 		return
 	}
 
-	wafLib.wafDestroy(handle.cHandle)
+	wafLib.WafDestroy(handle.cHandle)
 	handle.diagnostics = Diagnostics{} // Data in diagnostics may no longer be valid (e.g: strings from libddwaf)
 	handle.cHandle = 0                 // Makes it easy to spot use-after-free/double-free issues
 }
@@ -189,17 +196,17 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 	}
 }
 
-func newConfig(cgoRefs *cgoRefPool, keyObfuscatorRegex string, valueObfuscatorRegex string) *wafConfig {
-	config := new(wafConfig)
-	*config = wafConfig{
-		limits: wafConfigLimits{
-			maxContainerDepth: wafMaxContainerDepth,
-			maxContainerSize:  wafMaxContainerSize,
-			maxStringLength:   wafMaxStringLength,
+func newConfig(cgoRefs *cgoRefPool, keyObfuscatorRegex string, valueObfuscatorRegex string) *bindings.WafConfig {
+	config := new(bindings.WafConfig)
+	*config = bindings.WafConfig{
+		Limits: bindings.WafConfigLimits{
+			MaxContainerDepth: bindings.WafMaxContainerDepth,
+			MaxContainerSize:  bindings.WafMaxContainerSize,
+			MaxStringLength:   bindings.WafMaxStringLength,
 		},
-		obfuscator: wafConfigObfuscator{
-			keyRegex:   cgoRefs.AllocCString(keyObfuscatorRegex),
-			valueRegex: cgoRefs.AllocCString(valueObfuscatorRegex),
+		Obfuscator: bindings.WafConfigObfuscator{
+			KeyRegex:   cgoRefs.AllocCString(keyObfuscatorRegex),
+			ValueRegex: cgoRefs.AllocCString(valueObfuscatorRegex),
 		},
 		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
 		freeFn: 0,
@@ -207,14 +214,14 @@ func newConfig(cgoRefs *cgoRefPool, keyObfuscatorRegex string, valueObfuscatorRe
 	return config
 }
 
-func goRunError(rc wafReturnCode) error {
+func goRunError(rc bindings.WafReturnCode) error {
 	switch rc {
-	case wafErrInternal:
-		return ErrInternal
-	case wafErrInvalidObject:
-		return ErrInvalidObject
-	case wafErrInvalidArgument:
-		return ErrInvalidArgument
+	case bindings.WafErrInternal:
+		return errors2.ErrInternal
+	case bindings.WafErrInvalidObject:
+		return errors2.ErrInvalidObject
+	case bindings.WafErrInvalidArgument:
+		return errors2.ErrInvalidArgument
 	default:
 		return fmt.Errorf("unknown waf return code %d", int(rc))
 	}
