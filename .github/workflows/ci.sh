@@ -15,8 +15,6 @@ case $GOVERSION in
         CGOCHECK="GOEXPERIMENT=cgocheck2"
 esac
 
-GOTESTSUM_COMMAND="go run gotest.tools/gotestsum@v1.11.0 -- -shuffle=on -v"
-
 # Return true if the current OS is not Windows
 WAF_ENABLED=$([ "$GOOS" = "windows" ] && echo false || echo true)
 
@@ -29,19 +27,22 @@ run() {
     tags="ci,$(echo "$2" | sed 's/cgo//')"
     nproc=$(nproc)
     test_tags="$2,$GOOS,$GOARCH"
-    cgo=$(case "$2" in *"cgo"*) echo 1;; *) echo 0;; esac)
+    cgo="$(case "$2" in *cgo*) echo "1";; *) echo "0";; esac)"
 
-    echo "Running matrix "$test_tags" where the WAF is" "$($waf_enabled && echo "supported" || echo "not supported")" "..."
-    env CGO_ENABLED=$cgo $GOTESTSUM_COMMAND -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+    echo "Running matrix $test_tags where the WAF is" "$($waf_enabled && echo "supported" || echo "not supported")" "..."
+    env CGO_ENABLED="$cgo" go test -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
 
     if $waf_enabled; then
         if [ "$cgo" = "1" ]; then
             echo "Running again with cgocheck enabled..."
-            env "$CGOCHECK" CGO_ENABLED=1 $GOTESTSUM_COMMAND -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+            env "$CGOCHECK" CGO_ENABLED=1 go test -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
         fi
 
-        echo "Running again $nproc times in parralel"
-        env CGO_ENABLED=$cgo $GOTESTSUM_COMMAND -parallel $((nproc / 4)) -count="$nproc" -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+        # TODO: remove condition once we have native arm64 linux runners
+        if [ "$GOARCH" = "amd64" ]; then
+            echo "Running again $nproc times in parralel"
+            env CGO_ENABLED="$cgo" go test -shuffle=on -parallel $((nproc / 4)) -count="$nproc" -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+        fi
     fi
 }
 
