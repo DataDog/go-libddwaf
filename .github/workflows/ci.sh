@@ -61,6 +61,6 @@ if [ -f /etc/os-release ] && grep -q Alpine < /etc/os-release; then
 fi
 
 run "$WAF_ENABLED" cgo                   # WAF enabled (but not on windows)
-run false go1.23,cgo                     # CGO disabled and too recent go version
-run false datadog.no_waf,cgo             # WAF manually disabled and CGO disabled
-run false datadog.no_waf,go1.23,cgo      # CGO disabled, WAF manually disabled, too recent go version
+run false go1.23,cgo                     # CGO enabled and too recent go version
+run false datadog.no_waf,cgo             # WAF manually disabled and CGO enabled
+run false datadog.no_waf,go1.23,cgo      # CGO enabled, WAF manually disabled, too recent go version
