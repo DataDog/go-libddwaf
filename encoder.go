@@ -42,7 +42,7 @@ const (
 	// elements configured. The truncation values indicate the actual number of elements in the
 	// truncated container.
 	ContainerTooLarge
-	// ObjectTooDeepn indicates an overall object exceeded the maximum encoding depths configured. The
+	// ObjectTooDeep indicates an overall object exceeded the maximum encoding depths configured. The
 	// truncation values indicate an estimated actual depth of the truncated object. The value is
 	// guaranteed to be less than or equal to the actual depth (it may not be more).
 	ObjectTooDeep
