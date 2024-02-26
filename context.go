@@ -114,6 +114,41 @@ func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (
 	// Ensure the ephemerals don't get optimized away by the compiler before the WAF had a chance to use them.
 	keepAlive(ephemeralEncoder.cgoRefs)
 
+	res.Truncations = merge(persistentEncoder.Truncations(), ephemeralEncoder.Truncations())
+	return
+}
+
+// merge merges two maps of slices into a single map of slices. The resulting map will contain all
+// keys from both a and b, with the corresponding value from a and b concatenated (in this order) in
+// a single slice. The implementation tries to minimize reallocations.
+func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
+	count := len(a) + len(b)
+	if count == 0 {
+		return
+	}
+
+	keys := make(map[K]struct{}, count)
+	nothing := struct{}{}
+	totalCount := 0
+	for _, m := range [2]map[K][]V{a, b} {
+		for k, v := range m {
+			keys[k] = nothing
+			totalCount += len(v)
+		}
+	}
+
+	merged = make(map[K][]V, count)
+	values := make([]V, 0, totalCount)
+
+	for k := range keys {
+		idxS := len(values) // Start index
+		values = append(values, a[k]...)
+		values = append(values, b[k]...)
+		idxE := len(values) // End index
+
+		merged[k] = values[idxS:idxE]
+	}
+
 	return
 }
 

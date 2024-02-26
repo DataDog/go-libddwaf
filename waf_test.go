@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"text/template"
@@ -1102,6 +1103,31 @@ func TestObfuscatorConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, string(events), "sensitive")
 	})
+}
+
+func TestTruncationInformation(t *testing.T) {
+	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	defer waf.Close()
+
+	ctx := NewContext(waf)
+	defer ctx.Close()
+
+	extra := rand.Intn(10) + 1 // Random int between 1 and 10
+
+	res, err := ctx.Run(RunAddressData{
+		Ephemeral: map[string]any{
+			"my.input": map[string]any{
+				"string_too_long":     strings.Repeat("Z", wafMaxStringLength+extra),
+				"container_too_large": make([]bool, wafMaxContainerSize+extra),
+			},
+		},
+	}, time.Second)
+	require.NoError(t, err)
+	require.Equal(t, map[TruncationReason][]int{
+		StringTooLong:     {wafMaxStringLength + extra},
+		ContainerTooLarge: {wafMaxContainerSize + extra},
+	}, res.Truncations)
 }
 
 func BenchmarkEncoder(b *testing.B) {
