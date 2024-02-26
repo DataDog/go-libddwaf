@@ -1,19 +1,23 @@
-#!/bin/sh -e
+#!/bin/sh -ex
 
 export DD_APPSEC_WAF_TIMEOUT=10m
 export DD_APPSEC_WAF_LOG_FILTER="@ waf[.]cpp:"
 
-# Read all go env and os variables as shell variables
-# shellcheck disable=SC2046
-eval $(go env)
+GOVERSION="$(go env GOVERSION)"
+GOOS="$(go env GOOS)"
+GOARCH="$(go env GOARCH)"
 
 case $GOVERSION in
-    *1.20*|*1.19* )
-        CGOCHECK="GODEBUG=cgocheck=2"
-        ;;
-    *)
-        CGOCHECK="GOEXPERIMENT=cgocheck2"
+    *1.20*|*1.19* ) CGOCHECK="GODEBUG=cgocheck=2";;
+    *) CGOCHECK="GOEXPERIMENT=cgocheck2";;
 esac
+
+has_cgo() {
+    case $1 in
+        *cgo*) echo 1;;
+        *) echo 0;;
+    esac
+}
 
 # Return true if the current OS is not Windows
 WAF_ENABLED=$([ "$GOOS" = "windows" ] && echo false || echo true)
@@ -25,9 +29,9 @@ WAF_ENABLED=$([ "$GOOS" = "windows" ] && echo false || echo true)
 run() {
     waf_enabled="$1"
     tags="ci,$(echo "$2" | sed 's/cgo//')"
-    nproc=$(nproc)
+    nproc=$(getconf _NPROCESSORS_ONLN)
     test_tags="$2,$GOOS,$GOARCH"
-    cgo="$(case "$2" in *cgo*) echo "1";; *) echo "0";; esac)"
+    cgo=$(has_cgo "$2")
 
     echo "Running matrix $test_tags where the WAF is" "$($waf_enabled && echo "supported" || echo "not supported")" "..."
     env CGO_ENABLED="$cgo" go test -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
@@ -41,7 +45,7 @@ run() {
         # TODO: remove condition once we have native arm64 linux runners
         if [ "$GOARCH" = "amd64" ]; then
             echo "Running again $nproc times in parralel"
-            env CGO_ENABLED="$cgo" go test -shuffle=on -parallel $((nproc / 4)) -count="$nproc" -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+            env CGO_ENABLED="$cgo" go test -shuffle=on -parallel $((nproc / 4 + 1)) -count="$nproc" -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
         fi
     fi
 }
