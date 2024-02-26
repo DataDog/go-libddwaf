@@ -7,6 +7,7 @@ package waf
 
 import (
 	"fmt"
+	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
 	"sync"
 
 	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
@@ -14,6 +15,10 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 )
+
+// ErrTimeout is the error returned when the WAF times out while processing a request.
+// Deprecated: use github.com/DataDog/go-libddwaf/errors.ErrTimeout instead.
+const ErrTimeout = wafErrors.ErrTimeout
 
 // Diagnostics stores the information - provided by the WAF - about WAF rules initialization.
 type Diagnostics struct {

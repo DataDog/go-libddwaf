@@ -9,11 +9,10 @@ import (
 	"errors"
 	"fmt"
 
-	errors2 "github.com/DataDog/go-libddwaf/v2/errors"
+	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
 	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
 
-	"github.com/DataDog/go-libddwaf/v2/internal/noopfree"
 	"go.uber.org/atomic"
 )
 
@@ -209,7 +208,7 @@ func newConfig(cgoRefs *cgoRefPool, keyObfuscatorRegex string, valueObfuscatorRe
 			ValueRegex: cgoRefs.AllocCString(valueObfuscatorRegex),
 		},
 		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
-		freeFn: 0,
+		FreeFn: 0,
 	}
 	return config
 }
@@ -217,11 +216,11 @@ func newConfig(cgoRefs *cgoRefPool, keyObfuscatorRegex string, valueObfuscatorRe
 func goRunError(rc bindings.WafReturnCode) error {
 	switch rc {
 	case bindings.WafErrInternal:
-		return errors2.ErrInternal
+		return wafErrors.ErrInternal
 	case bindings.WafErrInvalidObject:
-		return errors2.ErrInvalidObject
+		return wafErrors.ErrInvalidObject
 	case bindings.WafErrInvalidArgument:
-		return errors2.ErrInvalidArgument
+		return wafErrors.ErrInvalidArgument
 	default:
 		return fmt.Errorf("unknown waf return code %d", int(rc))
 	}

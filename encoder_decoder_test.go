@@ -537,7 +537,7 @@ func TestEncoderLimits(t *testing.T) {
 		}
 
 		value := reflect.ValueOf(tc.Input)
-		encoded := &wafObject{}
+		encoded := &bindings.WafObject{}
 		err := encoder.encode(value, encoded, encoder.objectMaxDepth)
 		if len(encoder.truncations[ObjectTooDeep]) != 0 {
 			encoder.measureObjectDepth(value, time.Hour) // Stupid-sized timeout for slow arm CI runners

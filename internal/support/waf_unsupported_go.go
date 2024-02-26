@@ -10,8 +10,6 @@ package support
 
 import "github.com/DataDog/go-libddwaf/v2/errors"
 
-import "runtime"
-
 func init() {
 	wafSupportErrors = append(wafSupportErrors, errors.UnsupportedGoVersionError{})
 }
