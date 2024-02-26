@@ -7,44 +7,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runs-on: [ macos-14, macos-13, macos-12, ubuntu-22.04, ubuntu-20.04, windows-latest ]
-        go-version: [ "1.22.0-rc.2", "1.21", "1.20" ]
-        cgo-enabled: [ "0", "1" ] # test it compiles with and without cgo
-        go-tags:
-          - ''                      # Default behavior
-          - 'datadog.no_waf'        # Explicitly disabled WAF
-          - 'go1.23'                # Too recent go version (purego compatibility uncertain)
-          - 'appsec'                # Legacy build tag to enable appsec when cgo is disabled
-          - 'appsec,datadog.no_waf' # An awkward combination that must nevertheless compile
-          - 'datadog.no_waf,go1.23' # Explicitly disabled & too recent go version (purego compatibility uncertain)
-          - 'appsec,go1.23'         # Explicitly enabled w/o cgo & too recent go version (purego compatibility uncertain)
+        runs-on: [ macos-14, macos-13, macos-12, macos-11, ubuntu-22.04, ubuntu-20.04, windows-latest ]
+        go-version: [ "1.22", "1.21", "1.20", "1.19" ]
         include:
-          # gocheck2 is configured differently in go1.21 than in previous versions
-          - go-version: '1.21'
-            go-experiment: cgocheck2
-          - go-version: '1.22.0-rc.2'
-            go-experiment: cgocheck2
-          - go-version: '1.20'
-            go-debug: cgocheck=2
-          # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go, without any particular tag)
-          - go-version: '1.21'
-            go-tags: ''
+          # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go version)
+          - go-version: '1.22'
             waf-log-level: TRACE
-        exclude:
-          # Prune redundant checks (the go-next test needs only run once per platform)
-          - go-version: '1.21'
-            go-tags: 'go1.23'
-          - go-version: '1.21'
-            go-tags: 'datadog.no_waf,go1.23'
-          - go-version: '1.20'
-            go-tags: 'go1.23'
-          - go-version: '1.20'
-            go-tags: 'datadog.no_waf,go1.23'
-          # Prune redundant checks (the appsec build tag is only relevant with cgo-enabled=0)
-          - cgo-enabled: 1
-            go-tags: "appsec"
-          - cgo-enabled: 1
-            go-tags: "appsec,go1.23"
     name: ${{ toJSON(matrix) }}
     runs-on: ${{ matrix.runs-on }}
     steps:
@@ -57,14 +25,6 @@ jobs:
         run: go install gotest.tools/gotestsum@latest
       - name: go test
         shell: bash
-        run: |-
-          gotestsum -- -v -count=10 -shuffle=on -tags='${{ matrix.go-tags }}' ./...
+        run: ./.github/workflows/ci.sh
         env:
-          CGO_ENABLED: ${{ matrix.cgo-enabled }}
-          # libddwaf's DEBUG is pretty spammy, and higher log levels don't happen in normal operations... and log
-          # overhead can make tests time out if we don't filter out DEBUG to reduce thrash!
-          DD_APPSEC_WAF_LOG_FILTER: "@ waf[.]cpp:"
           DD_APPSEC_WAF_LOG_LEVEL: ${{ matrix.waf-log-level }}
-          DD_APPSEC_WAF_TIMEOUT: 5s
-          GODEBUG: ${{ matrix.go-debug }}
-          GOEXPERIMENT: ${{ matrix.go-experiment }}

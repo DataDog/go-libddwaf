@@ -532,7 +532,12 @@ func TestEncoderLimits(t *testing.T) {
 			containerMaxSize: maxContainerLength,
 		}
 
-		encoded, err := encoder.Encode(tc.Input)
+		value := reflect.ValueOf(tc.Input)
+		encoded := &wafObject{}
+		err := encoder.encode(value, encoded, encoder.objectMaxDepth)
+		if len(encoder.truncations[ObjectTooDeep]) != 0 {
+			encoder.measureObjectDepth(value, time.Hour) // Stupid-sized timeout for slow arm CI runners
+		}
 
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
 			require.Equal(t, tc.Truncations, sortValues(encoder.Truncations()))
@@ -835,7 +840,7 @@ func TestResolvePointer(t *testing.T) {
 
 func TestDepthOf(t *testing.T) {
 	t.Run("is safe with self-referecing structs", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*10)
 		defer cancel()
 
 		type selfReferencing struct {

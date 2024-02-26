@@ -83,7 +83,7 @@ func (encoder *encoder) Encode(data any) (wo *wafObject, err error) {
 
 	err = encoder.encode(value, wo, encoder.objectMaxDepth)
 	if len(encoder.truncations[ObjectTooDeep]) != 0 {
-		encoder.measureObjectDepth(value)
+		encoder.measureObjectDepth(value, time.Millisecond)
 	}
 
 	return
@@ -398,8 +398,8 @@ func (encoder *encoder) addTruncation(reason TruncationReason, size int) {
 // mesureObjectDepth traverses the provided object recursively to try and obtain
 // the real object depth, but limits itself to about 1ms of time budget, past
 // which it'll stop and return whatever it has go to so far.
-func (encoder *encoder) measureObjectDepth(obj reflect.Value) {
-	ctx, cancelCtx := context.WithTimeout(context.Background(), time.Millisecond)
+func (encoder *encoder) measureObjectDepth(obj reflect.Value, timeout time.Duration) {
+	ctx, cancelCtx := context.WithTimeout(context.Background(), timeout)
 	defer cancelCtx()
 
 	depth, _ := depthOf(ctx, obj)
