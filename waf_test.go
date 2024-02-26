@@ -1122,11 +1122,17 @@ func TestTruncationInformation(t *testing.T) {
 				"container_too_large": make([]bool, wafMaxContainerSize+extra),
 			},
 		},
+		Persistent: map[string]any{
+			"my.input.2": map[string]any{
+				"string_too_long":     strings.Repeat("Z", wafMaxStringLength+extra+2),
+				"container_too_large": make([]bool, wafMaxContainerSize+extra+2),
+			},
+		},
 	}, time.Second)
 	require.NoError(t, err)
 	require.Equal(t, map[TruncationReason][]int{
-		StringTooLong:     {wafMaxStringLength + extra},
-		ContainerTooLarge: {wafMaxContainerSize + extra},
+		StringTooLong:     {wafMaxStringLength + extra + 2, wafMaxStringLength + extra},
+		ContainerTooLarge: {wafMaxContainerSize + extra + 2, wafMaxContainerSize + extra},
 	}, res.Truncations)
 }
 
