@@ -9,6 +9,8 @@ package waf
 
 import (
 	"flag"
+	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
+	"github.com/DataDog/go-libddwaf/v2/internal/support"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -30,10 +32,10 @@ func TestSupport(t *testing.T) {
 	require.NotNil(t, wafBuildTags, "The `waf-build-tags` flag should be set")
 	require.NotEmpty(t, *wafBuildTags, "The `waf-build-tags` flag should not be empty")
 
-	errors := make([]error, len(wafSupportErrors))
-	copy(errors, wafSupportErrors)
-	if wafManuallyDisabledErr != nil {
-		errors = append(errors, wafManuallyDisabledErr)
+	errors := make([]error, len(support.WafSupportErrors()))
+	copy(errors, support.WafSupportErrors())
+	if support.WafManuallyDisabledError() != nil {
+		errors = append(errors, support.WafManuallyDisabledError())
 	}
 
 	ok, _ := Health()
@@ -47,14 +49,14 @@ func TestSupport(t *testing.T) {
 
 	for _, err := range errors {
 		switch err.(type) {
-		case UnsupportedOSArchError:
-			require.Contains(t, *wafBuildTags, err.(UnsupportedOSArchError).Os, "The OS is marked as supported but a support error appeared", err)
-			require.Contains(t, *wafBuildTags, err.(UnsupportedOSArchError).Arch, "The architecture is marked as supported but a support error appeared", err)
-		case UnsupportedGoVersionError:
+		case wafErrors.UnsupportedOSArchError:
+			require.Contains(t, *wafBuildTags, err.(wafErrors.UnsupportedOSArchError).Os, "The OS is marked as supported but a support error appeared", err)
+			require.Contains(t, *wafBuildTags, err.(wafErrors.UnsupportedOSArchError).Arch, "The architecture is marked as supported but a support error appeared", err)
+		case wafErrors.UnsupportedGoVersionError:
 			// We can't check anything here because we forced the version to be wrong we a build tag added manually instead of just having an incompatible version
-		case ManuallyDisabledError:
+		case wafErrors.ManuallyDisabledError:
 			require.Contains(t, *wafBuildTags, "datadog.no_waf", "The WAF is marked as enabled but a support error appeared", err)
-		case CgoDisabledError:
+		case wafErrors.CgoDisabledError:
 			require.NotContainsf(t, *wafBuildTags, "cgo", "The build tags contains cgo but a support error appeared", err)
 		default:
 			require.Fail(t, "Unknown error type", err)

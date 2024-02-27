@@ -5,7 +5,7 @@
 
 //go:build (linux || darwin) && (amd64 || arm64) && !go1.23 && !datadog.no_waf && (cgo || appsec)
 
-package waf
+package bindings
 
 import (
 	"fmt"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v2/internal/lib"
 	"github.com/DataDog/go-libddwaf/v2/internal/log"
+	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
 	"github.com/ebitengine/purego"
 )
 
@@ -20,7 +21,7 @@ import (
 // It uses `libwaf` to make C calls
 // All calls must go through this one-liner to be type safe
 // since purego calls are not type safe
-type wafDl struct {
+type WafDl struct {
 	wafSymbols
 	handle uintptr
 }
@@ -41,7 +42,7 @@ type wafSymbols struct {
 // newWafDl loads the libddwaf shared library and resolves all tge relevant symbols.
 // The caller is responsible for calling wafDl.Close on the returned object once they
 // are done with it so that associated resources can be released.
-func newWafDl() (dl *wafDl, err error) {
+func NewWafDl() (dl *WafDl, err error) {
 	var file string
 	file, err = lib.DumpEmbeddedWAF()
 	if err != nil {
@@ -73,11 +74,11 @@ func newWafDl() (dl *wafDl, err error) {
 		return
 	}
 
-	dl = &wafDl{symbols, handle}
+	dl = &WafDl{symbols, handle}
 
 	// Try calling the waf to make sure everything is fine
 	err = tryCall(func() error {
-		dl.wafGetVersion()
+		dl.WafGetVersion()
 		return nil
 	})
 	if err != nil {
@@ -100,88 +101,91 @@ func newWafDl() (dl *wafDl, err error) {
 	return
 }
 
-func (waf *wafDl) Close() error {
+func (waf *WafDl) Close() error {
 	return purego.Dlclose(waf.handle)
 }
 
 // wafGetVersion returned string is a static string so we do not need to free it
-func (waf *wafDl) wafGetVersion() string {
-	return gostring(cast[byte](waf.syscall(waf.getVersion)))
+func (waf *WafDl) WafGetVersion() string {
+	return unsafe.Gostring(unsafe.Cast[byte](waf.syscall(waf.getVersion)))
 }
 
 // wafInit initializes a new WAF with the provided ruleset, configuration and info objects. A
 // cgoRefPool ensures that the provided input values are not moved or garbage collected by the Go
 // runtime during the WAF call.
-func (waf *wafDl) wafInit(ruleset *wafObject, config *wafConfig, info *wafObject, refs cgoRefPool) wafHandle {
-	handle := wafHandle(waf.syscall(waf.init, ptrToUintptr(ruleset), ptrToUintptr(config), ptrToUintptr(info)))
-	keepAlive(ruleset)
-	keepAlive(config)
-	keepAlive(info)
-	keepAlive(refs)
+func (waf *WafDl) WafInit(ruleset *WafObject, config *WafConfig, info *WafObject) WafHandle {
+	handle := WafHandle(waf.syscall(waf.init, unsafe.PtrToUintptr(ruleset), unsafe.PtrToUintptr(config), unsafe.PtrToUintptr(info)))
+	unsafe.KeepAlive(ruleset)
+	unsafe.KeepAlive(config)
+	unsafe.KeepAlive(info)
 	return handle
 }
 
-func (waf *wafDl) wafUpdate(handle wafHandle, ruleset *wafObject, info *wafObject) wafHandle {
-	newHandle := wafHandle(waf.syscall(waf.update, uintptr(handle), ptrToUintptr(ruleset), ptrToUintptr(info)))
-	keepAlive(ruleset)
-	keepAlive(info)
+func (waf *WafDl) WafUpdate(handle WafHandle, ruleset *WafObject, info *WafObject) WafHandle {
+	newHandle := WafHandle(waf.syscall(waf.update, uintptr(handle), unsafe.PtrToUintptr(ruleset), unsafe.PtrToUintptr(info)))
+	unsafe.KeepAlive(ruleset)
+	unsafe.KeepAlive(info)
 	return newHandle
 }
 
-func (waf *wafDl) wafDestroy(handle wafHandle) {
+func (waf *WafDl) WafDestroy(handle WafHandle) {
 	waf.syscall(waf.destroy, uintptr(handle))
-	keepAlive(handle)
+	unsafe.KeepAlive(handle)
 }
 
 // wafKnownAddresses returns static strings so we do not need to free them
-func (waf *wafDl) wafKnownAddresses(handle wafHandle) []string {
+func (waf *WafDl) WafKnownAddresses(handle WafHandle) []string {
 	var nbAddresses uint32
 
-	arrayVoidC := waf.syscall(waf.knownAddresses, uintptr(handle), ptrToUintptr(&nbAddresses))
+	arrayVoidC := waf.syscall(waf.knownAddresses, uintptr(handle), unsafe.PtrToUintptr(&nbAddresses))
 	if arrayVoidC == 0 {
 		return nil
 	}
 
 	addresses := make([]string, int(nbAddresses))
 	for i := 0; i < int(nbAddresses); i++ {
-		addresses[i] = gostring(*castWithOffset[*byte](arrayVoidC, uint64(i)))
+		addresses[i] = unsafe.Gostring(*unsafe.CastWithOffset[*byte](arrayVoidC, uint64(i)))
 	}
 
-	keepAlive(&nbAddresses)
-	keepAlive(handle)
+	unsafe.KeepAlive(&nbAddresses)
+	unsafe.KeepAlive(handle)
 
 	return addresses
 }
 
-func (waf *wafDl) wafContextInit(handle wafHandle) wafContext {
-	ctx := wafContext(waf.syscall(waf.contextInit, uintptr(handle)))
-	keepAlive(handle)
+func (waf *WafDl) WafContextInit(handle WafHandle) WafContext {
+	ctx := WafContext(waf.syscall(waf.contextInit, uintptr(handle)))
+	unsafe.KeepAlive(handle)
 	return ctx
 }
 
-func (waf *wafDl) wafContextDestroy(context wafContext) {
+func (waf *WafDl) WafContextDestroy(context WafContext) {
 	waf.syscall(waf.contextDestroy, uintptr(context))
-	keepAlive(context)
+	unsafe.KeepAlive(context)
 }
 
-func (waf *wafDl) wafResultFree(result *wafResult) {
-	waf.syscall(waf.resultFree, ptrToUintptr(result))
-	keepAlive(result)
+func (waf *WafDl) WafResultFree(result *WafResult) {
+	waf.syscall(waf.resultFree, unsafe.PtrToUintptr(result))
+	unsafe.KeepAlive(result)
 }
 
-func (waf *wafDl) wafObjectFree(obj *wafObject) {
-	waf.syscall(waf.objectFree, ptrToUintptr(obj))
-	keepAlive(obj)
+func (waf *WafDl) WafObjectFree(obj *WafObject) {
+	waf.syscall(waf.objectFree, unsafe.PtrToUintptr(obj))
+	unsafe.KeepAlive(obj)
 }
 
-func (waf *wafDl) wafRun(context wafContext, persistentData, ephemeralData *wafObject, result *wafResult, timeout uint64) wafReturnCode {
-	rc := wafReturnCode(waf.syscall(waf.run, uintptr(context), ptrToUintptr(persistentData), ptrToUintptr(ephemeralData), ptrToUintptr(result), uintptr(timeout)))
-	keepAlive(context)
-	keepAlive(persistentData)
-	keepAlive(ephemeralData)
-	keepAlive(result)
-	keepAlive(timeout)
+func (waf *WafDl) WafRun(context WafContext, persistentData, ephemeralData *WafObject, result *WafResult, timeout uint64) WafReturnCode {
+	rc := WafReturnCode(waf.syscall(waf.run, uintptr(context), unsafe.PtrToUintptr(persistentData), unsafe.PtrToUintptr(ephemeralData), unsafe.PtrToUintptr(result), uintptr(timeout)))
+	unsafe.KeepAlive(context)
+	unsafe.KeepAlive(persistentData)
+	unsafe.KeepAlive(ephemeralData)
+	unsafe.KeepAlive(result)
+	unsafe.KeepAlive(timeout)
 	return rc
+}
+
+func (waf *WafDl) Handle() uintptr {
+	return waf.handle
 }
 
 // syscall is the only way to make C calls with this interface.
@@ -191,7 +195,7 @@ func (waf *wafDl) wafRun(context wafContext, persistentData, ephemeralData *wafO
 //	1st - The return value is a pointer or a int of any type
 //	2nd - The return value is a float
 //	3rd - The value of `errno` at the end of the call
-func (waf *wafDl) syscall(fn uintptr, args ...uintptr) uintptr {
+func (waf *WafDl) syscall(fn uintptr, args ...uintptr) uintptr {
 	ret, _, _ := purego.SyscallN(fn, args...)
 	return ret
 }

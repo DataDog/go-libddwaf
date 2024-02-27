@@ -5,7 +5,7 @@
 
 //go:build !cgo && appsec && linux && !go1.23 && !datadog.no_waf
 
-package waf
+package lib
 
 // Adds a dynamic import for libm.so because libddwaf needs the ceilf symbol
 // This mechanic only works when CGO is not enabled
