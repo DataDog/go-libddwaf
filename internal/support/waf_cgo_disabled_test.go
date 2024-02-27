@@ -3,24 +3,24 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build go1.23
+//go:build !cgo && !appsec
 
-package waf_test
+package support_test
 
 import (
-	"runtime"
 	"testing"
 
 	waf "github.com/DataDog/go-libddwaf/v2"
+	"github.com/DataDog/go-libddwaf/v2/errors"
 	"github.com/stretchr/testify/require"
 )
 
-func TestUnsupportedGoRuntime(t *testing.T) {
+func TestCgoDisabled(t *testing.T) {
 	t.Run("TestSupportsTarget", func(t *testing.T) {
 		supported, err := waf.SupportsTarget()
 		require.False(t, supported)
 		require.Error(t, err)
-		require.ErrorIs(t, err, waf.UnsupportedGoVersionError{runtime.Version()})
+		require.ErrorIs(t, err, errors.CgoDisabledError{})
 	})
 
 	t.Run("TestLoad", func(t *testing.T) {

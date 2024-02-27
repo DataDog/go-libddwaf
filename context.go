@@ -9,6 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DataDog/go-libddwaf/v2/errors"
+	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+
 	"go.uber.org/atomic"
 )
 
@@ -18,8 +22,8 @@ import (
 type Context struct {
 	handle *Handle // Instance of the WAF
 
-	cgoRefs  cgoRefPool // Used to retain go data referenced by WAF Objects the context holds
-	cContext wafContext // The C ddwaf_context pointer
+	cgoRefs  cgoRefPool          // Used to retain go data referenced by WAF Objects the context holds
+	cContext bindings.WafContext // The C ddwaf_context pointer
 
 	// Stats
 	totalRuntimeNs        atomic.Uint64 // Cumulative internal WAF run time - in nanoseconds - for this context.
@@ -41,7 +45,7 @@ func NewContext(handle *Handle) *Context {
 		return nil
 	}
 
-	cContext := wafLib.wafContextInit(handle.cHandle)
+	cContext := wafLib.WafContextInit(handle.cHandle)
 	if cContext == 0 {
 		handle.release() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
 		return nil
@@ -86,8 +90,8 @@ func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (
 	// behaviour is expected since either persistent or ephemeral addresses are allowed to be null one at a time.
 	// In this case, EncodeAddresses will return nil contrary to Encode which will return an nil wafObject,
 	// which is what we need to send to ddwaf_run to signal that the address data is empty.
-	var persistentData *wafObject = nil
-	var ephemeralData *wafObject = nil
+	var persistentData *bindings.WafObject = nil
+	var ephemeralData *bindings.WafObject = nil
 	persistentEncoder := newLimitedEncoder()
 	ephemeralEncoder := newLimitedEncoder()
 	if addressData.Persistent != nil {
@@ -109,55 +113,56 @@ func (context *Context) Run(addressData RunAddressData, timeout time.Duration) (
 	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the ddwaf_context.
 	defer context.cgoRefs.append(persistentEncoder.cgoRefs)
 
-	res, err = context.run(persistentData, ephemeralData, timeout, &persistentEncoder.cgoRefs)
+	res, err = context.run(persistentData, ephemeralData, timeout)
 
 	// Ensure the ephemerals don't get optimized away by the compiler before the WAF had a chance to use them.
-	keepAlive(ephemeralEncoder.cgoRefs)
+	unsafe.KeepAlive(ephemeralEncoder.cgoRefs)
+	unsafe.KeepAlive(persistentEncoder.cgoRefs)
 
 	return
 }
 
 // run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
 // context appropriately around this call.
-func (context *Context) run(persistentData, ephemeralData *wafObject, timeout time.Duration, cgoRefs *cgoRefPool) (Result, error) {
-	result := new(wafResult)
-	defer wafLib.wafResultFree(result)
+func (context *Context) run(persistentData, ephemeralData *bindings.WafObject, timeout time.Duration) (Result, error) {
+	result := new(bindings.WafResult)
+	defer wafLib.WafResultFree(result)
 
-	ret := wafLib.wafRun(context.cContext, persistentData, ephemeralData, result, uint64(timeout/time.Microsecond))
+	ret := wafLib.WafRun(context.cContext, persistentData, ephemeralData, result, uint64(timeout/time.Microsecond))
 
-	context.totalRuntimeNs.Add(result.total_runtime)
+	context.totalRuntimeNs.Add(result.TotalRuntime)
 	res, err := unwrapWafResult(ret, result)
-	if err == ErrTimeout {
+	if err == errors.ErrTimeout {
 		context.timeoutCount.Inc()
 	}
 
 	return res, err
 }
 
-func unwrapWafResult(ret wafReturnCode, result *wafResult) (res Result, err error) {
-	if result.timeout > 0 {
-		err = ErrTimeout
+func unwrapWafResult(ret bindings.WafReturnCode, result *bindings.WafResult) (res Result, err error) {
+	if result.Timeout > 0 {
+		err = errors.ErrTimeout
 	} else {
 		// Derivatives can be generated even if no security event gets detected, so we decode them as long as the WAF
 		// didn't timeout
-		res.Derivatives, err = decodeMap(&result.derivatives)
+		res.Derivatives, err = decodeMap(&result.Derivatives)
 	}
 
-	if ret == wafOK {
+	if ret == bindings.WafOK {
 		return res, err
 	}
 
-	if ret != wafMatch {
+	if ret != bindings.WafMatch {
 		return res, goRunError(ret)
 	}
 
-	res.Events, err = decodeArray(&result.events)
+	res.Events, err = decodeArray(&result.Events)
 	if err != nil {
 		return res, err
 	}
-	if size := result.actions.nbEntries; size > 0 {
+	if size := result.Actions.NbEntries; size > 0 {
 		// using ruleIdArray cause it decodes string array (I think)
-		res.Actions, err = decodeStringArray(&result.actions)
+		res.Actions, err = decodeStringArray(&result.Actions)
 		// TODO: use decode array, and eventually genericize the function
 		if err != nil {
 			return res, err
@@ -175,9 +180,9 @@ func (context *Context) Close() {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
-	wafLib.wafContextDestroy(context.cContext)
-	keepAlive(context.cgoRefs)     // Keep the Go pointer references until the end of the context
-	defer context.handle.release() // Reduce the reference counter of the Handle.
+	wafLib.WafContextDestroy(context.cContext)
+	unsafe.KeepAlive(context.cgoRefs) // Keep the Go pointer references until the end of the context
+	defer context.handle.release()    // Reduce the reference counter of the Handle.
 
 	context.cgoRefs = cgoRefPool{} // The data in context.cgoRefs is no longer needed, explicitly release
 	context.cContext = 0           // Makes it easy to spot use-after-free/double-free issues

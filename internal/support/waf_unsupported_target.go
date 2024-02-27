@@ -7,12 +7,14 @@
 //            Unsupported OS        Unsupported Arch
 //go:build (!linux && !darwin) || (!amd64 && !arm64)
 
-package waf
+package support
 
 import (
 	"runtime"
+
+	"github.com/DataDog/go-libddwaf/v2/errors"
 )
 
 func init() {
-	wafSupportErrors = append(wafSupportErrors, UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
+	wafSupportErrors = append(wafSupportErrors, errors.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
 }

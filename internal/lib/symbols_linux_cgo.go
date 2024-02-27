@@ -5,7 +5,7 @@
 
 //go:build cgo && linux && !go1.23 && !datadog.no_waf
 
-package waf
+package lib
 
 /*
 // Needed otherwise cielf call is optimized away or the builtin version is used

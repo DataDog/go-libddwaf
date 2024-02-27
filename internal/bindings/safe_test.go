@@ -3,10 +3,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-package waf
+package bindings
 
 import (
 	"errors"
+	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
 	"strconv"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestTryCall(t *testing.T) {
 				panic(myPanicErr)
 			})
 			require.Error(t, err)
-			var panicErr *PanicError
+			var panicErr *wafErrors.PanicError
 			require.True(t, errors.As(err, &panicErr))
 			require.True(t, errors.Is(err, myPanicErr))
 		})
@@ -36,7 +37,7 @@ func TestTryCall(t *testing.T) {
 				panic(str)
 			})
 			require.Error(t, err)
-			var panicErr *PanicError
+			var panicErr *wafErrors.PanicError
 			require.True(t, errors.As(err, &panicErr))
 			require.Contains(t, panicErr.Err.Error(), str)
 		})
@@ -48,7 +49,7 @@ func TestTryCall(t *testing.T) {
 				panic(i)
 			})
 			require.Error(t, err)
-			var panicErr *PanicError
+			var panicErr *wafErrors.PanicError
 			require.True(t, errors.As(err, &panicErr))
 			require.Contains(t, panicErr.Err.Error(), strconv.FormatInt(i, 10))
 		})

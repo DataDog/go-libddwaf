@@ -4,11 +4,13 @@
 // Copyright 2016-present Datadog, Inc.
 
 // The Go build tag "appsec" was introduced to avoid having CGO_ENABLED=0 breaking changes
-// due to purego's dynamic link against libdl.so, which is not expected when CGO is disabled. 
+// due to purego's dynamic link against libdl.so, which is not expected when CGO is disabled.
 //go:build !cgo && !appsec
 
-package waf
+package support
+
+import "github.com/DataDog/go-libddwaf/v2/errors"
 
 func init() {
-	wafSupportErrors = append(wafSupportErrors, CgoDisabledError{})
+	wafSupportErrors = append(wafSupportErrors, errors.CgoDisabledError{})
 }

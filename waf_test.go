@@ -19,6 +19,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/DataDog/go-libddwaf/v2/errors"
+
 	"github.com/DataDog/go-libddwaf/v2/internal/lib"
 	"github.com/stretchr/testify/require"
 )
@@ -357,7 +359,7 @@ func TestMatching(t *testing.T) {
 		"my.input": "Arachni",
 	}
 	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, 0)
-	require.Equal(t, ErrTimeout, err)
+	require.Equal(t, errors.ErrTimeout, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
@@ -494,7 +496,7 @@ func TestMatchingEphemeral(t *testing.T) {
 		},
 	}
 	res, err = wafCtx.Run(runAddresses, 0)
-	require.Equal(t, ErrTimeout, err)
+	require.Equal(t, errors.ErrTimeout, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
@@ -563,7 +565,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 		},
 	}
 	res, err = wafCtx.Run(runAddresses, 0)
-	require.Equal(t, ErrTimeout, err)
+	require.Equal(t, errors.ErrTimeout, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
@@ -886,27 +888,27 @@ func TestRunError(t *testing.T) {
 		ExpectedString string
 	}{
 		{
-			Err:            ErrInternal,
+			Err:            errors.ErrInternal,
 			ExpectedString: "internal waf error",
 		},
 		{
-			Err:            ErrTimeout,
+			Err:            errors.ErrTimeout,
 			ExpectedString: "waf timeout",
 		},
 		{
-			Err:            ErrInvalidObject,
+			Err:            errors.ErrInvalidObject,
 			ExpectedString: "invalid waf object",
 		},
 		{
-			Err:            ErrInvalidArgument,
+			Err:            errors.ErrInvalidArgument,
 			ExpectedString: "invalid waf argument",
 		},
 		{
-			Err:            ErrOutOfMemory,
+			Err:            errors.ErrOutOfMemory,
 			ExpectedString: "out of memory",
 		},
 		{
-			Err:            RunError(33),
+			Err:            errors.RunError(33),
 			ExpectedString: "unknown waf error 33",
 		},
 	} {
@@ -1029,7 +1031,7 @@ func TestMetrics(t *testing.T) {
 
 		for i := uint64(1); i <= 10; i++ {
 			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Nanosecond)
-			require.Equal(t, err, ErrTimeout)
+			require.Equal(t, err, errors.ErrTimeout)
 			require.Equal(t, i, wafCtx.TotalTimeouts())
 		}
 	})
