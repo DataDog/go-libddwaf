@@ -31,6 +31,13 @@ jobs:
       - bare-metal
       - containerized
       - smoke-tests
+    if: '!cancelled()'
     steps:
       - name: Done
+        if: success()
         run: echo "Done!"
+      - name: Done
+        if: failure()
+        run: |-
+          echo "Failed!"
+          exit 1
