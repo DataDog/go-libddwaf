@@ -34,10 +34,10 @@ jobs:
     if: '!cancelled()'
     steps:
       - name: Done
-        if: success()
+        if: needs.bare-metal.result == 'success' && needs.containerized.result == 'success' && needs.smoke-tests.result == 'success'
         run: echo "Done!"
       - name: Done
-        if: failure()
+        if: needs.bare-metal.result != 'success' || needs.containerized.result != 'success' || needs.smoke-tests.result != 'success'
         run: |-
           echo "Failed!"
           exit 1
