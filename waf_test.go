@@ -22,6 +22,7 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v2/errors"
 
+	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v2/internal/lib"
 	"github.com/stretchr/testify/require"
 )
@@ -1120,21 +1121,21 @@ func TestTruncationInformation(t *testing.T) {
 	res, err := ctx.Run(RunAddressData{
 		Ephemeral: map[string]any{
 			"my.input": map[string]any{
-				"string_too_long":     strings.Repeat("Z", wafMaxStringLength+extra),
-				"container_too_large": make([]bool, wafMaxContainerSize+extra),
+				"string_too_long":     strings.Repeat("Z", bindings.WafMaxStringLength+extra),
+				"container_too_large": make([]bool, bindings.WafMaxContainerSize+extra),
 			},
 		},
 		Persistent: map[string]any{
 			"my.input.2": map[string]any{
-				"string_too_long":     strings.Repeat("Z", wafMaxStringLength+extra+2),
-				"container_too_large": make([]bool, wafMaxContainerSize+extra+2),
+				"string_too_long":     strings.Repeat("Z", bindings.WafMaxStringLength+extra+2),
+				"container_too_large": make([]bool, bindings.WafMaxContainerSize+extra+2),
 			},
 		},
 	}, time.Second)
 	require.NoError(t, err)
 	require.Equal(t, map[TruncationReason][]int{
-		StringTooLong:     {wafMaxStringLength + extra + 2, wafMaxStringLength + extra},
-		ContainerTooLarge: {wafMaxContainerSize + extra + 2, wafMaxContainerSize + extra},
+		StringTooLong:     {bindings.WafMaxStringLength + extra + 2, bindings.WafMaxStringLength + extra},
+		ContainerTooLarge: {bindings.WafMaxContainerSize + extra + 2, bindings.WafMaxContainerSize + extra},
 	}, res.Truncations)
 }
 

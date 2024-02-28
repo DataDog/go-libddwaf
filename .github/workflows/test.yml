@@ -31,6 +31,13 @@ jobs:
       - bare-metal
       - containerized
       - smoke-tests
+    if: '!cancelled()'
     steps:
       - name: Done
+        if: needs.bare-metal.result == 'success' && needs.containerized.result == 'success' && needs.smoke-tests.result == 'success'
         run: echo "Done!"
+      - name: Done
+        if: needs.bare-metal.result != 'success' || needs.containerized.result != 'success' || needs.smoke-tests.result != 'success'
+        run: |-
+          echo "Failed!"
+          exit 1
