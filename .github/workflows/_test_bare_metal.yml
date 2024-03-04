@@ -24,7 +24,7 @@ jobs:
       # ARM runners (at least during early access) don't have GCC installed
       - if: matrix.runs-on == 'arm-4core-linux'
         name: Install build requirements (ARM only)
-        run: apt update && apt-install -y gcc
+        run: sudo apt update && sudo apt-install -y gcc
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
       - name: go test

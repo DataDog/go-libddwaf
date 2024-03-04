@@ -15,18 +15,12 @@ jobs:
           - golang:{0}-buster
           # RPM-based image
           - amazonlinux:2 # pretty popular on AWS workloads
-        arch: [ amd64, arm64 ]
         go-version: [ "1.22", "1.21", "1.20", "1.19" ]
         include:
           # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go, without any particular tag)
           - go-version: '1.22'
             waf-log-level: TRACE
         exclude:
-          # Test arm64 on a subset of the matrix for now to make it quicker to run due to qemu
-          - arch: arm64
-            image: golang:{0}-buster
-          - arch: arm64
-            image: golang:{0}-bullseye
           # Prune inexistent build images (debian buster is on LTS but won't get new go version images)
           - go-version: '1.21'
             image: golang:{0}-buster
@@ -49,16 +43,10 @@ jobs:
           path: ~/go/pkg/mod
           key: go-pkg-mod-${{ hashFiles('**/go.sum') }}
           restore-keys: go-pkg-mod-
-      - name: Set up QEMU
-        if: matrix.arch == 'arm64'
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
       - name: Create container
         id: container
         run: |-
           docker run --name gha-${{ github.run_id }} --rm -di                   \
-            --platform="linux/${{ matrix.arch }}"                               \
             -v "${HOME}/go/pkg/mod:/go/pkg/mod"                                 \
             -v "$PWD:$PWD"                                                      \
             -w "$PWD"                                                           \
