@@ -7,6 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        arch: [ amd64, arm64 ]
         image:
           # Standard golang images
           - golang:{0}-alpine
@@ -15,7 +16,7 @@ jobs:
           - golang:{0}-buster
           # RPM-based image
           - amazonlinux:2 # pretty popular on AWS workloads
-        go-version: [ "1.22", "1.21", "1.20", "1.19" ]
+        go-version: [ "1.22", "1.21", "1.20" ]
         include:
           # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go, without any particular tag)
           - go-version: '1.22'
@@ -28,15 +29,29 @@ jobs:
           - go-version: '1.22'
             image: golang:{0}-buster
           # The amazonlinux:2 variant is only relevant for the default go version yum ships (currently 1.20)
-          - go-version: '1.19'
-            image: amazonlinux:2
           - go-version: '1.21'
             image: amazonlinux:2
           - go-version: '1.22'
             image: amazonlinux:2
     name: ${{ toJSON(matrix) }}
-    runs-on: ubuntu-latest
+    # We use ARM runners when needed to avoid the performance hit of QEMU
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'arm-4core-linux' }}
     steps:
+      # Docker is not present on early-access ARM runners
+      - name: Prepare ARM Runner
+        if: matrix.arch == 'arm64'
+        run: |-
+          for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove -y $pkg || echo "Not present: $pkg"; done
+
+          sudo apt update
+          sudo apt install -y ca-certificates curl
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL "https://download.docker.com/linux/ubuntu/gpg" -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list
+          sudo apt update
+          sudo apt install -y docker-ce docker-ce-cli containerd.io
+
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
         with:
@@ -46,7 +61,7 @@ jobs:
       - name: Create container
         id: container
         run: |-
-          docker run --name gha-${{ github.run_id }} --rm -di                   \
+          sudo docker run --name gha-${{ github.run_id }} --rm -di              \
             -v "${HOME}/go/pkg/mod:/go/pkg/mod"                                 \
             -v "$PWD:$PWD"                                                      \
             -w "$PWD"                                                           \
@@ -56,12 +71,12 @@ jobs:
       - name: Install AmazonLinux 2 requirements
         if: matrix.image == 'amazonlinux:2'
         run: |-
-          docker exec -i gha-${{ github.run_id }}                               \
+          sudo docker exec -i gha-${{ github.run_id }}                          \
             yum install -y golang
       - name: Run the ci.sh script
         run: |-
-          docker exec -i gha-${{ github.run_id }} $PWD/.github/workflows/ci.sh
+          sudo docker exec -i gha-${{ github.run_id }} $PWD/.github/workflows/ci.sh
       - name: Stop container
         if: always() && steps.container.outcome == 'success'
         run: |-
-          docker stop gha-${{ github.run_id }}
+          sudo docker stop gha-${{ github.run_id }}
