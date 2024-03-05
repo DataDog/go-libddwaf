@@ -13,7 +13,7 @@ jobs:
           # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go version)
           - go-version: '1.22'
             waf-log-level: TRACE
-    name: ${{ toJSON(matrix) }}
+    name: ${{ matrix.runs-on }} go${{ matrix.go-version }}${{ matrix.waf-log-level && format(' (DD_APPSEC_WAF_LOG_LEVEL={0})', matrix.waf-log-level) || '' }}
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4

@@ -14,10 +14,13 @@ on:
 
 jobs:
   bare-metal:
+    name: Directly on GitHub Runner
     uses: ./.github/workflows/_test_bare_metal.yml
   containerized:
+    name: Containerized
     uses: ./.github/workflows/_test_containerized.yml
   smoke-tests:
+    name: Smoke Tests
     uses: DataDog/dd-trace-go/.github/workflows/smoke-tests.yml@main
     with:
       ref: main

@@ -33,7 +33,7 @@ jobs:
             image: amazonlinux:2
           - go-version: '1.22'
             image: amazonlinux:2
-    name: ${{ toJSON(matrix) }}
+    name: ${{ matrix.arch }} ${{ format(matrix.image, matrix.go-version) }} go${{ matrix.go-version }}${{ matrix.waf-log-level && format(' (DD_APPSEC_WAF_LOG_LEVEL={0})', matrix.waf-log-level) || '' }}
     # We use ARM runners when needed to avoid the performance hit of QEMU
     runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'arm-4core-linux' }}
     steps:
