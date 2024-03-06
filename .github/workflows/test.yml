@@ -14,7 +14,7 @@ on:
 
 jobs:
   bare-metal:
-    name: Directly on GitHub Runner
+    name: GitHub Runner
     uses: ./.github/workflows/_test_bare_metal.yml
   containerized:
     name: Containerized
