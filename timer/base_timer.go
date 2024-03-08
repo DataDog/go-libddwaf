@@ -17,7 +17,7 @@ type baseTimer struct {
 	// config is the configuration of the timer
 	config config
 
-	timeCache
+	clock
 
 	// start is the time when the timer was started
 	start time.Time
@@ -25,6 +25,7 @@ type baseTimer struct {
 	// parent is the parent timer. It is used to progate the stop of the timer to the parent timer and get the remaining time in case the budget has to be inherited.
 	parent NodeTimer
 
+	// componentName is the name of the component of the timer. It is used to store the time spent in the component and to propagate the stop of the timer to the parent timer.
 	componentName string
 
 	// spent is the time spent on the timer, set after calling stop
@@ -45,8 +46,8 @@ func NewTimer(options ...Option) (Timer, error) {
 	}
 
 	return &baseTimer{
-		config:    config,
-		timeCache: newTimeCache(),
+		config: config,
+		clock:  newTimeCache(),
 	}, nil
 }
 

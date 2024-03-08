@@ -6,15 +6,18 @@
 package timer
 
 import (
+	"math"
 	"time"
 )
 
-// UnlimitedBudget is a special value for the budget that means the timer has no budget
-var UnlimitedBudget = ^time.Duration(0) - 1
+const (
+	// UnlimitedBudget is a special value for the budget that means the timer has no budget
+	UnlimitedBudget = time.Duration(math.MaxInt64)
 
-// DynamicBudget is a special value for the budget that means the timer should inherit the budget from its parent
-// It is the default value if no options such as WithBudget, WithUnlimitedBudget or WithInheritedBudget are provided
-var DynamicBudget = time.Duration(0)
+	// DynamicBudget is a special value for the budget that means the timer should inherit the budget from its parent
+	// It is the default value if no options such as WithBudget, WithUnlimitedBudget or WithInheritedBudget are provided
+	DynamicBudget = ^time.Duration(0)
+)
 
 // DynamicBudgetFunc is a function that is called on all children when a change to the parent happens
 type DynamicBudgetFunc func(timer NodeTimer) time.Duration

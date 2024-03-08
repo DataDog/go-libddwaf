@@ -32,8 +32,8 @@ func NewTreeTimer(options ...Option) (NodeTimer, error) {
 
 	return &nodeTimer{
 		baseTimer: baseTimer{
-			config:    config,
-			timeCache: newTimeCache(),
+			config: config,
+			clock:  newTimeCache(),
 		},
 		components: newComponents(config.components),
 	}, nil
@@ -53,7 +53,7 @@ func (timer *nodeTimer) NewNode(name string, options ...Option) (NodeTimer, erro
 	return &nodeTimer{
 		baseTimer: baseTimer{
 			config:        config,
-			timeCache:     timer.timeCache,
+			clock:         timer.clock,
 			parent:        timer,
 			componentName: name,
 		},
@@ -73,7 +73,7 @@ func (timer *nodeTimer) NewLeaf(name string, options ...Option) (Timer, error) {
 	}
 
 	return &baseTimer{
-		timeCache:     timer.timeCache,
+		clock:         timer.clock,
 		config:        config,
 		componentName: name,
 		parent:        timer,
@@ -91,12 +91,12 @@ func (timer *nodeTimer) MustLeaf(name string, options ...Option) Timer {
 func (timer *nodeTimer) childStarted() {}
 
 func (timer *nodeTimer) childStopped(componentName string, duration time.Duration) {
+	timer.components.lookup[componentName].Add(int64(duration))
 	if timer.parent == nil {
 		return
 	}
 
-	timer.components.lookup[componentName].Add(int64(duration))
-	timer.parent.childStopped(componentName, duration)
+	timer.parent.childStopped(timer.componentName, duration)
 }
 
 func (timer *nodeTimer) Stats() map[string]time.Duration {

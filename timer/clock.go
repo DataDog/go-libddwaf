@@ -9,18 +9,18 @@ import (
 	"time"
 )
 
-// timeCache is a simple cache for time.Now() to hopefully avoid some expensive calls to REALTIME part of time.Now()
-type timeCache struct {
+// clock is a simple cache for time.Now() to hopefully avoid some expensive calls to REALTIME part of time.Now()
+type clock struct {
 	lastRequest time.Time
 }
 
-func newTimeCache() timeCache {
-	return timeCache{
+func newTimeCache() clock {
+	return clock{
 		lastRequest: time.Now(),
 	}
 }
 
-func (ct *timeCache) now() time.Time {
+func (ct *clock) now() time.Time {
 	// If the diff is greater than ~2^32 then the monotonic clock has wrapped around
 	// and time.Since will do a call to time.Now() for us.
 	ct.lastRequest = ct.lastRequest.Add(time.Since(ct.lastRequest))

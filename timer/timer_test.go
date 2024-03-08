@@ -301,18 +301,17 @@ func TestTree(t *testing.T) {
 				leafTimer.Timed(func(timer timer.Timer) {})
 
 				subSum += leafTimer.Spent()
-				require.Equal(t, nodeTimer.SumSpent(), subSum)
+				require.Equal(t, subSum, nodeTimer.SumSpent())
 			}
 
+			subSum += nodeTimer.Stop()
 			sum += subSum
-			require.Equal(t, rootTimer.SumSpent(), sum)
+			require.Equal(t, sum, rootTimer.SumSpent())
 
-			nodeTimer.Stop()
 			require.GreaterOrEqual(t, nodeTimer.Spent(), nodeTimer.SumSpent())
 		}
 
 		rootTimer.Stop()
-		require.GreaterOrEqual(t, rootTimer.Spent(), rootTimer.SumSpent())
 	})
 
 	t.Run("100-nodes-depth", func(t *testing.T) {

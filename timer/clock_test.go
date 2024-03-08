@@ -60,15 +60,15 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 	})
 }
 
-// Benchmark time.Now() vs timeCache.now()
+// Benchmark time.Now() vs clock.now()
 func BenchmarkNow(b *testing.B) {
 	b.Run("time.Now()", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			unsafe.KeepAlive(time.Now())
 		}
 	})
-	ct := &timeCache{lastRequest: time.Now()}
-	b.Run("timeCache.now()", func(b *testing.B) {
+	ct := &clock{lastRequest: time.Now()}
+	b.Run("clock.now()", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			unsafe.KeepAlive(ct.now())
 		}
