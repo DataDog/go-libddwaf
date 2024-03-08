@@ -47,7 +47,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 		}
 	})
 
-	b.Run("timer.Expired()", func(b *testing.B) {
+	b.Run("timer.Exhausted()", func(b *testing.B) {
 		timer, err := NewTreeTimer(WithBudget(time.Hour))
 		if err != nil {
 			b.Fatal(err)
@@ -55,7 +55,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			unsafe.KeepAlive(timer.Expired())
+			unsafe.KeepAlive(timer.Exhausted())
 		}
 	})
 }

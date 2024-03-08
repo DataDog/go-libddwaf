@@ -5,13 +5,20 @@
 
 package timer
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+	"time"
+)
 
 type component struct {
 	// name through which the component is identified
 	name string
 	// Updated each time a run of a sub-timer ends
 	spent atomic.Int64
+}
+
+func (component *component) addSpent(duration time.Duration) {
+	component.spent.Add(int64(duration))
 }
 
 // components store the data shared between child timers of the same component name

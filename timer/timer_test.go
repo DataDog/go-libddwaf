@@ -18,13 +18,13 @@ import (
 func hasExpired(t *testing.T, timer timer.Timer, duration time.Duration) {
 	require.Greater(t, timer.Spent(), duration)
 	require.Zero(t, timer.Remaining())
-	require.True(t, timer.Expired())
+	require.True(t, timer.Exhausted())
 }
 
 func hasSumExpired(t *testing.T, timer timer.NodeTimer, duration time.Duration) {
 	require.Greater(t, timer.SumSpent(), duration)
 	require.Zero(t, timer.SumRemaining())
-	require.True(t, timer.SumExpired())
+	require.True(t, timer.SumExhausted())
 }
 
 func TestBasic(t *testing.T) {
@@ -87,7 +87,7 @@ func TestSum(t *testing.T) {
 
 		require.Greater(t, rootTimer.SumSpent(), time.Millisecond)
 		require.Zero(t, rootTimer.SumRemaining())
-		require.True(t, rootTimer.SumExpired())
+		require.True(t, rootTimer.SumExhausted())
 	})
 
 	t.Run("remaining", func(t *testing.T) {
@@ -102,7 +102,7 @@ func TestSum(t *testing.T) {
 		require.GreaterOrEqual(t, rootTimer.SumSpent(), time.Millisecond)
 		require.GreaterOrEqual(t, rootTimer.SumRemaining(), time.Duration(0))
 		require.LessOrEqual(t, rootTimer.SumRemaining(), 3*time.Millisecond)
-		require.False(t, rootTimer.SumExpired())
+		require.False(t, rootTimer.SumExhausted())
 	})
 
 	t.Run("multiple-components", func(t *testing.T) {
@@ -130,7 +130,7 @@ func TestSum(t *testing.T) {
 
 		require.GreaterOrEqual(t, rootTimer.SumSpent(), time.Millisecond)
 		require.GreaterOrEqual(t, rootTimer.SumRemaining(), time.Duration(0))
-		require.False(t, rootTimer.SumExpired())
+		require.False(t, rootTimer.SumExhausted())
 	})
 }
 
@@ -146,7 +146,7 @@ func TestFull(t *testing.T) {
 			require.GreaterOrEqual(t, newTimer.Spent(), time.Millisecond)
 			require.GreaterOrEqual(t, newTimer.Remaining(), time.Duration(0))
 			require.LessOrEqual(t, newTimer.Remaining(), time.Second)
-			require.False(t, newTimer.Expired())
+			require.False(t, newTimer.Exhausted())
 		})
 
 		t.Run("expired", func(t *testing.T) {
@@ -185,7 +185,7 @@ func TestFull(t *testing.T) {
 			require.GreaterOrEqual(t, leafTimer.Spent(), time.Millisecond)
 			require.GreaterOrEqual(t, leafTimer.Remaining(), time.Duration(0))
 			require.LessOrEqual(t, leafTimer.Remaining(), time.Second)
-			require.False(t, leafTimer.Expired())
+			require.False(t, leafTimer.Exhausted())
 
 		})
 	})
@@ -359,21 +359,21 @@ func BenchmarkContext(b *testing.B) {
 
 			runTimer.MustLeaf("persistent-encoder").Timed(func(timer timer.Timer) {
 				for i := 0; i < 10; i++ {
-					unsafe.KeepAlive(timer.Expired())
+					unsafe.KeepAlive(timer.Exhausted())
 				}
 			})
 
-			if contextTimer.SumExpired() {
+			if contextTimer.SumExhausted() {
 				// return
 			}
 
 			runTimer.MustLeaf("ephemera-encoder").Timed(func(timer timer.Timer) {
 				for i := 0; i < 10; i++ {
-					unsafe.KeepAlive(timer.Expired())
+					unsafe.KeepAlive(timer.Exhausted())
 				}
 			})
 
-			if contextTimer.SumExpired() {
+			if contextTimer.SumExhausted() {
 				// return
 			}
 
@@ -404,21 +404,21 @@ func BenchmarkRun(b *testing.B) {
 
 		runTimer.MustLeaf("persistent-encoder").Timed(func(timer timer.Timer) {
 			for i := 0; i < 10; i++ {
-				unsafe.KeepAlive(timer.Expired())
+				unsafe.KeepAlive(timer.Exhausted())
 			}
 		})
 
-		if runTimer.SumExpired() {
+		if runTimer.SumExhausted() {
 			// return
 		}
 
 		runTimer.MustLeaf("ephemera-encoder").Timed(func(timer timer.Timer) {
 			for i := 0; i < 10; i++ {
-				unsafe.KeepAlive(timer.Expired())
+				unsafe.KeepAlive(timer.Exhausted())
 			}
 		})
 
-		if runTimer.SumExpired() {
+		if runTimer.SumExhausted() {
 			// return
 		}
 

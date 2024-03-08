@@ -26,7 +26,7 @@ type baseTimer struct {
 	parentComponent *component
 
 	// config is the configuration of the timer
-	config Config
+	config config
 
 	// spent is the time spent on the timer, set after calling stop
 	spent time.Duration
@@ -37,11 +37,11 @@ var _ Timer = (*baseTimer)(nil)
 // NewTimer creates a new Timer with the given options. You have to specify either the option WithBudget or WithUnlimitedBudget.
 func NewTimer(options ...Option) (Timer, error) {
 	config := newConfig(options...)
-	if config.Budget == InheritedBudget {
+	if config.budget == DynamicBudget {
 		return nil, errors.New("root timer cannot inherit parent budget, please provide a budget using timer.WithBudget() or timer.WithUnlimitedBudget()")
 	}
 
-	if len(config.Components) > 0 {
+	if len(config.components) > 0 {
 		return nil, errors.New("NewTimer: timer that have components must use NewTreeTimer()")
 	}
 
@@ -57,8 +57,8 @@ func (timer *baseTimer) Start() time.Time {
 		return timer.start
 	}
 
-	if timer.config.Budget == InheritedBudget && timer.parent != nil {
-		timer.config.Budget = timer.parent.Remaining()
+	if timer.config.budget == DynamicBudget && timer.parent != nil {
+		timer.config.budget = timer.config.dynamicBudget(timer.parent)
 	}
 
 	timer.start = timer.now()
@@ -80,11 +80,11 @@ func (timer *baseTimer) Spent() time.Duration {
 }
 
 func (timer *baseTimer) Remaining() time.Duration {
-	if timer.config.Budget == UnlimitedBudget {
+	if timer.config.budget == UnlimitedBudget {
 		return UnlimitedBudget
 	}
 
-	remaining := timer.config.Budget - timer.Spent()
+	remaining := timer.config.budget - timer.Spent()
 	if remaining < 0 {
 		return 0
 	}
@@ -92,12 +92,12 @@ func (timer *baseTimer) Remaining() time.Duration {
 	return remaining
 }
 
-func (timer *baseTimer) Expired() bool {
-	if timer.config.Budget == UnlimitedBudget {
+func (timer *baseTimer) Exhausted() bool {
+	if timer.config.budget == UnlimitedBudget {
 		return false
 	}
 
-	return timer.Spent() > timer.config.Budget
+	return timer.Spent() > timer.config.budget
 }
 
 func (timer *baseTimer) Stop() time.Duration {
@@ -108,7 +108,7 @@ func (timer *baseTimer) Stop() time.Duration {
 
 	timer.spent = timer.Spent()
 	if timer.parent != nil {
-		timer.parentComponent.spent.Add(int64(timer.spent))
+		timer.parentComponent.addSpent(timer.spent)
 		timer.parent.childStopped(timer.spent)
 	}
 
@@ -118,8 +118,7 @@ func (timer *baseTimer) Stop() time.Duration {
 func (timer *baseTimer) Timed(timedFunc func(timer Timer)) (spent time.Duration) {
 	timer.Start()
 	defer func() {
-		timer.spent = timer.Stop()
-		spent = timer.spent
+		spent = timer.Stop()
 	}()
 
 	timedFunc(timer)

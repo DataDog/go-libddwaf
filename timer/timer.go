@@ -28,16 +28,16 @@ type Timer interface {
 	// Spent is thread-safe
 	Spent() time.Duration
 
-	// Remaining returns the time remaining before the timer reaches its budget. (Budget - Spent())
-	// It returns 0 if the timer has expired. Remaining may never return a value below zero.
+	// Remaining returns the time remaining before the timer reaches its budget. (budget - Spent())
+	// It returns 0 if the timer is exhausted. Remaining may never return a value below zero.
 	// Remaining only makes sense if the timer has a budget. If the timer has no budget, it returns the special value UnlimitedBudget.
 	// Remaining is thread-safe
 	Remaining() time.Duration
 
-	// Expired returns true if the timer spent in the timer is greater than the budget. (Spent() > Budget)
-	// Expired may return true only in case the time has a budget. If the timer has n, it returns false.
-	// Expired is thread-safe
-	Expired() bool
+	// Exhausted returns true if the timer spent in the timer is greater than the budget. (Spent() > budget)
+	// Exhausted may return true only in case the time has a budget. If the timer has n, it returns false.
+	// Exhausted is thread-safe
+	Exhausted() bool
 
 	// Timed is a convenience function that starts the timer, calls the provided function and stops the timer.
 	// Timed is panic-safe and will stop the timer even if the function panics.
@@ -57,10 +57,10 @@ type SumTimer interface {
 	// SumRemaining is thread-safe
 	SumRemaining() time.Duration
 
-	// SumExpired returns true if the sum of the time spent in each component of the timer is greater than the budget.
-	// SumExpired returns false if the timer has no budget. (UnlimitedBudget)
-	// SumExpired is thread-safe
-	SumExpired() bool
+	// SumExhausted returns true if the sum of the time spent in each component of the timer is greater than the budget.
+	// SumExhausted returns false if the timer has no budget. (UnlimitedBudget)
+	// SumExhausted is thread-safe
+	SumExhausted() bool
 }
 
 // NodeTimer is the interface for tree timers. NewTreeTimer will provide you with a NodeTimer.
@@ -73,7 +73,7 @@ type SumTimer interface {
 // The following functions are the same as the Timer interface but works using the sum of the children timers:
 // - SumSpent() -> Spent()
 // - SumRemaining() -> Remaining()
-// - SumExpired() -> Expired()
+// - SumExhausted() -> Exhausted()
 // Keep in mind that the timer itself (only Start and Stop) is NOT thread-safe and once Stop() is called, the NodeTimer cannot be restarted.
 type NodeTimer interface {
 	Timer
@@ -99,6 +99,8 @@ type NodeTimer interface {
 	// Stats returns a map of the time spent in each component of the timer.
 	// Stats is thread-safe
 	Stats() map[string]time.Duration
+
+	childStarted()
 
 	// childStopped is used to propagate the time spent in a child timer to the parent timer through the whole tree.
 	childStopped(duration time.Duration)

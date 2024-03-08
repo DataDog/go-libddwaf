@@ -30,11 +30,11 @@ var _ NodeTimer = (*nodeTimer)(nil)
 // NewTreeTimer creates a new Timer with the given options. You have to specify either the option WithBudget or WithUnlimitedBudget and at least one component using the WithComponents option.
 func NewTreeTimer(options ...Option) (NodeTimer, error) {
 	config := newConfig(options...)
-	if config.Budget == InheritedBudget {
+	if config.budget == DynamicBudget {
 		return nil, errors.New("root timer cannot inherit parent budget, please provide a budget using timer.WithBudget() or timer.WithUnlimitedBudget()")
 	}
 
-	if len(config.Components) == 0 {
+	if len(config.components) == 0 {
 		return nil, errors.New("NewTreeTimer: tree timer must have at least one component, otherwise use NewTimer()")
 	}
 
@@ -43,13 +43,13 @@ func NewTreeTimer(options ...Option) (NodeTimer, error) {
 			config:    config,
 			timeCache: newTimeCache(),
 		},
-		components: newComponents(config.Components),
+		components: newComponents(config.components),
 	}, nil
 }
 
 func (timer *nodeTimer) NewNode(name string, options ...Option) (NodeTimer, error) {
 	config := newConfig(options...)
-	if len(config.Components) == 0 {
+	if len(config.components) == 0 {
 		return nil, errors.New("NewNode: node timer must have at least one component, otherwise use NewLeaf()")
 	}
 
@@ -63,7 +63,7 @@ func (timer *nodeTimer) NewNode(name string, options ...Option) (NodeTimer, erro
 			config:    config,
 			timeCache: timer.timeCache,
 		},
-		components:      newComponents(config.Components),
+		components:      newComponents(config.components),
 		parentComponent: component,
 		parent:          timer,
 	}, nil
@@ -71,7 +71,7 @@ func (timer *nodeTimer) NewNode(name string, options ...Option) (NodeTimer, erro
 
 func (timer *nodeTimer) NewLeaf(name string, options ...Option) (Timer, error) {
 	config := newConfig(options...)
-	if len(config.Components) != 0 {
+	if len(config.components) != 0 {
 		return nil, errors.New("NewLeaf: leaf timer cannot have components, otherwise use NewNode()")
 	}
 
@@ -95,6 +95,8 @@ func (timer *nodeTimer) MustLeaf(name string, options ...Option) Timer {
 	}
 	return leaf
 }
+
+func (timer *nodeTimer) childStarted() {}
 
 func (timer *nodeTimer) childStopped(duration time.Duration) {
 	if timer.parent == nil {
@@ -123,11 +125,11 @@ func (timer *nodeTimer) SumSpent() time.Duration {
 }
 
 func (timer *nodeTimer) SumRemaining() time.Duration {
-	if timer.config.Budget == UnlimitedBudget {
+	if timer.config.budget == UnlimitedBudget {
 		return UnlimitedBudget
 	}
 
-	remaining := timer.config.Budget - timer.SumSpent()
+	remaining := timer.config.budget - timer.SumSpent()
 	if remaining < 0 {
 		return 0
 	}
@@ -135,10 +137,10 @@ func (timer *nodeTimer) SumRemaining() time.Duration {
 	return remaining
 }
 
-func (timer *nodeTimer) SumExpired() bool {
-	if timer.config.Budget == UnlimitedBudget {
+func (timer *nodeTimer) SumExhausted() bool {
+	if timer.config.budget == UnlimitedBudget {
 		return false
 	}
 
-	return timer.SumSpent() > timer.config.Budget
+	return timer.SumSpent() > timer.config.budget
 }

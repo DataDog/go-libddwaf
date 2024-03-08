@@ -12,20 +12,26 @@ import (
 // UnlimitedBudget is a special value for the budget that means the timer has no budget
 var UnlimitedBudget = ^time.Duration(0) - 1
 
-// InheritedBudget is a special value for the budget that means the timer should inherit the budget from its parent
+// DynamicBudget is a special value for the budget that means the timer should inherit the budget from its parent
 // It is the default value if no options such as WithBudget, WithUnlimitedBudget or WithInheritedBudget are provided
-var InheritedBudget = time.Duration(0)
+var DynamicBudget = time.Duration(0)
 
-// Config is the configuration of a timer. It can be created through the use of options
-type Config struct {
-	// Components store all the components of the timer
-	Components []string
-	// Budget is the time budget for the timer
-	Budget time.Duration
+// DynamicBudgetFunc is a function that is called on all children when a change to the parent happens
+type DynamicBudgetFunc func(timer NodeTimer) time.Duration
+
+// config is the configuration of a timer. It can be created through the use of options
+type config struct {
+	// components store all the components of the timer
+	components []string
+	// budget is the time budget for the timer
+	budget        time.Duration
+	dynamicBudget DynamicBudgetFunc
 }
 
-func newConfig(options ...Option) Config {
-	config := Config{}
+func newConfig(options ...Option) config {
+	config := config{}
+	// Make sure the budget is inherited by default
+	WithInheritedSumBudget()(&config)
 	for _, option := range options {
 		option(&config)
 	}
@@ -33,32 +39,45 @@ func newConfig(options ...Option) Config {
 }
 
 // Option are the configuration options for any type of timer. Please read the documentation of said timer to see which options are available
-type Option func(*Config)
+type Option func(*config)
 
-// WithBudget is an Option that sets the Budget value
+// WithBudget is an Option that sets the budget value
 func WithBudget(budget time.Duration) Option {
-	return func(c *Config) {
-		c.Budget = budget
+	return func(c *config) {
+		c.budget = budget
 	}
 }
 
-// WithUnlimitedBudget is an Option that sets the UnlimitedBudget flag on Config.Budget
+// WithUnlimitedBudget is an Option that sets the UnlimitedBudget flag on config.budget
 func WithUnlimitedBudget() Option {
-	return func(c *Config) {
-		c.Budget = UnlimitedBudget
+	return func(c *config) {
+		c.budget = UnlimitedBudget
 	}
 }
 
-// WithInheritedBudget is an Option that sets the InheritedBudget flag on Config.Budget
+// WithInheritedBudget is an Option that sets the DynamicBudget flag on config.budget
 func WithInheritedBudget() Option {
-	return func(c *Config) {
-		c.Budget = InheritedBudget
+	return func(c *config) {
+		c.budget = DynamicBudget
+		c.dynamicBudget = func(timer NodeTimer) time.Duration {
+			return timer.Remaining()
+		}
 	}
 }
 
-// WithComponents is an Option that adds multiple components to the Components list
+// WithInheritedSumBudget is an Option that sets the DynamicBudget flag on config.budget and sets the DynamicBudgetFunc to sum the remaining time of all children
+func WithInheritedSumBudget() Option {
+	return func(c *config) {
+		c.budget = DynamicBudget
+		c.dynamicBudget = func(timer NodeTimer) time.Duration {
+			return timer.SumRemaining()
+		}
+	}
+}
+
+// WithComponents is an Option that adds multiple components to the components list
 func WithComponents(components ...string) Option {
-	return func(c *Config) {
-		c.Components = append(c.Components, components...)
+	return func(c *config) {
+		c.components = append(c.components, components...)
 	}
 }
