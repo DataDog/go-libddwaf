@@ -7,31 +7,18 @@ package timer
 
 import (
 	"sync/atomic"
-	"time"
 )
-
-type component struct {
-	// name through which the component is identified
-	name string
-	// Updated each time a run of a sub-timer ends
-	spent atomic.Int64
-}
-
-func (component *component) addSpent(duration time.Duration) {
-	component.spent.Add(int64(duration))
-}
 
 // components store the data shared between child timers of the same component name
 type components struct {
-	lookup  map[string]*component
-	storage []component
+	lookup  map[string]*atomic.Int64
+	storage []atomic.Int64
 }
 
 func newComponents(names []string) components {
-	lookup := make(map[string]*component, len(names))
-	storage := make([]component, len(names))
+	lookup := make(map[string]*atomic.Int64, len(names))
+	storage := make([]atomic.Int64, len(names))
 	for i, name := range names {
-		storage[i].name = name
 		lookup[name] = &storage[i]
 	}
 	return components{

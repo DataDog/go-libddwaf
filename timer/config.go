@@ -21,11 +21,11 @@ type DynamicBudgetFunc func(timer NodeTimer) time.Duration
 
 // config is the configuration of a timer. It can be created through the use of options
 type config struct {
+	dynamicBudget DynamicBudgetFunc
 	// components store all the components of the timer
 	components []string
 	// budget is the time budget for the timer
-	budget        time.Duration
-	dynamicBudget DynamicBudgetFunc
+	budget time.Duration
 }
 
 func newConfig(options ...Option) config {

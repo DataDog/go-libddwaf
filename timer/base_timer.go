@@ -13,6 +13,10 @@ import (
 // baseTimer is the type used for all the timers that won't have children
 // It's implementation is more lightweight than nodeTimer and can be used as a standalone timer using NewTimer
 type baseTimer struct {
+
+	// config is the configuration of the timer
+	config config
+
 	timeCache
 
 	// start is the time when the timer was started
@@ -21,12 +25,7 @@ type baseTimer struct {
 	// parent is the parent timer. It is used to progate the stop of the timer to the parent timer and get the remaining time in case the budget has to be inherited.
 	parent NodeTimer
 
-	// parentComponent is the component stored in the map of the parent timer. We keep a reference to it to update its spent time
-	// once the timer is stopped. It may be nil if the timer is not a child of a tree timer, like when calling NewTimer.
-	parentComponent *component
-
-	// config is the configuration of the timer
-	config config
+	componentName string
 
 	// spent is the time spent on the timer, set after calling stop
 	spent time.Duration
@@ -108,8 +107,7 @@ func (timer *baseTimer) Stop() time.Duration {
 
 	timer.spent = timer.Spent()
 	if timer.parent != nil {
-		timer.parentComponent.addSpent(timer.spent)
-		timer.parent.childStopped(timer.spent)
+		timer.parent.childStopped(timer.componentName, timer.spent)
 	}
 
 	return timer.spent

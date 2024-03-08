@@ -100,10 +100,11 @@ type NodeTimer interface {
 	// Stats is thread-safe
 	Stats() map[string]time.Duration
 
+	// childStarted is used to propagate the start of a child timer to the parent timer through the whole tree.
 	childStarted()
 
 	// childStopped is used to propagate the time spent in a child timer to the parent timer through the whole tree.
-	childStopped(duration time.Duration)
+	childStopped(componentName string, duration time.Duration)
 
 	// now is a convenience wrapper to swap the time.Now() function for testing and performance purposes.
 	now() time.Time

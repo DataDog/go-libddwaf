@@ -14,14 +14,6 @@ import (
 // nodeTimer is the type used for all the timers that can (and will) have children
 type nodeTimer struct {
 	baseTimer
-
-	// parent is the parent timer. It is used to propagate the stop of the timer to the parent timer and get the remaining time in case the budget has to be inherited.
-	parent NodeTimer
-
-	// parentComponent is the component stored in the map of the parent timer. We keep a reference to it to update its spent time
-	// once the timer is stopped. It may be nil if the timer is not a child of a tree timer, like when calling NewTimer.
-	parentComponent *component
-
 	components
 }
 
@@ -53,19 +45,19 @@ func (timer *nodeTimer) NewNode(name string, options ...Option) (NodeTimer, erro
 		return nil, errors.New("NewNode: node timer must have at least one component, otherwise use NewLeaf()")
 	}
 
-	component, ok := timer.components.lookup[name]
+	_, ok := timer.components.lookup[name]
 	if !ok {
 		return nil, fmt.Errorf("NewNode: component %s not found", name)
 	}
 
 	return &nodeTimer{
 		baseTimer: baseTimer{
-			config:    config,
-			timeCache: timer.timeCache,
+			config:        config,
+			timeCache:     timer.timeCache,
+			parent:        timer,
+			componentName: name,
 		},
-		components:      newComponents(config.components),
-		parentComponent: component,
-		parent:          timer,
+		components: newComponents(config.components),
 	}, nil
 }
 
@@ -75,16 +67,16 @@ func (timer *nodeTimer) NewLeaf(name string, options ...Option) (Timer, error) {
 		return nil, errors.New("NewLeaf: leaf timer cannot have components, otherwise use NewNode()")
 	}
 
-	component, ok := timer.components.lookup[name]
+	_, ok := timer.components.lookup[name]
 	if !ok {
 		return nil, fmt.Errorf("NewLeaf: component %s not found", name)
 	}
 
 	return &baseTimer{
-		timeCache:       timer.timeCache,
-		config:          config,
-		parentComponent: component,
-		parent:          timer,
+		timeCache:     timer.timeCache,
+		config:        config,
+		componentName: name,
+		parent:        timer,
 	}, nil
 }
 
@@ -98,19 +90,19 @@ func (timer *nodeTimer) MustLeaf(name string, options ...Option) Timer {
 
 func (timer *nodeTimer) childStarted() {}
 
-func (timer *nodeTimer) childStopped(duration time.Duration) {
+func (timer *nodeTimer) childStopped(componentName string, duration time.Duration) {
 	if timer.parent == nil {
 		return
 	}
 
-	timer.parentComponent.spent.Add(int64(duration))
-	timer.parent.childStopped(duration)
+	timer.components.lookup[componentName].Add(int64(duration))
+	timer.parent.childStopped(componentName, duration)
 }
 
 func (timer *nodeTimer) Stats() map[string]time.Duration {
 	stats := make(map[string]time.Duration, len(timer.components.lookup))
 	for name, component := range timer.components.lookup {
-		stats[name] = time.Duration(component.spent.Load())
+		stats[name] = time.Duration(component.Load())
 	}
 
 	return stats
@@ -119,7 +111,7 @@ func (timer *nodeTimer) Stats() map[string]time.Duration {
 func (timer *nodeTimer) SumSpent() time.Duration {
 	var sum time.Duration
 	for _, component := range timer.components.lookup {
-		sum += time.Duration(component.spent.Load())
+		sum += time.Duration(component.Load())
 	}
 	return sum
 }
