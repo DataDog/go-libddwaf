@@ -18,10 +18,10 @@ var InheritedBudget = time.Duration(0)
 
 // Config is the configuration of a timer. It can be created through the use of options
 type Config struct {
-	// Budget is the time budget for the timer
-	Budget time.Duration
 	// Components store all the components of the timer
 	Components []string
+	// Budget is the time budget for the timer
+	Budget time.Duration
 }
 
 func newConfig(options ...Option) Config {

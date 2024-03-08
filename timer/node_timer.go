@@ -14,14 +14,15 @@ import (
 // nodeTimer is the type used for all the timers that can (and will) have children
 type nodeTimer struct {
 	baseTimer
-	components
+
+	// parent is the parent timer. It is used to propagate the stop of the timer to the parent timer and get the remaining time in case the budget has to be inherited.
+	parent NodeTimer
 
 	// parentComponent is the component stored in the map of the parent timer. We keep a reference to it to update its spent time
 	// once the timer is stopped. It may be nil if the timer is not a child of a tree timer, like when calling NewTimer.
 	parentComponent *component
 
-	// parent is the parent timer. It is used to propagate the stop of the timer to the parent timer and get the remaining time in case the budget has to be inherited.
-	parent NodeTimer
+	components
 }
 
 var _ NodeTimer = (*nodeTimer)(nil)
