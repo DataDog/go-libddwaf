@@ -9,7 +9,6 @@ import (
 	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
 	"github.com/DataDog/go-libddwaf/v2/timer"
 	"github.com/stretchr/testify/require"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -72,10 +71,6 @@ func TestBasic(t *testing.T) {
 
 func TestSum(t *testing.T) {
 
-	if os.Getenv("GITHUB_RUN_ID") != "" {
-		t.Skip("Skipping test in CI environment")
-	}
-
 	t.Run("expired", func(t *testing.T) {
 		rootTimer, err := timer.NewTreeTimer(timer.WithBudget(time.Millisecond), timer.WithComponents("a"))
 		require.NoError(t, err)
@@ -91,7 +86,7 @@ func TestSum(t *testing.T) {
 	})
 
 	t.Run("remaining", func(t *testing.T) {
-		rootTimer, err := timer.NewTreeTimer(timer.WithBudget(4*time.Millisecond), timer.WithComponents("a"))
+		rootTimer, err := timer.NewTreeTimer(timer.WithBudget(time.Hour), timer.WithComponents("a"))
 		require.NoError(t, err)
 
 		leafTimer := rootTimer.MustLeaf("a", timer.WithBudget(1*time.Millisecond))
@@ -101,7 +96,7 @@ func TestSum(t *testing.T) {
 
 		require.GreaterOrEqual(t, rootTimer.SumSpent(), time.Millisecond)
 		require.GreaterOrEqual(t, rootTimer.SumRemaining(), time.Duration(0))
-		require.LessOrEqual(t, rootTimer.SumRemaining(), 3*time.Millisecond)
+		require.LessOrEqual(t, rootTimer.SumRemaining(), time.Hour-time.Millisecond)
 		require.False(t, rootTimer.SumExhausted())
 	})
 
@@ -119,6 +114,8 @@ func TestSum(t *testing.T) {
 			time.Sleep(1 * time.Millisecond)
 		})
 
+		require.True(t, leafTimer.Exhausted())
+
 		leafTimer = rootTimer.MustLeaf("b", timer.WithBudget(1*time.Millisecond))
 		leafTimer.Timed(func(timer timer.Timer) {
 		})
@@ -128,7 +125,9 @@ func TestSum(t *testing.T) {
 			time.Sleep(1 * time.Millisecond)
 		})
 
-		require.GreaterOrEqual(t, rootTimer.SumSpent(), time.Millisecond)
+		require.True(t, leafTimer.Exhausted())
+
+		require.GreaterOrEqual(t, rootTimer.SumSpent(), 2*time.Millisecond)
 		require.GreaterOrEqual(t, rootTimer.SumRemaining(), time.Duration(0))
 		require.False(t, rootTimer.SumExhausted())
 	})
