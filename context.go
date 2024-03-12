@@ -141,7 +141,7 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 		return res, err
 	}
 
-	// ddwaf_run cannot run concurrently and the next merge write on the context state so we need a mutex
+	// ddwaf_run cannot run concurrently and we are going to mutate the context.cgoRefs, so we need to lock the context
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
@@ -226,13 +226,13 @@ func (context *Context) run(persistentData, ephemeralData *bindings.WafObject, w
 	result := new(bindings.WafResult)
 	defer wafLib.WafResultFree(result)
 
-	if timeBudget == timer.UnlimitedBudget {
-		timeBudget = timer.UnlimitedBudget / 1000 // Value is too big for the WAF
-	}
-
 	wafTimer.Start()
 	defer wafTimer.Stop()
-	ret := wafLib.WafRun(context.cContext, persistentData, ephemeralData, result, uint64(timeBudget.Microseconds()))
+
+	// The value of the timeout cannot exceed 2^55
+	// cf. https://en.cppreference.com/w/cpp/chrono/duration
+	timeout := uint64(timeBudget.Microseconds()) & 0x008FFFFFFFFFFFFF
+	ret := wafLib.WafRun(context.cContext, persistentData, ephemeralData, result, timeout)
 
 	return unwrapWafResult(ret, result)
 }
@@ -314,6 +314,10 @@ type metrics struct {
 func (metrics *metrics) add(key string, duration time.Duration) {
 	metrics.mutex.Lock()
 	defer metrics.mutex.Unlock()
+	if metrics.data == nil {
+		metrics.data = make(map[string]time.Duration, 5)
+	}
+
 	metrics.data[key] += duration
 }
 
@@ -326,6 +330,10 @@ func (metrics *metrics) get(key string) time.Duration {
 func (metrics *metrics) copy() map[string]time.Duration {
 	metrics.mutex.Lock()
 	defer metrics.mutex.Unlock()
+	if metrics.data == nil {
+		return nil
+	}
+
 	copy := make(map[string]time.Duration, len(metrics.data))
 	for k, v := range metrics.data {
 		copy[k] = v
@@ -337,6 +345,10 @@ func (metrics *metrics) copy() map[string]time.Duration {
 func (metrics *metrics) merge(other map[string]time.Duration) {
 	metrics.mutex.Lock()
 	defer metrics.mutex.Unlock()
+	if metrics.data == nil {
+		metrics.data = make(map[string]time.Duration, 5)
+	}
+
 	for key, val := range other {
 		prev, ok := metrics.data[key]
 		if !ok {
