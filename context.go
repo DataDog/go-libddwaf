@@ -69,7 +69,7 @@ func NewContextWithBudget(handle *Handle, budget time.Duration) *Context {
 		return nil
 	}
 
-	return &Context{handle: handle, cContext: cContext, timer: timer, stats: metrics{data: make(map[string]time.Duration, 6)}}
+	return &Context{handle: handle, cContext: cContext, timer: timer, stats: metrics{data: make(map[string]time.Duration, 5)}}
 }
 
 // RunAddressData provides address data to the Context.Run method. If a given key is present in both
@@ -94,6 +94,7 @@ func (d RunAddressData) isEmpty() bool {
 // the RunError type.
 // Struct fields having the tag `ddwaf:"ignore"` will not be encoded and sent to the WAF
 // if the output of TotalTime() exceeds the value of Timeout, the function will immediately return with errors.ErrTimeout
+// The second parameter is deprecated and should be passed to NewContextWithBudget instead.
 func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Result, err error) {
 	if addressData.isEmpty() {
 		return
@@ -135,7 +136,7 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 
 	// The WAF releases ephemeral address data at the max of each run call, so we need not keep the Go values live beyond
 	// that in the same way we need for persistent data. We hence use a separate encoder.
-	ephemeralData, ephemeralEncoder, err := encodeOneAddressType(addressData.Ephemeral, runTimer.MustLeaf("dd.appsec.waf.encode.persistent"))
+	ephemeralData, ephemeralEncoder, err := encodeOneAddressType(addressData.Ephemeral, runTimer.MustLeaf("dd.appsec.waf.encode.ephemeral"))
 	if err != nil {
 		return res, err
 	}
@@ -212,7 +213,6 @@ func encodeOneAddressType(addressData map[string]any, timer timer.Timer) (*bindi
 	}
 
 	data, _ := encoder.EncodeAddresses(addressData)
-
 	if timer.Exhausted() {
 		return nil, encoder, errors.ErrTimeout
 	}
@@ -222,12 +222,16 @@ func encodeOneAddressType(addressData map[string]any, timer timer.Timer) (*bindi
 
 // run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
 // context appropriately around this call.
-func (context *Context) run(persistentData, ephemeralData *bindings.WafObject, timer timer.Timer, timeBudget time.Duration) (Result, error) {
+func (context *Context) run(persistentData, ephemeralData *bindings.WafObject, wafTimer timer.Timer, timeBudget time.Duration) (Result, error) {
 	result := new(bindings.WafResult)
 	defer wafLib.WafResultFree(result)
 
-	timer.Start()
-	defer timer.Stop()
+	if timeBudget == timer.UnlimitedBudget {
+		timeBudget = timer.UnlimitedBudget / 1000 // Value is too big for the WAF
+	}
+
+	wafTimer.Start()
+	defer wafTimer.Stop()
 	ret := wafLib.WafRun(context.cContext, persistentData, ephemeralData, result, uint64(timeBudget.Microseconds()))
 
 	return unwrapWafResult(ret, result)

@@ -15,6 +15,7 @@ import (
 	"github.com/DataDog/go-libddwaf/v2/timer"
 	"math/rand"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -325,6 +326,102 @@ func TestUpdateWAF(t *testing.T) {
 	})
 }
 
+func maxWafValueEncoder(encoder encoder) map[string]any {
+	rnd := rand.New(rand.NewSource(33))
+	buf := make([]byte, bindings.WafMaxStringLength)
+	rnd.Read(buf)
+	fullstr := string(buf)
+
+	return maxWafValueRec(encoder, fullstr, encoder.objectMaxDepth)
+}
+
+func maxWafValueRec(encoder encoder, str string, depth int) map[string]any {
+	data := make(map[string]any, encoder.containerMaxSize)
+
+	if depth == 0 {
+		for i := 0; i < encoder.containerMaxSize; i++ {
+			data[str+strconv.Itoa(i)] = str
+		}
+		return data
+	}
+
+	for i := 0; i < encoder.containerMaxSize; i++ {
+		data[str+strconv.Itoa(i)] = maxWafValueRec(encoder, str, depth-1)
+	}
+	return data
+}
+
+func TestTimeout(t *testing.T) {
+	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	require.NotNil(t, waf)
+
+	largeValue := map[string]any{
+		"my.input": maxWafValueEncoder(encoder{
+			containerMaxSize: 64,
+			objectMaxDepth:   2,
+			stringMaxSize:    512,
+		}),
+	}
+
+	normalValue := map[string]interface{}{
+		"my.input": "Arachni",
+	}
+
+	t.Run("not-empty-stats", func(t *testing.T) {
+		context := NewContextWithBudget(waf, time.Millisecond)
+		require.NotNil(t, context)
+		defer context.Close()
+
+		_, err := context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue}, 0)
+		require.NoError(t, err)
+		require.NotEmpty(t, context.Stats())
+		require.NotZero(t, context.Stats()["dd.appsec.waf.run"])
+		require.NotZero(t, context.Stats()["dd.appsec.waf.encode.persistent"])
+		require.NotZero(t, context.Stats()["dd.appsec.waf.encode.ephemeral"])
+		require.NotZero(t, context.Stats()["dd.appsec.waf.duration_ext"])
+		require.NotZero(t, context.Stats()["dd.appsec.waf.duration"])
+	})
+
+	t.Run("timeout-persistent-encoder", func(t *testing.T) {
+		context := NewContextWithBudget(waf, time.Millisecond)
+		require.NotNil(t, context)
+		defer context.Close()
+
+		_, err := context.Run(RunAddressData{Persistent: largeValue}, 0)
+		require.Equal(t, errors.ErrTimeout, err)
+		require.GreaterOrEqual(t, context.Stats()["dd.appsec.waf.run"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Stats()["dd.appsec.waf.encode.persistent"], time.Millisecond)
+		require.Equal(t, context.Stats()["dd.appsec.waf.encode.ephemeral"], time.Duration(0))
+	})
+
+	t.Run("timeout-ephemeral-encoder", func(t *testing.T) {
+		context := NewContextWithBudget(waf, time.Millisecond)
+		require.NotNil(t, context)
+		defer context.Close()
+
+		_, err := context.Run(RunAddressData{Ephemeral: largeValue}, 0)
+		require.Equal(t, errors.ErrTimeout, err)
+		require.GreaterOrEqual(t, context.Stats()["dd.appsec.waf.run"], time.Millisecond)
+		require.Equal(t, context.Stats()["dd.appsec.waf.encode.persistent"], time.Duration(0))
+		require.GreaterOrEqual(t, context.Stats()["dd.appsec.waf.encode.ephemeral"], time.Millisecond)
+	})
+
+	t.Run("many-runs", func(t *testing.T) {
+		context := NewContextWithBudget(waf, time.Millisecond)
+		require.NotNil(t, context)
+		defer context.Close()
+
+		var err error
+
+		for i := 0; i < 1000 && err != errors.ErrTimeout; i++ {
+			_, err = context.Run(RunAddressData{Persistent: normalValue}, 0)
+		}
+
+		require.Equal(t, errors.ErrTimeout, err)
+	})
+}
+
 func TestMatching(t *testing.T) {
 
 	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
@@ -354,15 +451,6 @@ func TestMatching(t *testing.T) {
 	}
 	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, time.Second)
 	require.NoError(t, err)
-	require.Nil(t, res.Events)
-	require.Nil(t, res.Actions)
-
-	// Not matching due to a timeout
-	values = map[string]interface{}{
-		"my.input": "Arachni",
-	}
-	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, 0)
-	require.Equal(t, errors.ErrTimeout, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
@@ -498,10 +586,6 @@ func TestMatchingEphemeral(t *testing.T) {
 			input2: "Arachni-2",
 		},
 	}
-	res, err = wafCtx.Run(runAddresses, 0)
-	require.Equal(t, errors.ErrTimeout, err)
-	require.Nil(t, res.Events)
-	require.Nil(t, res.Actions)
 
 	// Matching
 	// Note a WAF rule with ephemeral addresses may match more than once!
@@ -567,11 +651,6 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 			input1: "Arachni-1",
 		},
 	}
-
-	res, err = wafCtx.Run(runAddresses, 0)
-	require.Equal(t, errors.ErrTimeout, err)
-	require.Nil(t, res.Events)
-	require.Nil(t, res.Actions)
 
 	// Matching
 	res, err = wafCtx.Run(runAddresses, time.Second)
@@ -1022,7 +1101,7 @@ func TestMetrics(t *testing.T) {
 	})
 
 	t.Run("Timeouts", func(t *testing.T) {
-		wafCtx := NewContext(waf)
+		wafCtx := NewContextWithBudget(waf, time.Nanosecond)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		// Craft matching data to force work on the WAF
@@ -1034,7 +1113,7 @@ func TestMetrics(t *testing.T) {
 		}
 
 		for i := uint64(1); i <= 10; i++ {
-			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Nanosecond)
+			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, 0)
 			require.Equal(t, errors.ErrTimeout, err)
 			require.Equal(t, wafCtx.TotalTimeouts(), i)
 		}
