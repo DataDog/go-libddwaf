@@ -234,12 +234,6 @@ func newDefaultHandle(rule any) (*Handle, error) {
 	return NewHandle(rule, "", "")
 }
 
-func newTestContext(t *testing.T, waf *Handle) *Context {
-	wafCtx := NewContext(waf)
-	require.NotNil(t, wafCtx)
-	return wafCtx
-}
-
 func TestNewWAF(t *testing.T) {
 	t.Run("valid-rule", func(t *testing.T) {
 		waf, err := newDefaultHandle(testArachniRule)
@@ -279,7 +273,7 @@ func TestUpdateWAF(t *testing.T) {
 		require.NotNil(t, waf)
 		defer waf.Close()
 
-		wafCtx := newTestContext(t, waf)
+		wafCtx := NewContext(waf)
 		defer wafCtx.Close()
 
 		// Matches
@@ -300,7 +294,7 @@ func TestUpdateWAF(t *testing.T) {
 		require.NotNil(t, waf2)
 		defer waf2.Close()
 
-		wafCtx2 := newTestContext(t, waf2)
+		wafCtx2 := NewContext(waf2)
 		defer wafCtx2.Close()
 
 		// Matches & Block
@@ -339,7 +333,7 @@ func TestMatching(t *testing.T) {
 
 	require.Equal(t, []string{"my.input"}, waf.Addresses())
 
-	wafCtx := newTestContext(t, waf)
+	wafCtx := NewContext(waf)
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
@@ -412,7 +406,7 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 	require.NoError(t, err)
 	defer waf.Close()
 
-	wafCtx := newTestContext(t, waf)
+	wafCtx := NewContext(waf)
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()
 
@@ -464,7 +458,7 @@ func TestMatchingEphemeral(t *testing.T) {
 	sort.Strings(addrs)
 	require.Equal(t, []string{input1, input2}, addrs)
 
-	wafCtx := newTestContext(t, waf)
+	wafCtx := NewContext(waf)
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
@@ -542,7 +536,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	sort.Strings(addrs)
 	require.Equal(t, []string{input1, input2}, addrs)
 
-	wafCtx := newTestContext(t, waf)
+	wafCtx := NewContext(waf)
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
@@ -600,7 +594,7 @@ func TestActions(t *testing.T) {
 			require.NotNil(t, waf)
 			defer waf.Close()
 
-			wafCtx := newTestContext(t, waf)
+			wafCtx := NewContext(waf)
 			require.NotNil(t, wafCtx)
 			defer wafCtx.Close()
 
@@ -642,7 +636,7 @@ func TestConcurrency(t *testing.T) {
 		require.NoError(t, err)
 		defer waf.Close()
 
-		wafCtx := newTestContext(t, waf)
+		wafCtx := NewContext(waf)
 		defer wafCtx.Close()
 
 		// User agents that won't match the rule so that it doesn't get pruned.
@@ -736,7 +730,7 @@ func TestConcurrency(t *testing.T) {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				wafCtx := newTestContext(t, waf)
+				wafCtx := NewContext(waf)
 				defer wafCtx.Close()
 
 				for c := 0; c < nbRun; c++ {
@@ -805,7 +799,7 @@ func TestConcurrency(t *testing.T) {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				wafCtx := newTestContext(t, waf)
+				wafCtx := NewContext(waf)
 				if wafCtx == nil {
 					return
 				}
@@ -838,7 +832,7 @@ func TestConcurrency(t *testing.T) {
 		waf, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 
-		wafCtx := newTestContext(t, waf)
+		wafCtx := NewContext(waf)
 		require.NotNil(t, wafCtx)
 
 		var startBarrier, stopBarrier sync.WaitGroup
@@ -1002,7 +996,7 @@ func TestMetrics(t *testing.T) {
 	})
 
 	t.Run("RunDuration", func(t *testing.T) {
-		wafCtx := newTestContext(t, waf)
+		wafCtx := NewContext(waf)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		// Craft matching data to force work on the WAF
@@ -1053,7 +1047,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, err := NewHandle(rule, "key", "")
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx := newTestContext(t, waf)
+		wafCtx := NewContext(waf)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		data := map[string]interface{}{
@@ -1075,7 +1069,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, err := NewHandle(rule, "", "sensitive")
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx := newTestContext(t, waf)
+		wafCtx := NewContext(waf)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		data := map[string]interface{}{
@@ -1097,7 +1091,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, err := NewHandle(rule, "", "")
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx := newTestContext(t, waf)
+		wafCtx := NewContext(waf)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		data := map[string]interface{}{
