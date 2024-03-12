@@ -94,7 +94,7 @@ func (d RunAddressData) isEmpty() bool {
 // the RunError type.
 // Struct fields having the tag `ddwaf:"ignore"` will not be encoded and sent to the WAF
 // if the output of TotalTime() exceeds the value of Timeout, the function will immediately return with errors.ErrTimeout
-func (context *Context) Run(addressData RunAddressData, budget time.Duration) (res Result, err error) {
+func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Result, err error) {
 	if addressData.isEmpty() {
 		return
 	}
@@ -110,7 +110,7 @@ func (context *Context) Run(addressData RunAddressData, budget time.Duration) (r
 		return Result{}, errors.ErrTimeout
 	}
 
-	runTimer, err := context.timer.NewNode("dd.appsec.waf.run", timer.WithBudget(budget),
+	runTimer, err := context.timer.NewNode("dd.appsec.waf.run",
 		timer.WithComponents(
 			"dd.appsec.waf.encode.persistent",
 			"dd.appsec.waf.encode.ephemeral",
