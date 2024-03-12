@@ -114,7 +114,6 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 		timer.WithComponents(
 			"dd.appsec.waf.encode.persistent",
 			"dd.appsec.waf.encode.ephemeral",
-			"dd.appsec.waf.lock",
 			"dd.appsec.waf.duration_ext",
 			"dd.appsec.waf.duration",
 		),
@@ -142,11 +141,7 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 	}
 
 	// ddwaf_run cannot run concurrently and the next merge write on the context state so we need a mutex
-	waitTimer := runTimer.MustLeaf("dd.appsec.waf.lock")
-	waitTimer.Start()
 	context.mutex.Lock()
-	waitTimer.Stop()
-
 	defer context.mutex.Unlock()
 
 	if runTimer.SumExhausted() {
