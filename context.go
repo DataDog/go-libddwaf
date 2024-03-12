@@ -6,7 +6,6 @@
 package waf
 
 import (
-	stdErrors "errors"
 	"github.com/DataDog/go-libddwaf/v2/timer"
 	"sync"
 	"time"
@@ -94,14 +93,14 @@ func (d RunAddressData) isEmpty() bool {
 // matches and actions can still be returned, for instance in the case of a timeout error. Errors can be tested against
 // the RunError type.
 // Struct fields having the tag `ddwaf:"ignore"` will not be encoded and sent to the WAF
-// if the output of TotalTime() exceeds the value of Timeout, the function will immediately return with an error
+// if the output of TotalTime() exceeds the value of Timeout, the function will immediately return with errors.ErrTimeout
 func (context *Context) Run(addressData RunAddressData, budget time.Duration) (res Result, err error) {
 	if addressData.isEmpty() {
 		return
 	}
 
 	defer func() {
-		if stdErrors.Is(err, errors.ErrTimeout) {
+		if err == errors.ErrTimeout {
 			context.timeoutCount.Inc()
 		}
 	}()
@@ -127,22 +126,22 @@ func (context *Context) Run(addressData RunAddressData, budget time.Duration) (r
 	runTimer.Start()
 	defer func() {
 		context.stats.add("dd.appsec.waf.run", runTimer.Stop())
-		context.stats.append(runTimer.Stats())
+		context.stats.merge(runTimer.Stats())
 	}()
 
-	persistentData, persistentEncoder, err := context.encodeOneAddressType(addressData.Persistent, runTimer.MustLeaf("dd.appsec.waf.encode.persistent"))
+	persistentData, persistentEncoder, err := encodeOneAddressType(addressData.Persistent, runTimer.MustLeaf("dd.appsec.waf.encode.persistent"))
 	if err != nil {
 		return res, err
 	}
 
 	// The WAF releases ephemeral address data at the max of each run call, so we need not keep the Go values live beyond
 	// that in the same way we need for persistent data. We hence use a separate encoder.
-	ephemeralData, ephemeralEncoder, err := context.encodeOneAddressType(addressData.Ephemeral, runTimer.MustLeaf("dd.appsec.waf.encode.persistent"))
+	ephemeralData, ephemeralEncoder, err := encodeOneAddressType(addressData.Ephemeral, runTimer.MustLeaf("dd.appsec.waf.encode.persistent"))
 	if err != nil {
 		return res, err
 	}
 
-	// ddwaf_run cannot run concurrently and the next append write on the context state so we need a mutex
+	// ddwaf_run cannot run concurrently and the next merge write on the context state so we need a mutex
 	waitTimer := runTimer.MustLeaf("dd.appsec.waf.lock")
 	waitTimer.Start()
 	context.mutex.Lock()
@@ -207,11 +206,11 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 
 // encodeOneAddressType encodes the given addressData values and returns the corresponding WAF object and its refs.
 // If the addressData is empty, it returns nil for the WAF object and an empty ref pool.
-// At this point, the only error we can get is an error in case the top level object is a nil map, but this
-// behaviour is expected since either persistent or ephemeral addresses are allowed to be null one at a time.
-// In this case, EncodeAddresses will return nil contrary to Encode which will return an nil wafObject,
+// At this point, if the encoder does not timeout, the only error we can get is an error in case the top level object
+// is a nil map, but this  behaviour is expected since either persistent or ephemeral addresses are allowed to be null
+// one at a time. In this case, EncodeAddresses will return nil contrary to Encode which will return a nil wafObject,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
-func (context *Context) encodeOneAddressType(addressData map[string]any, timer timer.Timer) (*bindings.WafObject, encoder, error) {
+func encodeOneAddressType(addressData map[string]any, timer timer.Timer) (*bindings.WafObject, encoder, error) {
 	encoder := newLimitedEncoder(timer)
 	if addressData == nil {
 		return nil, encoder, nil
@@ -313,14 +312,12 @@ type metrics struct {
 	mutex sync.RWMutex
 }
 
-// add
 func (metrics *metrics) add(key string, duration time.Duration) {
 	metrics.mutex.Lock()
 	defer metrics.mutex.Unlock()
 	metrics.data[key] += duration
 }
 
-// get
 func (metrics *metrics) get(key string) time.Duration {
 	metrics.mutex.RLock()
 	defer metrics.mutex.RUnlock()
@@ -337,8 +334,8 @@ func (metrics *metrics) copy() map[string]time.Duration {
 	return copy
 }
 
-// append merges the current metrics with the new run
-func (metrics *metrics) append(other map[string]time.Duration) {
+// merge merges the current metrics with the new run
+func (metrics *metrics) merge(other map[string]time.Duration) {
 	metrics.mutex.Lock()
 	defer metrics.mutex.Unlock()
 	for key, val := range other {
