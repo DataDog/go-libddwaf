@@ -12,6 +12,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"github.com/DataDog/go-libddwaf/v2/timer"
 	"math/rand"
 	"sort"
 	"strings"
@@ -233,6 +234,12 @@ func newDefaultHandle(rule any) (*Handle, error) {
 	return NewHandle(rule, "", "")
 }
 
+func newTestContext(t *testing.T, waf *Handle) *Context {
+	wafCtx := NewContext(waf)
+	require.NotNil(t, wafCtx)
+	return wafCtx
+}
+
 func TestNewWAF(t *testing.T) {
 	t.Run("valid-rule", func(t *testing.T) {
 		waf, err := newDefaultHandle(testArachniRule)
@@ -272,7 +279,7 @@ func TestUpdateWAF(t *testing.T) {
 		require.NotNil(t, waf)
 		defer waf.Close()
 
-		wafCtx := NewContext(waf)
+		wafCtx := newTestContext(t, waf)
 		defer wafCtx.Close()
 
 		// Matches
@@ -293,7 +300,7 @@ func TestUpdateWAF(t *testing.T) {
 		require.NotNil(t, waf2)
 		defer waf2.Close()
 
-		wafCtx2 := NewContext(waf2)
+		wafCtx2 := newTestContext(t, waf2)
 		defer wafCtx2.Close()
 
 		// Matches & Block
@@ -332,7 +339,7 @@ func TestMatching(t *testing.T) {
 
 	require.Equal(t, []string{"my.input"}, waf.Addresses())
 
-	wafCtx := NewContext(waf)
+	wafCtx := newTestContext(t, waf)
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
@@ -405,7 +412,7 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 	require.NoError(t, err)
 	defer waf.Close()
 
-	wafCtx := NewContext(waf)
+	wafCtx := newTestContext(t, waf)
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()
 
@@ -457,7 +464,7 @@ func TestMatchingEphemeral(t *testing.T) {
 	sort.Strings(addrs)
 	require.Equal(t, []string{input1, input2}, addrs)
 
-	wafCtx := NewContext(waf)
+	wafCtx := newTestContext(t, waf)
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
@@ -535,7 +542,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	sort.Strings(addrs)
 	require.Equal(t, []string{input1, input2}, addrs)
 
-	wafCtx := NewContext(waf)
+	wafCtx := newTestContext(t, waf)
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
@@ -566,6 +573,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 			input1: "Arachni-1",
 		},
 	}
+
 	res, err = wafCtx.Run(runAddresses, 0)
 	require.Equal(t, errors.ErrTimeout, err)
 	require.Nil(t, res.Events)
@@ -592,7 +600,7 @@ func TestActions(t *testing.T) {
 			require.NotNil(t, waf)
 			defer waf.Close()
 
-			wafCtx := NewContext(waf)
+			wafCtx := newTestContext(t, waf)
 			require.NotNil(t, wafCtx)
 			defer wafCtx.Close()
 
@@ -634,7 +642,7 @@ func TestConcurrency(t *testing.T) {
 		require.NoError(t, err)
 		defer waf.Close()
 
-		wafCtx := NewContext(waf)
+		wafCtx := newTestContext(t, waf)
 		defer wafCtx.Close()
 
 		// User agents that won't match the rule so that it doesn't get pruned.
@@ -728,7 +736,7 @@ func TestConcurrency(t *testing.T) {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				wafCtx := NewContext(waf)
+				wafCtx := newTestContext(t, waf)
 				defer wafCtx.Close()
 
 				for c := 0; c < nbRun; c++ {
@@ -759,7 +767,7 @@ func TestConcurrency(t *testing.T) {
 				ephemeral := map[string]interface{}{
 					"server.request.body": map[string]bool{"safe": true},
 				}
-				res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Second)
+				res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Hour)
 				require.NoError(t, err)
 				require.NotEmpty(t, res.Events)
 				require.Nil(t, res.Actions)
@@ -797,7 +805,7 @@ func TestConcurrency(t *testing.T) {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				wafCtx := NewContext(waf)
+				wafCtx := newTestContext(t, waf)
 				if wafCtx == nil {
 					return
 				}
@@ -830,7 +838,7 @@ func TestConcurrency(t *testing.T) {
 		waf, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 
-		wafCtx := NewContext(waf)
+		wafCtx := newTestContext(t, waf)
 		require.NotNil(t, wafCtx)
 
 		var startBarrier, stopBarrier sync.WaitGroup
@@ -857,7 +865,7 @@ func TestConcurrency(t *testing.T) {
 				// effectively releases the WAF context, and between 0 and N calls to wafCtx.Run(...) are
 				// done (those that land after `wafCtx.Close()` happened will be silent no-ops).
 				if n%2 == 0 {
-					wafCtx.Run(RunAddressData{Ephemeral: data}, time.Second)
+					wafCtx.Run(RunAddressData{Ephemeral: data}, time.Hour)
 				} else {
 					wafCtx.Close()
 				}
@@ -994,7 +1002,7 @@ func TestMetrics(t *testing.T) {
 	})
 
 	t.Run("RunDuration", func(t *testing.T) {
-		wafCtx := NewContext(waf)
+		wafCtx := newTestContext(t, waf)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		// Craft matching data to force work on the WAF
@@ -1033,8 +1041,8 @@ func TestMetrics(t *testing.T) {
 
 		for i := uint64(1); i <= 10; i++ {
 			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Nanosecond)
-			require.Equal(t, err, errors.ErrTimeout)
-			require.Equal(t, i, wafCtx.TotalTimeouts())
+			require.Equal(t, errors.ErrTimeout, err)
+			require.Equal(t, wafCtx.TotalTimeouts(), i)
 		}
 	})
 }
@@ -1045,7 +1053,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, err := NewHandle(rule, "key", "")
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx := NewContext(waf)
+		wafCtx := newTestContext(t, waf)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		data := map[string]interface{}{
@@ -1067,7 +1075,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, err := NewHandle(rule, "", "sensitive")
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx := NewContext(waf)
+		wafCtx := newTestContext(t, waf)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		data := map[string]interface{}{
@@ -1089,7 +1097,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, err := NewHandle(rule, "", "")
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx := NewContext(waf)
+		wafCtx := newTestContext(t, waf)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		data := map[string]interface{}{
@@ -1144,11 +1152,13 @@ func BenchmarkEncoder(b *testing.B) {
 	buf := make([]byte, 16384)
 	n, err := rnd.Read(buf)
 	fullstr := string(buf)
+	encodeTimer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
 	for _, l := range []int{1024, 4096, 8192, 16384} {
 		encoder := encoder{
 			objectMaxDepth:   10,
 			stringMaxSize:    1 * 1024 * 1024,
 			containerMaxSize: 100,
+			timer:            encodeTimer,
 		}
 		b.Run(fmt.Sprintf("%d", l), func(b *testing.B) {
 			b.ReportAllocs()

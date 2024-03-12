@@ -10,6 +10,7 @@ package waf
 import (
 	"context"
 	"encoding/json"
+	"github.com/DataDog/go-libddwaf/v2/timer"
 	"reflect"
 	"sort"
 	"testing"
@@ -530,7 +531,9 @@ func TestEncoderLimits(t *testing.T) {
 		if max := tc.MaxStringLength; max != nil {
 			maxStringLength = max.(int)
 		}
+		encodeTimer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
 		encoder := encoder{
+			timer:            encodeTimer,
 			objectMaxDepth:   maxValueDepth,
 			stringMaxSize:    maxStringLength,
 			containerMaxSize: maxContainerLength,

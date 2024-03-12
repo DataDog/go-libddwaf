@@ -9,6 +9,7 @@ import (
 	"fmt"
 	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
 	"sync"
+	"time"
 
 	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v2/internal/support"
@@ -95,6 +96,9 @@ type Result struct {
 	// Truncatations provides details about truncations that occurred while
 	// encoding address data for WAF execution.
 	Truncations map[TruncationReason][]int
+
+	// TimeSpent is the time the WAF self-reported as spent processing the call to ddwaf_run
+	TimeSpent time.Duration
 }
 
 // Globally dlopen() libddwaf only once because several dlopens (eg. in tests)
