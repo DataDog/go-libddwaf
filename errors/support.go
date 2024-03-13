@@ -32,7 +32,7 @@ func (e UnsupportedGoVersionError) Error() string {
 type CgoDisabledError struct{}
 
 func (e CgoDisabledError) Error() string {
-	return "go-libddwaf is disabled when cgo is disabled unless you compile with the go build tag `appsec`. It will require libdl.so.2. libpthread.so.0, libc.so.6 and libm.so.6 shared libraries at run time on linux"
+	return "go-libddwaf is disabled when cgo is disabled unless you compile with the go build tag `appsec`. It will require libdl.so.2. libpthread.so.0 and libc.so.6 shared libraries at run time on linux"
 }
 
 // ManuallyDisabledError is a wrapper error type helping to handle the error
