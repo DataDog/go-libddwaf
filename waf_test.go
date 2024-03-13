@@ -368,7 +368,7 @@ func TestTimeout(t *testing.T) {
 		"my.input": "Arachni",
 	}
 
-	t.Run("not-empty-stats", func(t *testing.T) {
+	t.Run("not-empty-metricsStore", func(t *testing.T) {
 		context := NewContextWithBudget(waf, time.Millisecond)
 		require.NotNil(t, context)
 		defer context.Close()
@@ -376,11 +376,11 @@ func TestTimeout(t *testing.T) {
 		_, err := context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue}, 0)
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Stats())
-		require.NotZero(t, context.Stats()["dd.appsec.waf.run"])
-		require.NotZero(t, context.Stats()["dd.appsec.waf.encode.persistent"])
-		require.NotZero(t, context.Stats()["dd.appsec.waf.encode.ephemeral"])
-		require.NotZero(t, context.Stats()["dd.appsec.waf.duration_ext"])
-		require.NotZero(t, context.Stats()["dd.appsec.waf.duration"])
+		require.NotZero(t, context.Stats()["_dd.appsec.waf.run"])
+		require.NotZero(t, context.Stats()["_dd.appsec.waf.encode.persistent"])
+		require.NotZero(t, context.Stats()["_dd.appsec.waf.encode.ephemeral"])
+		require.NotZero(t, context.Stats()["_dd.appsec.waf.duration_ext"])
+		require.NotZero(t, context.Stats()["_dd.appsec.waf.duration"])
 	})
 
 	t.Run("timeout-persistent-encoder", func(t *testing.T) {
@@ -390,9 +390,9 @@ func TestTimeout(t *testing.T) {
 
 		_, err := context.Run(RunAddressData{Persistent: largeValue}, 0)
 		require.Equal(t, errors.ErrTimeout, err)
-		require.GreaterOrEqual(t, context.Stats()["dd.appsec.waf.run"], time.Millisecond)
-		require.GreaterOrEqual(t, context.Stats()["dd.appsec.waf.encode.persistent"], time.Millisecond)
-		require.Equal(t, context.Stats()["dd.appsec.waf.encode.ephemeral"], time.Duration(0))
+		require.GreaterOrEqual(t, context.Stats()["_dd.appsec.waf.run"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Stats()["_dd.appsec.waf.encode.persistent"], time.Millisecond)
+		require.Equal(t, context.Stats()["_dd.appsec.waf.encode.ephemeral"], time.Duration(0))
 	})
 
 	t.Run("timeout-ephemeral-encoder", func(t *testing.T) {
@@ -402,9 +402,9 @@ func TestTimeout(t *testing.T) {
 
 		_, err := context.Run(RunAddressData{Ephemeral: largeValue}, 0)
 		require.Equal(t, errors.ErrTimeout, err)
-		require.GreaterOrEqual(t, context.Stats()["dd.appsec.waf.run"], time.Millisecond)
-		require.Equal(t, context.Stats()["dd.appsec.waf.encode.persistent"], time.Duration(0))
-		require.GreaterOrEqual(t, context.Stats()["dd.appsec.waf.encode.ephemeral"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Stats()["_dd.appsec.waf.run"], time.Millisecond)
+		require.Equal(t, context.Stats()["_dd.appsec.waf.encode.persistent"], time.Duration(0))
+		require.GreaterOrEqual(t, context.Stats()["_dd.appsec.waf.encode.ephemeral"], time.Millisecond)
 	})
 
 	t.Run("many-runs", func(t *testing.T) {
@@ -762,7 +762,7 @@ func TestConcurrency(t *testing.T) {
 			}()
 		}
 
-		// Save the test start time to compare it to the first metrics store's
+		// Save the test start time to compare it to the first metricsStore store's
 		// that should be latter.
 		startBarrier.Done() // Unblock the user goroutines
 		stopBarrier.Wait()  // Wait for the user goroutines to be done
@@ -847,7 +847,7 @@ func TestConcurrency(t *testing.T) {
 			}()
 		}
 
-		// Save the test start time to compare it to the first metrics store's
+		// Save the test start time to compare it to the first metricsStore store's
 		// that should be latter.
 		startBarrier.Done() // Unblock the user goroutines
 		stopBarrier.Wait()  // Wait for the user goroutines to be done
@@ -894,7 +894,7 @@ func TestConcurrency(t *testing.T) {
 			waf.Close()
 		}()
 
-		// Save the test start time to compare it to the first metrics store's
+		// Save the test start time to compare it to the first metricsStore store's
 		// that should be latter.
 		startBarrier.Done() // Unblock the user goroutines
 		stopBarrier.Wait()  // Wait for the user goroutines to be done
