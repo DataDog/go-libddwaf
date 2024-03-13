@@ -317,7 +317,8 @@ func (context *Context) Stats() Stats {
 
 	truncations := make(map[TruncationReason][]int, len(context.truncations))
 	for reason, counts := range context.truncations {
-		truncations[reason] = append([]int(nil), counts...)
+		truncations[reason] = make([]int, len(counts))
+		copy(truncations[reason], counts)
 	}
 
 	return Stats{

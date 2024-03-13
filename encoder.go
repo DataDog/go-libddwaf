@@ -7,6 +7,7 @@ package waf
 
 import (
 	"context"
+	"fmt"
 	"github.com/DataDog/go-libddwaf/v2/timer"
 	"math"
 	"reflect"
@@ -65,7 +66,7 @@ func (reason TruncationReason) String() string {
 	case StringTooLong:
 		return "string-size"
 	default:
-		return ""
+		return fmt.Sprintf("TruncationReason(%v)", int(reason))
 	}
 }
 
