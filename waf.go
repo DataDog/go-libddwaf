@@ -93,10 +93,6 @@ type Result struct {
 	// against the provided address data.
 	Actions []string
 
-	// Truncatations provides details about truncations that occurred while
-	// encoding address data for WAF execution.
-	Truncations map[TruncationReason][]int
-
 	// TimeSpent is the time the WAF self-reported as spent processing the call to ddwaf_run
 	TimeSpent time.Duration
 }

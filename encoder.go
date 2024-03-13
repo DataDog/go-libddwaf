@@ -7,6 +7,7 @@ package waf
 
 import (
 	"context"
+	"fmt"
 	"github.com/DataDog/go-libddwaf/v2/timer"
 	"math"
 	"reflect"
@@ -55,6 +56,19 @@ const (
 	// guaranteed to be less than or equal to the actual depth (it may not be more).
 	ObjectTooDeep
 )
+
+func (reason TruncationReason) String() string {
+	switch reason {
+	case ObjectTooDeep:
+		return "depth"
+	case ContainerTooLarge:
+		return "container-size"
+	case StringTooLong:
+		return "string-size"
+	default:
+		return fmt.Sprintf("TruncationReason(%v)", int(reason))
+	}
+}
 
 const (
 	AppsecFieldTag            = "ddwaf"
