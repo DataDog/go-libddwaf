@@ -35,7 +35,7 @@ const (
 )
 
 // Metrics transform the stats returned by the WAF into a map of key value metrics for datadog backend
-func (stats *Stats) Metrics() map[string]any {
+func (stats Stats) Metrics() map[string]any {
 	tags := make(map[string]any, len(stats.Timers)+len(stats.Truncations)+1)
 	for k, v := range stats.Timers {
 		tags[k] = uint64(v.Microseconds())
