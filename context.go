@@ -36,6 +36,10 @@ type Context struct {
 
 	// metrics stores the cumulative time spent in various parts of the WAF
 	metrics metricsStore
+
+	// truncations provides details about truncations that occurred while
+	// encoding address data for WAF execution.
+	truncations map[TruncationReason][]int
 }
 
 // NewContext returns a new WAF context of to the given WAF handle.
@@ -64,7 +68,7 @@ func NewContextWithBudget(handle *Handle, budget time.Duration) *Context {
 		return nil
 	}
 
-	timer, err := timer.NewTreeTimer(timer.WithBudget(budget), timer.WithComponents("_dd.appsec.waf.run"))
+	timer, err := timer.NewTreeTimer(timer.WithBudget(budget), timer.WithComponents(wafRunTag))
 	if err != nil {
 		return nil
 	}
@@ -111,12 +115,12 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 		return Result{}, errors.ErrTimeout
 	}
 
-	runTimer, err := context.timer.NewNode("_dd.appsec.waf.run",
+	runTimer, err := context.timer.NewNode(wafRunTag,
 		timer.WithComponents(
-			"_dd.appsec.waf.encode.persistent",
-			"_dd.appsec.waf.encode.ephemeral",
-			"_dd.appsec.waf.duration_ext",
-			"_dd.appsec.waf.duration",
+			wafPersistentEncoderTag,
+			wafEphemeralEncoderTag,
+			wafDurationExtTag,
+			wafDurationTag,
 		),
 	)
 	if err != nil {
@@ -129,14 +133,14 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 		context.metrics.merge(runTimer.Stats())
 	}()
 
-	persistentData, persistentEncoder, err := encodeOneAddressType(addressData.Persistent, runTimer.MustLeaf("_dd.appsec.waf.encode.persistent"))
+	persistentData, persistentEncoder, err := context.encodeOneAddressType(addressData.Persistent, runTimer.MustLeaf(wafPersistentEncoderTag))
 	if err != nil {
 		return res, err
 	}
 
 	// The WAF releases ephemeral address data at the max of each run call, so we need not keep the Go values live beyond
 	// that in the same way we need for persistent data. We hence use a separate encoder.
-	ephemeralData, ephemeralEncoder, err := encodeOneAddressType(addressData.Ephemeral, runTimer.MustLeaf("_dd.appsec.waf.encode.ephemeral"))
+	ephemeralData, ephemeralEncoder, err := context.encodeOneAddressType(addressData.Ephemeral, runTimer.MustLeaf(wafEphemeralEncoderTag))
 	if err != nil {
 		return res, err
 	}
@@ -153,16 +157,15 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the ddwaf_context.
 	defer context.cgoRefs.append(persistentEncoder.cgoRefs)
 
-	wafExtTimer := runTimer.MustLeaf("_dd.appsec.waf.duration_ext")
+	wafExtTimer := runTimer.MustLeaf(wafDurationExtTag)
 	res, err = context.run(persistentData, ephemeralData, wafExtTimer, runTimer.SumRemaining())
 
-	runTimer.AddTime("_dd.appsec.waf.duration", res.TimeSpent)
+	runTimer.AddTime(wafDurationTag, res.TimeSpent)
 
 	// Ensure the ephemerals don't get optimized away by the compiler before the WAF had a chance to use them.
 	unsafe.KeepAlive(ephemeralEncoder.cgoRefs)
 	unsafe.KeepAlive(persistentEncoder.cgoRefs)
 
-	res.Truncations = merge(persistentEncoder.Truncations(), ephemeralEncoder.Truncations())
 	return
 }
 
@@ -206,13 +209,20 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // is a nil map, but this  behaviour is expected since either persistent or ephemeral addresses are allowed to be null
 // one at a time. In this case, EncodeAddresses will return nil contrary to Encode which will return a nil wafObject,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
-func encodeOneAddressType(addressData map[string]any, timer timer.Timer) (*bindings.WafObject, encoder, error) {
+func (context *Context) encodeOneAddressType(addressData map[string]any, timer timer.Timer) (*bindings.WafObject, encoder, error) {
 	encoder := newLimitedEncoder(timer)
 	if addressData == nil {
 		return nil, encoder, nil
 	}
 
 	data, _ := encoder.EncodeAddresses(addressData)
+	if len(encoder.truncations) > 0 {
+		context.mutex.Lock()
+		defer context.mutex.Unlock()
+
+		context.truncations = merge(context.truncations, encoder.truncations)
+	}
+
 	if timer.Exhausted() {
 		return nil, encoder, errors.ErrTimeout
 	}
@@ -291,7 +301,7 @@ func (context *Context) Close() {
 // Returned time is in nanoseconds.
 // Deprecated: use Timings instead
 func (context *Context) TotalRuntime() (uint64, uint64) {
-	return uint64(context.metrics.get("_dd.appsec.waf.run") * time.Nanosecond), uint64(context.metrics.get("_dd.appsec.waf.duration"))
+	return uint64(context.metrics.get(wafRunTag)), uint64(context.metrics.get(wafDurationTag))
 }
 
 // TotalTimeouts returns the cumulated amount of WAF timeouts across various run calls within the same WAF context.
@@ -301,58 +311,18 @@ func (context *Context) TotalTimeouts() uint64 {
 
 // Stats returns the cumulative time spent in various parts of the WAF, all in nanoseconds
 // and the timeout value used
-func (context *Context) Stats() map[string]time.Duration {
-	return context.metrics.copy()
-}
+func (context *Context) Stats() Stats {
+	context.mutex.Lock()
+	defer context.mutex.Unlock()
 
-type metricsStore struct {
-	data  map[string]time.Duration
-	mutex sync.RWMutex
-}
-
-func (metrics *metricsStore) add(key string, duration time.Duration) {
-	metrics.mutex.Lock()
-	defer metrics.mutex.Unlock()
-	if metrics.data == nil {
-		metrics.data = make(map[string]time.Duration, 5)
+	truncations := make(map[TruncationReason][]int, len(context.truncations))
+	for reason, counts := range context.truncations {
+		truncations[reason] = append([]int(nil), counts...)
 	}
 
-	metrics.data[key] += duration
-}
-
-func (metrics *metricsStore) get(key string) time.Duration {
-	metrics.mutex.RLock()
-	defer metrics.mutex.RUnlock()
-	return metrics.data[key]
-}
-
-func (metrics *metricsStore) copy() map[string]time.Duration {
-	metrics.mutex.Lock()
-	defer metrics.mutex.Unlock()
-	if metrics.data == nil {
-		return nil
-	}
-
-	copy := make(map[string]time.Duration, len(metrics.data))
-	for k, v := range metrics.data {
-		copy[k] = v
-	}
-	return copy
-}
-
-// merge merges the current metrics with new ones
-func (metrics *metricsStore) merge(other map[string]time.Duration) {
-	metrics.mutex.Lock()
-	defer metrics.mutex.Unlock()
-	if metrics.data == nil {
-		metrics.data = make(map[string]time.Duration, 5)
-	}
-
-	for key, val := range other {
-		prev, ok := metrics.data[key]
-		if !ok {
-			prev = 0
-		}
-		metrics.data[key] = prev + val
+	return Stats{
+		Timers:       context.metrics.copy(),
+		TimeoutCount: context.timeoutCount.Load(),
+		Truncations:  truncations,
 	}
 }

@@ -56,6 +56,19 @@ const (
 	ObjectTooDeep
 )
 
+func (reason TruncationReason) String() string {
+	switch reason {
+	case ObjectTooDeep:
+		return "depth"
+	case ContainerTooLarge:
+		return "container-size"
+	case StringTooLong:
+		return "string-size"
+	default:
+		return ""
+	}
+}
+
 const (
 	AppsecFieldTag            = "ddwaf"
 	AppsecFieldTagValueIgnore = "ignore"
