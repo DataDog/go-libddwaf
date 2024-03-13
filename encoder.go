@@ -7,6 +7,7 @@ package waf
 
 import (
 	"context"
+	"github.com/DataDog/go-libddwaf/v2/timer"
 	"math"
 	"reflect"
 	"strings"
@@ -26,6 +27,9 @@ import (
 // reference now or in the future, are stored and referenced in the `cgoRefs` field. The user MUST leverage
 // `keepAlive()` with it according to its ddwaf use-case.
 type encoder struct {
+	// timer makes sure the encoder doesn't spend too much time doing its job.
+	timer timer.Timer
+
 	// For each TruncationReason, holds the size that is required to avoid truncation for each truncation that happened.
 	truncations map[TruncationReason][]int
 
@@ -61,8 +65,9 @@ type native interface {
 	int64 | uint64 | uintptr
 }
 
-func newLimitedEncoder() encoder {
+func newLimitedEncoder(timer timer.Timer) encoder {
 	return encoder{
+		timer:            timer,
 		containerMaxSize: bindings.WafMaxContainerSize,
 		stringMaxSize:    bindings.WafMaxStringLength,
 		objectMaxDepth:   bindings.WafMaxContainerDepth,
@@ -70,7 +75,9 @@ func newLimitedEncoder() encoder {
 }
 
 func newMaxEncoder() encoder {
+	timer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
 	return encoder{
+		timer:            timer,
 		containerMaxSize: math.MaxInt,
 		stringMaxSize:    math.MaxInt,
 		objectMaxDepth:   math.MaxInt,
@@ -85,9 +92,12 @@ func (encoder *encoder) Encode(data any) (wo *bindings.WafObject, err error) {
 	value := reflect.ValueOf(data)
 	wo = &bindings.WafObject{}
 
+	encoder.timer.Start()
+	defer encoder.timer.Stop()
 	err = encoder.encode(value, wo, encoder.objectMaxDepth)
-	if len(encoder.truncations[ObjectTooDeep]) != 0 {
-		encoder.measureObjectDepth(value, time.Millisecond)
+
+	if len(encoder.truncations[ObjectTooDeep]) != 0 && !encoder.timer.Exhausted() {
+		encoder.measureObjectDepth(value, encoder.timer.Remaining())
 	}
 
 	return
@@ -139,6 +149,10 @@ func isValueNil(value reflect.Value) bool {
 }
 
 func (encoder *encoder) encode(value reflect.Value, obj *bindings.WafObject, depth int) error {
+	if encoder.timer.Exhausted() {
+		return errors.ErrTimeout
+	}
+
 	value, kind := resolvePointer(value)
 	if (kind == reflect.Interface || kind == reflect.Pointer) && !value.IsNil() {
 		// resolvePointer failed to resolve to something that's not a pointer, it
@@ -242,6 +256,10 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 // - Private fields and also values producing an error at encoding will be skipped
 // - Even if the element values are invalid or null we still keep them to report the field name
 func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WafObject, depth int) {
+	if encoder.timer.Exhausted() {
+		return
+	}
+
 	typ := value.Type()
 	nbFields := typ.NumField()
 
@@ -253,6 +271,10 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WafObjec
 
 	objArray := encoder.cgoRefs.AllocWafArray(obj, bindings.WafMapType, uint64(capacity))
 	for i := 0; i < nbFields; i++ {
+		if encoder.timer.Exhausted() {
+			return
+		}
+
 		if length == capacity {
 			encoder.addTruncation(ContainerTooLarge, nbFields)
 			break
@@ -296,6 +318,10 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WafObject, 
 
 	length := 0
 	for iter := value.MapRange(); iter.Next(); {
+		if encoder.timer.Exhausted() {
+			return
+		}
+
 		if length == capacity {
 			encoder.addTruncation(ContainerTooLarge, value.Len())
 			break
@@ -369,6 +395,9 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WafObject
 	objArray := encoder.cgoRefs.AllocWafArray(obj, bindings.WafArrayType, uint64(capacity))
 
 	for i := 0; i < length; i++ {
+		if encoder.timer.Exhausted() {
+			return
+		}
 		if currIndex == capacity {
 			encoder.addTruncation(ContainerTooLarge, length)
 			break

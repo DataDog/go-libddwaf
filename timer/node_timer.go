@@ -99,6 +99,15 @@ func (timer *nodeTimer) childStopped(componentName string, duration time.Duratio
 	timer.parent.childStopped(timer.componentName, duration)
 }
 
+func (timer *nodeTimer) AddTime(name string, duration time.Duration) {
+	value, ok := timer.components.lookup[name]
+	if !ok {
+		return
+	}
+
+	value.Add(int64(duration))
+}
+
 func (timer *nodeTimer) Stats() map[string]time.Duration {
 	stats := make(map[string]time.Duration, len(timer.components.lookup))
 	for name, component := range timer.components.lookup {

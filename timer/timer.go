@@ -96,6 +96,10 @@ type NodeTimer interface {
 	// MustLeaf is thread-safe
 	MustLeaf(name string, options ...Option) Timer
 
+	// AddTime adds the given duration to the component of the timer with the given name.
+	// AddTime is thread-safe
+	AddTime(name string, duration time.Duration)
+
 	// Stats returns a map of the time spent in each component of the timer.
 	// Stats is thread-safe
 	Stats() map[string]time.Duration
