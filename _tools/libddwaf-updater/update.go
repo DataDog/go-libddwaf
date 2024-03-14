@@ -11,6 +11,7 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -34,16 +35,27 @@ const (
 	goVersionUnsupported = "go1.23"
 )
 
-func main() {
-	force := false
+var (
+	forceFlag   *bool
+	versionFlag *string
+)
 
-	if len(os.Args) >= 2 {
-		force = os.Args[1] == "--force"
+func main() {
+
+	flag.Parse()
+
+	var (
+		release *github.RepositoryRelease
+		err     error
+		gh      = github.NewClient(nil)
+	)
+
+	if *versionFlag == "latest" {
+		release, _, err = gh.Repositories.GetLatestRelease(context.Background(), "DataDog", "libddwaf")
+	} else {
+		release, _, err = gh.Repositories.GetReleaseByTag(context.Background(), "DataDog", "libddwaf", *versionFlag)
 	}
 
-	gh := github.NewClient(nil)
-
-	release, _, err := gh.Repositories.GetLatestRelease(context.Background(), "DataDog", "libddwaf")
 	if err != nil {
 		panic(err)
 	}
@@ -51,7 +63,7 @@ func main() {
 	version := *release.TagName
 	if version == currentVersion {
 		fmt.Printf("Already up-to-date with v%s\n", version)
-		if force {
+		if *forceFlag {
 			fmt.Println("--force is set, re-downloading assets anyway!")
 		} else {
 			return
@@ -71,7 +83,7 @@ func main() {
 	wg := sync.WaitGroup{}
 	wg.Add(len(targets))
 	for _, tgt := range targets {
-		go handleTarget(&wg, version, tgt, assets, force)
+		go handleTarget(&wg, version, tgt, assets, *forceFlag)
 	}
 
 	wg.Wait()
@@ -298,6 +310,14 @@ func (t target) embedSourceDirective() string {
 }
 
 func init() {
+
+	forceFlag = flag.Bool("force", false, "Force the download of assets even if the version is the same")
+	versionFlag = flag.String("version", "latest", "Force the download of assets for a specific version (by git tag), or 'latest' for the latest release")
+
+	if forceFlag == nil || versionFlag == nil {
+		panic("unexpected nil flag")
+	}
+
 	_, filename, _, _ := runtime.Caller(0)
 	dir := path.Dir(filename)
 	rootDir = path.Join(dir, "..", "..")
