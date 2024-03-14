@@ -1,6 +1,6 @@
 module github.com/DataDog/go-libddwaf/libddwaf-updater
 
-go 1.18
+go 1.20
 
 require (
 	github.com/bitfield/script v0.22.0
