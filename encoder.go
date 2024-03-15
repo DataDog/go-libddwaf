@@ -106,8 +106,6 @@ func (encoder *encoder) Encode(data any) (wo *bindings.WafObject, err error) {
 	value := reflect.ValueOf(data)
 	wo = &bindings.WafObject{}
 
-	encoder.timer.Start()
-	defer encoder.timer.Stop()
 	err = encoder.encode(value, wo, encoder.objectMaxDepth)
 
 	if len(encoder.truncations[ObjectTooDeep]) != 0 && !encoder.timer.Exhausted() {
@@ -123,21 +121,6 @@ func (encoder *encoder) Truncations() map[TruncationReason][]int {
 	result := encoder.truncations
 	encoder.truncations = nil
 	return result
-}
-
-// EncodeAddresses takes a map of Go values and returns a wafObject pointer and an error.
-// The returned wafObject is the root of the tree of nested wafObjects representing the Go values.
-// This function is further optimized from Encode to take addresses as input and avoid further
-// errors in case the top-level map with addresses as keys is nil.
-// Since errors returned by Encode are not sent up between levels of the tree, this means that all errors come from the
-// top layer of encoding, which is the map of addresses. Hence, all errors should be developer errors since the map of
-// addresses is not user defined custom data.
-func (encoder *encoder) EncodeAddresses(addresses map[string]any) (*bindings.WafObject, error) {
-	if addresses == nil {
-		return nil, errors.ErrUnsupportedValue
-	}
-
-	return encoder.Encode(addresses)
 }
 
 func encodeNative[T native](val T, t bindings.WafObjectType, obj *bindings.WafObject) {

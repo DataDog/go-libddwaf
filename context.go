@@ -117,8 +117,7 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 
 	runTimer, err := context.timer.NewNode(wafRunTag,
 		timer.WithComponents(
-			wafPersistentEncoderTag,
-			wafEphemeralEncoderTag,
+			wafEncodeTag,
 			wafDecodeTag,
 			wafDurationTag,
 		),
@@ -133,17 +132,23 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 		context.metrics.merge(runTimer.Stats())
 	}()
 
-	persistentData, persistentEncoder, err := context.encodeOneAddressType(addressData.Persistent, runTimer.MustLeaf(wafPersistentEncoderTag))
+	wafEncodeTimer := runTimer.MustLeaf(wafEncodeTag)
+	wafEncodeTimer.Start()
+	persistentData, persistentEncoder, err := context.encodeOneAddressType(addressData.Persistent, wafEncodeTimer)
 	if err != nil {
+		wafEncodeTimer.Stop()
 		return res, err
 	}
 
 	// The WAF releases ephemeral address data at the max of each run call, so we need not keep the Go values live beyond
 	// that in the same way we need for persistent data. We hence use a separate encoder.
-	ephemeralData, ephemeralEncoder, err := context.encodeOneAddressType(addressData.Ephemeral, runTimer.MustLeaf(wafEphemeralEncoderTag))
+	ephemeralData, ephemeralEncoder, err := context.encodeOneAddressType(addressData.Ephemeral, wafEncodeTimer)
 	if err != nil {
+		wafEncodeTimer.Stop()
 		return res, err
 	}
+
+	wafEncodeTimer.Stop()
 
 	// ddwaf_run cannot run concurrently and we are going to mutate the context.cgoRefs, so we need to lock the context
 	context.mutex.Lock()
@@ -207,7 +212,7 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // If the addressData is empty, it returns nil for the WAF object and an empty ref pool.
 // At this point, if the encoder does not timeout, the only error we can get is an error in case the top level object
 // is a nil map, but this  behaviour is expected since either persistent or ephemeral addresses are allowed to be null
-// one at a time. In this case, EncodeAddresses will return nil contrary to Encode which will return a nil wafObject,
+// one at a time. In this case, Encode will return nil contrary to Encode which will return a nil wafObject,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
 func (context *Context) encodeOneAddressType(addressData map[string]any, timer timer.Timer) (*bindings.WafObject, encoder, error) {
 	encoder := newLimitedEncoder(timer)
@@ -215,7 +220,7 @@ func (context *Context) encodeOneAddressType(addressData map[string]any, timer t
 		return nil, encoder, nil
 	}
 
-	data, _ := encoder.EncodeAddresses(addressData)
+	data, _ := encoder.Encode(addressData)
 	if len(encoder.truncations) > 0 {
 		context.mutex.Lock()
 		defer context.mutex.Unlock()

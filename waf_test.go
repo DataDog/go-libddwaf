@@ -377,8 +377,7 @@ func TestTimeout(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Stats())
 		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.decode"])
-		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.encode.persistent"])
-		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.encode.ephemeral"])
+		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.encode"])
 		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.duration_ext"])
 		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.duration"])
 	})
@@ -391,8 +390,7 @@ func TestTimeout(t *testing.T) {
 		_, err := context.Run(RunAddressData{Persistent: largeValue}, 0)
 		require.Equal(t, errors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.duration_ext"], time.Millisecond)
-		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.encode.persistent"], time.Millisecond)
-		require.Equal(t, context.Stats().Timers["_dd.appsec.waf.encode.ephemeral"], time.Duration(0))
+		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.encode"], time.Millisecond)
 	})
 
 	t.Run("timeout-ephemeral-encoder", func(t *testing.T) {
@@ -403,8 +401,7 @@ func TestTimeout(t *testing.T) {
 		_, err := context.Run(RunAddressData{Ephemeral: largeValue}, 0)
 		require.Equal(t, errors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.duration_ext"], time.Millisecond)
-		require.Equal(t, context.Stats().Timers["_dd.appsec.waf.encode.persistent"], time.Duration(0))
-		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.encode.ephemeral"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.encode"], time.Millisecond)
 	})
 
 	t.Run("many-runs", func(t *testing.T) {
