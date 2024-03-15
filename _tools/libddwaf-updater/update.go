@@ -101,7 +101,7 @@ func main() {
 		written += wrote
 	}
 
-	fmt.Println("All done! Don't forget to check in changes to internal/lib/ and internal/log/ddhaf.h, check the libddwaf upgrade guide to update bindings!")
+	fmt.Println("All done! Don't forget to check in changes to internal/lib/ and internal/log/ddwaf.h, check the libddwaf upgrade guide to update bindings!")
 }
 
 // createEmbedSource creates the embed source file for the given target.
