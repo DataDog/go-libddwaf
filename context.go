@@ -119,7 +119,7 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 		timer.WithComponents(
 			wafPersistentEncoderTag,
 			wafEphemeralEncoderTag,
-			wafDurationExtTag,
+			wafDecodeTag,
 			wafDurationTag,
 		),
 	)
@@ -129,7 +129,7 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 
 	runTimer.Start()
 	defer func() {
-		context.metrics.add("_dd.appsec.waf.run", runTimer.Stop())
+		context.metrics.add(wafRunTag, runTimer.Stop())
 		context.metrics.merge(runTimer.Stats())
 	}()
 
@@ -157,8 +157,8 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the ddwaf_context.
 	defer context.cgoRefs.append(persistentEncoder.cgoRefs)
 
-	wafExtTimer := runTimer.MustLeaf(wafDurationExtTag)
-	res, err = context.run(persistentData, ephemeralData, wafExtTimer, runTimer.SumRemaining())
+	wafDecodeTimer := runTimer.MustLeaf(wafDecodeTag)
+	res, err = context.run(persistentData, ephemeralData, wafDecodeTimer, runTimer.SumRemaining())
 
 	runTimer.AddTime(wafDurationTag, res.TimeSpent)
 
@@ -232,17 +232,17 @@ func (context *Context) encodeOneAddressType(addressData map[string]any, timer t
 
 // run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
 // context appropriately around this call.
-func (context *Context) run(persistentData, ephemeralData *bindings.WafObject, wafTimer timer.Timer, timeBudget time.Duration) (Result, error) {
+func (context *Context) run(persistentData, ephemeralData *bindings.WafObject, wafDecodeTimer timer.Timer, timeBudget time.Duration) (Result, error) {
 	result := new(bindings.WafResult)
 	defer wafLib.WafResultFree(result)
-
-	wafTimer.Start()
-	defer wafTimer.Stop()
 
 	// The value of the timeout cannot exceed 2^55
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
 	timeout := uint64(timeBudget.Microseconds()) & 0x008FFFFFFFFFFFFF
 	ret := wafLib.WafRun(context.cContext, persistentData, ephemeralData, result, timeout)
+
+	wafDecodeTimer.Start()
+	defer wafDecodeTimer.Stop()
 
 	return unwrapWafResult(ret, result)
 }
