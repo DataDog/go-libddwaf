@@ -117,9 +117,8 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 
 	runTimer, err := context.timer.NewNode(wafRunTag,
 		timer.WithComponents(
-			wafPersistentEncoderTag,
-			wafEphemeralEncoderTag,
-			wafDurationExtTag,
+			wafEncodeTag,
+			wafDecodeTag,
 			wafDurationTag,
 		),
 	)
@@ -129,21 +128,27 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 
 	runTimer.Start()
 	defer func() {
-		context.metrics.add("_dd.appsec.waf.run", runTimer.Stop())
+		context.metrics.add(wafRunTag, runTimer.Stop())
 		context.metrics.merge(runTimer.Stats())
 	}()
 
-	persistentData, persistentEncoder, err := context.encodeOneAddressType(addressData.Persistent, runTimer.MustLeaf(wafPersistentEncoderTag))
+	wafEncodeTimer := runTimer.MustLeaf(wafEncodeTag)
+	wafEncodeTimer.Start()
+	persistentData, persistentEncoder, err := context.encodeOneAddressType(addressData.Persistent, wafEncodeTimer)
 	if err != nil {
+		wafEncodeTimer.Stop()
 		return res, err
 	}
 
 	// The WAF releases ephemeral address data at the max of each run call, so we need not keep the Go values live beyond
 	// that in the same way we need for persistent data. We hence use a separate encoder.
-	ephemeralData, ephemeralEncoder, err := context.encodeOneAddressType(addressData.Ephemeral, runTimer.MustLeaf(wafEphemeralEncoderTag))
+	ephemeralData, ephemeralEncoder, err := context.encodeOneAddressType(addressData.Ephemeral, wafEncodeTimer)
 	if err != nil {
+		wafEncodeTimer.Stop()
 		return res, err
 	}
+
+	wafEncodeTimer.Stop()
 
 	// ddwaf_run cannot run concurrently and we are going to mutate the context.cgoRefs, so we need to lock the context
 	context.mutex.Lock()
@@ -157,8 +162,8 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the ddwaf_context.
 	defer context.cgoRefs.append(persistentEncoder.cgoRefs)
 
-	wafExtTimer := runTimer.MustLeaf(wafDurationExtTag)
-	res, err = context.run(persistentData, ephemeralData, wafExtTimer, runTimer.SumRemaining())
+	wafDecodeTimer := runTimer.MustLeaf(wafDecodeTag)
+	res, err = context.run(persistentData, ephemeralData, wafDecodeTimer, runTimer.SumRemaining())
 
 	runTimer.AddTime(wafDurationTag, res.TimeSpent)
 
@@ -207,7 +212,7 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // If the addressData is empty, it returns nil for the WAF object and an empty ref pool.
 // At this point, if the encoder does not timeout, the only error we can get is an error in case the top level object
 // is a nil map, but this  behaviour is expected since either persistent or ephemeral addresses are allowed to be null
-// one at a time. In this case, EncodeAddresses will return nil contrary to Encode which will return a nil wafObject,
+// one at a time. In this case, Encode will return nil contrary to Encode which will return a nil wafObject,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
 func (context *Context) encodeOneAddressType(addressData map[string]any, timer timer.Timer) (*bindings.WafObject, encoder, error) {
 	encoder := newLimitedEncoder(timer)
@@ -215,7 +220,7 @@ func (context *Context) encodeOneAddressType(addressData map[string]any, timer t
 		return nil, encoder, nil
 	}
 
-	data, _ := encoder.EncodeAddresses(addressData)
+	data, _ := encoder.Encode(addressData)
 	if len(encoder.truncations) > 0 {
 		context.mutex.Lock()
 		defer context.mutex.Unlock()
@@ -232,17 +237,17 @@ func (context *Context) encodeOneAddressType(addressData map[string]any, timer t
 
 // run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
 // context appropriately around this call.
-func (context *Context) run(persistentData, ephemeralData *bindings.WafObject, wafTimer timer.Timer, timeBudget time.Duration) (Result, error) {
+func (context *Context) run(persistentData, ephemeralData *bindings.WafObject, wafDecodeTimer timer.Timer, timeBudget time.Duration) (Result, error) {
 	result := new(bindings.WafResult)
 	defer wafLib.WafResultFree(result)
-
-	wafTimer.Start()
-	defer wafTimer.Stop()
 
 	// The value of the timeout cannot exceed 2^55
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
 	timeout := uint64(timeBudget.Microseconds()) & 0x008FFFFFFFFFFFFF
 	ret := wafLib.WafRun(context.cContext, persistentData, ephemeralData, result, timeout)
+
+	wafDecodeTimer.Start()
+	defer wafDecodeTimer.Stop()
 
 	return unwrapWafResult(ret, result)
 }

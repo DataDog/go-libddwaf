@@ -25,13 +25,12 @@ type Stats struct {
 }
 
 const (
-	wafPersistentEncoderTag = "_dd.appsec.waf.encode.persistent"
-	wafEphemeralEncoderTag  = "_dd.appsec.waf.encode.ephemeral"
-	wafRunTag               = "_dd.appsec.waf.run"
-	wafDurationTag          = "_dd.appsec.waf.duration"
-	wafDurationExtTag       = "_dd.appsec.waf.duration_ext"
-	wafTimeoutTag           = "_dd.appsec.waf.timeouts"
-	wafTruncationTag        = "_dd.appsec.waf.truncations"
+	wafEncodeTag     = "_dd.appsec.waf.encode"
+	wafRunTag        = "_dd.appsec.waf.duration_ext"
+	wafDurationTag   = "_dd.appsec.waf.duration"
+	wafDecodeTag     = "_dd.appsec.waf.decode"
+	wafTimeoutTag    = "_dd.appsec.waf.timeouts"
+	wafTruncationTag = "_dd.appsec.waf.truncations"
 )
 
 // Metrics transform the stats returned by the WAF into a map of key value metrics for datadog backend
