@@ -261,7 +261,8 @@ func unwrapWafResult(ret bindings.WafReturnCode, result *bindings.WafResult) (re
 		res.Derivatives, err = decodeMap(&result.Derivatives)
 	}
 
-	res.TimeSpent = time.Duration(result.TotalRuntime)
+	res.TimeSpent = time.Duration(result.TotalRuntime) * time.Nanosecond
+
 	if ret == bindings.WafOK {
 		return res, err
 	}
