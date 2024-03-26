@@ -368,12 +368,26 @@ func TestTimeout(t *testing.T) {
 		"my.input": "Arachni",
 	}
 
-	t.Run("not-empty-metricsStore", func(t *testing.T) {
-		context := NewContextWithBudget(waf, time.Millisecond)
+	t.Run("not-empty-metrics-match", func(t *testing.T) {
+		context := NewContextWithBudget(waf, time.Hour)
 		require.NotNil(t, context)
 		defer context.Close()
 
 		_, err := context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue}, 0)
+		require.NoError(t, err)
+		require.NotEmpty(t, context.Stats())
+		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.decode"])
+		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.encode"])
+		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.duration_ext"])
+		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.duration"])
+	})
+
+	t.Run("not-empty-metrics-no-match", func(t *testing.T) {
+		context := NewContextWithBudget(waf, time.Hour)
+		require.NotNil(t, context)
+		defer context.Close()
+
+		_, err := context.Run(RunAddressData{Persistent: map[string]any{"my.input": "curl/7.88"}}, 0)
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Stats())
 		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.decode"])
