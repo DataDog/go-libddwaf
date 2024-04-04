@@ -16,3 +16,8 @@
 
 # Swap files
 *.swp
+
+## Ensure WAF static libraries are not excluded from vendor folders
+!internal/lib/*.so
+!internal/lib/*.dylib
+
