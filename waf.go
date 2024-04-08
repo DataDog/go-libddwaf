@@ -163,7 +163,7 @@ func (r *Result) HasActions() bool {
 // Otherwise, it returns false along with an error detailing why.
 func SupportsTarget() (bool, error) {
 	wafSupportErrors := support.WafSupportErrors()
-	return wafSupportErrors == nil, wafSupportErrors
+	return wafSupportErrors == nil, errors.Join(wafSupportErrors...)
 }
 
 // Health returns true if the waf is usable, false otherwise. At the same time it can return an error
@@ -174,7 +174,7 @@ func SupportsTarget() (bool, error) {
 // - The Waf library is not in an unsupported OS/Arch
 // - The Waf library is not in an unsupported Go version
 func Health() (bool, error) {
-	wafSupportErrors := support.WafSupportErrors()
+	wafSupportErrors := errors.Join(support.WafSupportErrors()...)
 	wafManuallyDisabledErr := support.WafManuallyDisabledError()
 
 	return (wafLib != nil || wafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil, errors.Join(wafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
