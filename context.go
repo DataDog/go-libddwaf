@@ -14,7 +14,7 @@ import (
 	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
 
-	"go.uber.org/atomic"
+	"sync/atomic"
 )
 
 // Context is a WAF execution context. It allows running the WAF incrementally
@@ -106,7 +106,7 @@ func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Re
 
 	defer func() {
 		if err == errors.ErrTimeout {
-			context.timeoutCount.Inc()
+			context.timeoutCount.Add(1)
 		}
 	}()
 

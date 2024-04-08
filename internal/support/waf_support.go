@@ -5,6 +5,8 @@
 
 package support
 
+import "errors"
+
 // Errors used to report data using the Health function
 // Store all the errors related to why go-liddwaf is unavailable for the current target at runtime.
 var wafSupportErrors []error
@@ -12,10 +14,12 @@ var wafSupportErrors []error
 // Not nil if the build tag `datadog.no_waf` is set
 var wafManuallyDisabledErr error
 
-func WafSupportErrors() []error {
-	return wafSupportErrors
+// WafSupportErrors returns all the errors related to why go-liddwaf is unavailable for the current target at runtime.
+func WafSupportErrors() error {
+	return errors.Join(wafSupportErrors...)
 }
 
+// WafManuallyDisabledError returns an error if the build tag `datadog.no_waf` is set
 func WafManuallyDisabledError() error {
 	return wafManuallyDisabledErr
 }
