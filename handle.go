@@ -13,7 +13,7 @@ import (
 	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
 
-	"go.uber.org/atomic"
+	"sync/atomic"
 )
 
 // Handle represents an instance of the WAF for a given ruleset.
@@ -31,7 +31,7 @@ type Handle struct {
 	// time with their own set of rules. This choice was done to be able to
 	// efficiently update the security rules concurrently, without having to
 	// block the request handlers for the time of the security rules update.
-	refCounter *atomic.Int32
+	refCounter atomic.Int32
 
 	// Instance of the WAF
 	cHandle bindings.WafHandle
@@ -95,11 +95,13 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 
 	unsafe.KeepAlive(encoder.cgoRefs)
 
-	return &Handle{
+	handle := &Handle{
 		cHandle:     cHandle,
-		refCounter:  atomic.NewInt32(1), // We count the handle itself in the counter
 		diagnostics: *diags,
-	}, nil
+	}
+
+	handle.refCounter.Store(1) // We count the handle itself in the counter
+	return handle, nil
 }
 
 // Diagnostics returns the rules initialization metrics for the current WAF handle
@@ -135,10 +137,12 @@ func (handle *Handle) Update(newRules any) (*Handle, error) {
 		return nil, fmt.Errorf("could not decode the WAF ruleset errors: %w", err)
 	}
 
-	return &Handle{
-		cHandle:    cHandle,
-		refCounter: atomic.NewInt32(1), // We count the handle itself in the counter
-	}, nil
+	newHandle := &Handle{
+		cHandle: cHandle,
+	}
+
+	newHandle.refCounter.Store(1) // We count the handle itself in the counter
+	return newHandle, nil
 }
 
 // Close puts the handle in termination state, when all the contexts are closed the handle will be destroyed

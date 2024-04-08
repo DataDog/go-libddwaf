@@ -6,6 +6,7 @@
 package waf
 
 import (
+	"errors"
 	"fmt"
 	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
 	"sync"
@@ -13,8 +14,6 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v2/internal/support"
-
-	"github.com/hashicorp/go-multierror"
 )
 
 // ErrTimeout is the error returned when the WAF times out while processing a request.
@@ -47,17 +46,16 @@ func (d *Diagnostics) TopLevelError() error {
 		"scanners":       d.Scanners,
 	}
 
-	var err *multierror.Error
+	var errs []error
 	for field, entry := range fields {
 		if entry == nil || entry.Error == "" {
 			// No entry or no error => we're all good.
 			continue
 		}
-		// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-		err = multierror.Append(err, fmt.Errorf("in %#v: %s", field, entry.Error))
+		errs = append(errs, fmt.Errorf("in %#v: %s", field, entry.Error))
 	}
 
-	return err.ErrorOrNil()
+	return errors.Join(errs...)
 }
 
 // DiagnosticEntry stores the information - provided by the WAF - about loaded and failed rules
@@ -165,7 +163,7 @@ func (r *Result) HasActions() bool {
 // Otherwise, it returns false along with an error detailing why.
 func SupportsTarget() (bool, error) {
 	wafSupportErrors := support.WafSupportErrors()
-	return len(wafSupportErrors) == 0, multierror.Append(nil, wafSupportErrors...).ErrorOrNil()
+	return wafSupportErrors == nil, errors.Join(wafSupportErrors...)
 }
 
 // Health returns true if the waf is usable, false otherwise. At the same time it can return an error
@@ -176,20 +174,8 @@ func SupportsTarget() (bool, error) {
 // - The Waf library is not in an unsupported OS/Arch
 // - The Waf library is not in an unsupported Go version
 func Health() (bool, error) {
-	var err *multierror.Error
-	if wafLoadErr != nil {
-		err = multierror.Append(err, wafLoadErr)
-	}
-
-	wafSupportErrors := support.WafSupportErrors()
-	if len(wafSupportErrors) > 0 {
-		err = multierror.Append(err, wafSupportErrors...)
-	}
-
+	wafSupportErrors := errors.Join(support.WafSupportErrors()...)
 	wafManuallyDisabledErr := support.WafManuallyDisabledError()
-	if wafManuallyDisabledErr != nil {
-		err = multierror.Append(err, wafManuallyDisabledErr)
-	}
 
-	return (wafLib != nil || wafLoadErr == nil) && len(wafSupportErrors) == 0 && wafManuallyDisabledErr == nil, err.ErrorOrNil()
+	return (wafLib != nil || wafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil, errors.Join(wafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
 }

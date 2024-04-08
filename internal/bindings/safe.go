@@ -7,6 +7,8 @@ package bindings
 
 import (
 	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
+
+	"fmt"
 	"reflect"
 	"runtime"
 
@@ -36,7 +38,7 @@ func tryCall(f func() error) (err error) {
 		case string:
 			err = errors.New(actual)
 		default:
-			err = errors.Errorf("%v", r)
+			err = fmt.Errorf("%v", r)
 		}
 
 		err = newPanicError(f, err)
