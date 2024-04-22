@@ -88,8 +88,8 @@ type Result struct {
 	Derivatives map[string]any
 
 	// Actions is the set of actions the WAF decided on when evaluating rules
-	// against the provided address data.
-	Actions []string
+	// against the provided address data. It maps action types to their dynamic parameter values
+	Actions map[string]any
 
 	// TimeSpent is the time the WAF self-reported as spent processing the call to ddwaf_run
 	TimeSpent time.Duration
