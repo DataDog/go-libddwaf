@@ -6,13 +6,14 @@
 package waf
 
 import (
-	"github.com/DataDog/go-libddwaf/v2/timer"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/DataDog/go-libddwaf/v2/errors"
 	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v2/timer"
 
 	"sync/atomic"
 )
@@ -47,7 +48,7 @@ type Context struct {
 // WAF context couldn't be created.
 // handle. A nil value is returned when the WAF handle can no longer be used
 // or the WAF context couldn't be created.
-func NewContext(handle *Handle) *Context {
+func NewContext(handle *Handle) (*Context, error) {
 	return NewContextWithBudget(handle, timer.UnlimitedBudget)
 }
 
@@ -56,24 +57,24 @@ func NewContext(handle *Handle) *Context {
 // WAF context couldn't be created.
 // handle. A nil value is returned when the WAF handle can no longer be used
 // or the WAF context couldn't be created.
-func NewContextWithBudget(handle *Handle, budget time.Duration) *Context {
+func NewContextWithBudget(handle *Handle, budget time.Duration) (*Context, error) {
 	// Handle has been released
 	if !handle.retain() {
-		return nil
+		return nil, fmt.Errorf("handle was released")
 	}
 
 	cContext := wafLib.WafContextInit(handle.cHandle)
 	if cContext == 0 {
 		handle.release() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
-		return nil
+		return nil, fmt.Errorf("could not get C context")
 	}
 
 	timer, err := timer.NewTreeTimer(timer.WithBudget(budget), timer.WithComponents(wafRunTag))
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return &Context{handle: handle, cContext: cContext, timer: timer, metrics: metricsStore{data: make(map[string]time.Duration, 5)}}
+	return &Context{handle: handle, cContext: cContext, timer: timer, metrics: metricsStore{data: make(map[string]time.Duration, 5)}}, nil
 }
 
 // RunAddressData provides address data to the Context.Run method. If a given key is present in both
