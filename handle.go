@@ -8,10 +8,12 @@ package waf
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
 	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v2/timer"
 
 	"sync/atomic"
 )
@@ -102,6 +104,36 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 
 	handle.refCounter.Store(1) // We count the handle itself in the counter
 	return handle, nil
+}
+
+// NewContext returns a new WAF context for the given WAF handle.
+// A nil value is returned when the WAF handle was released or when the
+// WAF context couldn't be created.
+func (handle *Handle) NewContext() (*Context, error) {
+	return handle.NewContextWithBudget(timer.UnlimitedBudget)
+}
+
+// NewContextWithBudget returns a new WAF context for the given WAF handle.
+// A nil value is returned when the WAF handle was released or when the
+// WAF context couldn't be created.
+func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, error) {
+	// Handle has been released
+	if !handle.retain() {
+		return nil, fmt.Errorf("handle was released")
+	}
+
+	cContext := wafLib.WafContextInit(handle.cHandle)
+	if cContext == 0 {
+		handle.release() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
+		return nil, fmt.Errorf("could not get C context")
+	}
+
+	timer, err := timer.NewTreeTimer(timer.WithBudget(budget), timer.WithComponents(wafRunTag))
+	if err != nil {
+		return nil, err
+	}
+
+	return &Context{handle: handle, cContext: cContext, timer: timer, metrics: metricsStore{data: make(map[string]time.Duration, 5)}}, nil
 }
 
 // Diagnostics returns the rules initialization metrics for the current WAF handle
