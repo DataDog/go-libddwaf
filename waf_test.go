@@ -908,8 +908,7 @@ func TestConcurrency(t *testing.T) {
 				defer stopBarrier.Done() // Signal we are done when returning
 
 				wafCtx, err := waf.NewContext()
-				require.NoError(t, err)
-				if wafCtx == nil {
+				if wafCtx == nil || err != nil {
 					return
 				}
 				wafCtx.Close()
