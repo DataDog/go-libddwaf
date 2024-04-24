@@ -34,7 +34,7 @@ func wafTest(t *testing.T, obj *bindings.WafObject) {
 	_, err = wafCtx.Run(RunAddressData{
 		Persistent: map[string]any{"my.input": obj},
 		Ephemeral:  map[string]any{"my.other.input": obj},
-	}, time.Second)
+	})
 	require.NoError(t, err)
 }
 

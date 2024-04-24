@@ -284,7 +284,7 @@ func TestUpdateWAF(t *testing.T) {
 		ephemeral := map[string]interface{}{
 			"my.other.input": map[string]bool{"safe": true},
 		}
-		res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, time.Second)
+		res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
 		require.Nil(t, res.Actions)
@@ -302,7 +302,7 @@ func TestUpdateWAF(t *testing.T) {
 		values = map[string]interface{}{
 			"my.input": "Arachni",
 		}
-		res, err = wafCtx2.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, time.Second)
+		res, err = wafCtx2.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
 		require.NotEmpty(t, res.Actions)
@@ -373,7 +373,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		_, err := context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue}, 0)
+		_, err = context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Stats())
 		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.decode"])
@@ -387,7 +387,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		_, err := context.Run(RunAddressData{Persistent: map[string]any{"my.input": "curl/7.88"}}, 0)
+		_, err = context.Run(RunAddressData{Persistent: map[string]any{"my.input": "curl/7.88"}})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Stats())
 		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.decode"])
@@ -401,7 +401,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		_, err := context.Run(RunAddressData{Persistent: largeValue}, 0)
+		_, err = context.Run(RunAddressData{Persistent: largeValue})
 		require.Equal(t, errors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.duration_ext"], time.Millisecond)
 		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.encode"], time.Millisecond)
@@ -412,7 +412,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		_, err := context.Run(RunAddressData{Ephemeral: largeValue}, 0)
+		_, err = context.Run(RunAddressData{Ephemeral: largeValue})
 		require.Equal(t, errors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.duration_ext"], time.Millisecond)
 		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.encode"], time.Millisecond)
@@ -426,7 +426,7 @@ func TestTimeout(t *testing.T) {
 		var err error
 
 		for i := 0; i < 1000 && err != errors.ErrTimeout; i++ {
-			_, err = context.Run(RunAddressData{Persistent: normalValue}, 0)
+			_, err = context.Run(RunAddressData{Persistent: normalValue})
 		}
 
 		require.Equal(t, errors.ErrTimeout, err)
@@ -451,7 +451,7 @@ func TestMatching(t *testing.T) {
 	ephemeral := map[string]interface{}{
 		"my.other.input": map[string]bool{"safe": true},
 	}
-	res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, time.Second)
+	res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -460,7 +460,7 @@ func TestMatching(t *testing.T) {
 	values = map[string]interface{}{
 		"server.request.uri.raw": "something",
 	}
-	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, time.Second)
+	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -470,25 +470,25 @@ func TestMatching(t *testing.T) {
 	values = map[string]interface{}{
 		"my.input": "Arachni",
 	}
-	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, time.Second)
+	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
 	require.NoError(t, err)
 	require.NotEmpty(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	// Not matching anymore since it already matched before
-	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, time.Second)
+	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	// Nil values
-	res, err = wafCtx.Run(RunAddressData{}, time.Second)
+	res, err = wafCtx.Run(RunAddressData{})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	// Empty values
-	res, err = wafCtx.Run(RunAddressData{Persistent: map[string]interface{}{}, Ephemeral: ephemeral}, time.Second)
+	res, err = wafCtx.Run(RunAddressData{Persistent: map[string]interface{}{}, Ephemeral: ephemeral})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -515,7 +515,7 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 		Ephemeral:  map[string]any{"my.input": "Arachni/ephemeral"},
 	}
 
-	res, err := wafCtx.Run(addresses, time.Second)
+	res, err := wafCtx.Run(addresses)
 	require.NoError(t, err)
 
 	// There is only one hit here
@@ -537,7 +537,7 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 	)
 
 	// Matche the same inputs a second time...
-	res, err = wafCtx.Run(addresses, time.Second)
+	res, err = wafCtx.Run(addresses)
 	require.NoError(t, err)
 	// There shouldn't be any match anymore...
 	require.Empty(t, res.Events)
@@ -569,7 +569,7 @@ func TestMatchingEphemeral(t *testing.T) {
 			input2: "go client",
 		},
 	}
-	res, err := wafCtx.Run(runAddresses, time.Second)
+	res, err := wafCtx.Run(runAddresses)
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -583,7 +583,7 @@ func TestMatchingEphemeral(t *testing.T) {
 			"server.request.body.raw": "something",
 		},
 	}
-	res, err = wafCtx.Run(runAddresses, time.Second)
+	res, err = wafCtx.Run(runAddresses)
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -600,13 +600,13 @@ func TestMatchingEphemeral(t *testing.T) {
 
 	// Matching
 	// Note a WAF rule with ephemeral addresses may match more than once!
-	res, err = wafCtx.Run(runAddresses, time.Second)
+	res, err = wafCtx.Run(runAddresses)
 	require.NoError(t, err)
 	require.Len(t, res.Events, 2) // 1 ephemeral, 1 persistent [!!Only if the rules have a different tags.type value!!]
 	require.Nil(t, res.Actions)
 
 	// Ephemeral address should still match, persistent shouldn't anymore
-	res, err = wafCtx.Run(runAddresses, time.Second)
+	res, err = wafCtx.Run(runAddresses)
 	require.NoError(t, err)
 	require.Len(t, res.Events, 1) // 1 ephemeral
 	require.Nil(t, res.Actions)
@@ -640,7 +640,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 			input1: "go client",
 		},
 	}
-	res, err := wafCtx.Run(runAddresses, time.Second)
+	res, err := wafCtx.Run(runAddresses)
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -651,7 +651,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 			"server.request.uri.raw": "something",
 		},
 	}
-	res, err = wafCtx.Run(runAddresses, time.Second)
+	res, err = wafCtx.Run(runAddresses)
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -664,7 +664,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	}
 
 	// Matching
-	res, err = wafCtx.Run(runAddresses, time.Second)
+	res, err = wafCtx.Run(runAddresses)
 	require.NoError(t, err)
 	require.Len(t, res.Events, 1) // 1 ephemeral
 	require.Nil(t, res.Actions)
@@ -695,7 +695,7 @@ func TestActions(t *testing.T) {
 			ephemeral := map[string]interface{}{
 				"my.other.input": map[string]bool{"safe": true},
 			}
-			res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, time.Second)
+			res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
 			require.NoError(t, err)
 			require.NotEmpty(t, res.Events)
 			// FIXME: check with libddwaf why the order of returned actions is not kept the same
@@ -762,7 +762,7 @@ func TestConcurrency(t *testing.T) {
 					ephemeralData := map[string]interface{}{
 						"server.request.body": bodies[i],
 					}
-					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeralData}, time.Minute)
+					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeralData})
 					if err != nil {
 						panic(err)
 					}
@@ -787,7 +787,7 @@ func TestConcurrency(t *testing.T) {
 		ephemeral := map[string]interface{}{
 			"server.request.body": map[string]bool{"safe": true},
 		}
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Second)
+		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
 	})
@@ -832,7 +832,7 @@ func TestConcurrency(t *testing.T) {
 					}
 					ephemeral := map[string]interface{}{"server.request.body": bodies[i]}
 
-					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Minute)
+					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
 
 					if err != nil {
 						panic(err)
@@ -851,7 +851,7 @@ func TestConcurrency(t *testing.T) {
 				ephemeral := map[string]interface{}{
 					"server.request.body": map[string]bool{"safe": true},
 				}
-				res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Hour)
+				res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
 				require.NoError(t, err)
 				require.NotEmpty(t, res.Events)
 				require.Nil(t, res.Actions)
@@ -949,7 +949,7 @@ func TestConcurrency(t *testing.T) {
 				// effectively releases the WAF context, and between 0 and N calls to wafCtx.Run(...) are
 				// done (those that land after `wafCtx.Close()` happened will be silent no-ops).
 				if n%2 == 0 {
-					wafCtx.Run(RunAddressData{Ephemeral: data}, time.Hour)
+					wafCtx.Run(RunAddressData{Ephemeral: data})
 				} else {
 					wafCtx.Close()
 				}
@@ -1097,7 +1097,7 @@ func TestMetrics(t *testing.T) {
 			"server.request.body": map[string]bool{"safe": true},
 		}
 		start := time.Now()
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Second)
+		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
 		elapsedNS := time.Since(start).Nanoseconds()
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
@@ -1124,7 +1124,7 @@ func TestMetrics(t *testing.T) {
 		}
 
 		for i := uint64(1); i <= 10; i++ {
-			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, 0)
+			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
 			require.Equal(t, errors.ErrTimeout, err)
 			require.Equal(t, wafCtx.TotalTimeouts(), i)
 		}
@@ -1146,7 +1146,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		ephemeral := map[string]interface{}{
 			"server.request.body": map[string]bool{"safe": true},
 		}
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Second)
+		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
@@ -1168,7 +1168,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		ephemeral := map[string]interface{}{
 			"server.request.body": map[string]bool{"safe": true},
 		}
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Second)
+		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
@@ -1190,7 +1190,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		ephemeral := map[string]interface{}{
 			"server.request.body": map[string]bool{"safe": true},
 		}
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral}, time.Second)
+		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
@@ -1223,7 +1223,7 @@ func TestTruncationInformation(t *testing.T) {
 				"container_too_large": make([]bool, bindings.WafMaxContainerSize+extra+2),
 			},
 		},
-	}, time.Second)
+	})
 	require.NoError(t, err)
 	require.Equal(t, map[TruncationReason][]int{
 		StringTooLong:     {bindings.WafMaxStringLength + extra + 2, bindings.WafMaxStringLength + extra},
