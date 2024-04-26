@@ -698,7 +698,6 @@ func TestActions(t *testing.T) {
 			res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral}, time.Second)
 			require.NoError(t, err)
 			require.NotEmpty(t, res.Events)
-			// FIXME: check with libddwaf why the order of returned actions is not kept the same
 			for _, aType := range expectedActionsTypes {
 				require.Contains(t, res.Actions, aType)
 			}
