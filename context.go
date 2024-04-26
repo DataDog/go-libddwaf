@@ -276,17 +276,9 @@ func unwrapWafResult(ret bindings.WafReturnCode, result *bindings.WafResult) (re
 		return res, err
 	}
 	if size := result.Actions.NbEntries; size > 0 {
-		m, err := decodeMap(&result.Actions)
+		res.Actions, err = decodeMap(&result.Actions)
 		if err != nil {
 			return res, err
-		}
-		res.Actions = make(map[string]map[string]any, len(m))
-		for k, v := range m {
-			val, ok := v.(map[string]any)
-			if !ok {
-				return res, errors.ErrInvalidObjectType
-			}
-			res.Actions[k] = val
 		}
 	}
 
