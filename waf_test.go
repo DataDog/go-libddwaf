@@ -676,7 +676,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 }
 
 func TestActions(t *testing.T) {
-	testActions := func(expectedActions []string) func(t *testing.T) {
+	testActions := func(expectedActions []string, expectedActionsTypes []string) func(t *testing.T) {
 		return func(t *testing.T) {
 
 			waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, expectedActions))
@@ -698,13 +698,14 @@ func TestActions(t *testing.T) {
 			res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
 			require.NoError(t, err)
 			require.NotEmpty(t, res.Events)
-			// FIXME: check with libddwaf why the order of returned actions is not kept the same
-			require.ElementsMatch(t, expectedActions, res.Actions)
+			for _, aType := range expectedActionsTypes {
+				require.Contains(t, res.Actions, aType)
+			}
 		}
 	}
 
-	t.Run("single", testActions([]string{"block"}))
-	t.Run("multiple-actions", testActions([]string{"action 1", "action 2", "action 3"}))
+	t.Run("single", testActions([]string{"block"}, []string{"block_request"}))
+	t.Run("multiple-actions", testActions([]string{"block", "extract_schema"}, []string{"block_request", "generate_schema"}))
 }
 
 func TestAddresses(t *testing.T) {

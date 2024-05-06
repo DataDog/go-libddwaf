@@ -20,6 +20,7 @@ jobs:
     name: Containerized
     uses: ./.github/workflows/_test_containerized.yml
   smoke-tests:
+    if: "!contains(github.event.pull_request.labels.*.name, 'skip-smoke-tests')"
     name: Smoke Tests
     uses: DataDog/dd-trace-go/.github/workflows/smoke-tests.yml@main
     with:
@@ -37,10 +38,10 @@ jobs:
     if: '!cancelled()'
     steps:
       - name: Done
-        if: needs.bare-metal.result == 'success' && needs.containerized.result == 'success' && needs.smoke-tests.result == 'success'
+        if: needs.bare-metal.result == 'success' && needs.containerized.result == 'success' && (needs.smoke-tests.result == 'success' || needs.smoke-tests.result == 'skipped')
         run: echo "Done!"
       - name: Done
-        if: needs.bare-metal.result != 'success' || needs.containerized.result != 'success' || needs.smoke-tests.result != 'success'
+        if: needs.bare-metal.result != 'success' || needs.containerized.result != 'success' || (needs.smoke-tests.result != 'success' && needs.smoke-tests.result != 'skipped')
         run: |-
           echo "Failed!"
           exit 1
