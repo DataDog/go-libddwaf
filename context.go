@@ -242,9 +242,7 @@ func unwrapWafResult(ret bindings.WafReturnCode, result *bindings.WafResult) (re
 		return res, err
 	}
 	if size := result.Actions.NbEntries; size > 0 {
-		// using ruleIdArray cause it decodes string array (I think)
-		res.Actions, err = decodeStringArray(&result.Actions)
-		// TODO: use decode array, and eventually genericize the function
+		res.Actions, err = decodeMap(&result.Actions)
 		if err != nil {
 			return res, err
 		}
