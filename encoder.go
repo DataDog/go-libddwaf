@@ -8,16 +8,16 @@ package waf
 import (
 	"context"
 	"fmt"
-	"github.com/DataDog/go-libddwaf/v2/timer"
+	"github.com/DataDog/go-libddwaf/v3/timer"
 	"math"
 	"reflect"
 	"strings"
 	"time"
 	"unicode"
 
-	"github.com/DataDog/go-libddwaf/v2/errors"
-	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v3/errors"
+	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 )
 
 // Encode Go values into wafObjects. Only the subset of Go types representable into wafObjects

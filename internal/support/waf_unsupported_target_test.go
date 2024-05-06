@@ -11,8 +11,8 @@ import (
 	"runtime"
 	"testing"
 
-	waf "github.com/DataDog/go-libddwaf/v2"
-	"github.com/DataDog/go-libddwaf/v2/errors"
+	waf "github.com/DataDog/go-libddwaf/v3"
+	"github.com/DataDog/go-libddwaf/v3/errors"
 	"github.com/stretchr/testify/require"
 )
 

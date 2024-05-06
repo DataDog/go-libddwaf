@@ -6,8 +6,8 @@
 package timer_test
 
 import (
-	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v2/timer"
+	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v3/timer"
 	"github.com/stretchr/testify/require"
 	"strconv"
 	"testing"

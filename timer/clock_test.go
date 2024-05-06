@@ -1,7 +1,7 @@
 package timer
 
 import (
-	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 	"testing"
 	"time"
 )

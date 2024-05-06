@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"time"
 
-	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
-	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v2/timer"
+	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
+	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v3/timer"
 
 	"sync/atomic"
 )

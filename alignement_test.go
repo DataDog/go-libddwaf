@@ -11,8 +11,8 @@ package waf
 import (
 	"testing"
 
-	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 
 	"github.com/ebitengine/purego"
 	"github.com/stretchr/testify/require"
