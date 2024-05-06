@@ -8,12 +8,12 @@ package waf
 import (
 	"errors"
 	"fmt"
-	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
 	"sync"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v2/internal/support"
+	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
+	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v3/internal/support"
 )
 
 // ErrTimeout is the error returned when the WAF times out while processing a request.

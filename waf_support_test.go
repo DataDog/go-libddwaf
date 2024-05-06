@@ -9,10 +9,12 @@ package waf
 
 import (
 	"flag"
-	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
-	"github.com/DataDog/go-libddwaf/v2/internal/support"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
+	"github.com/DataDog/go-libddwaf/v3/internal/support"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (

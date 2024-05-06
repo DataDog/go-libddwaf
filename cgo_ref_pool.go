@@ -8,8 +8,8 @@ package waf
 import (
 	"strconv"
 
-	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 )
 
 // cgoRefPool is a way to make sure we can safely send go allocated data on the C side of the WAF

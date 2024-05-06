@@ -15,7 +15,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/DataDog/go-libddwaf/v2/internal/lib"
+	"github.com/DataDog/go-libddwaf/v3/internal/lib"
 	"github.com/stretchr/testify/require"
 )
 

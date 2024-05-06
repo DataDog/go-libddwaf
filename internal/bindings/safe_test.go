@@ -7,7 +7,7 @@ package bindings
 
 import (
 	"errors"
-	wafErrors "github.com/DataDog/go-libddwaf/v2/errors"
+	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
 	"strconv"
 	"testing"
 

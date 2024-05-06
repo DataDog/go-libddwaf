@@ -6,9 +6,9 @@
 package waf
 
 import (
-	"github.com/DataDog/go-libddwaf/v2/errors"
-	"github.com/DataDog/go-libddwaf/v2/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v3/errors"
+	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 )
 
 // decodeErrors transforms the wafObject received by the wafRulesetInfo after the call to wafDl.wafInit to a map where

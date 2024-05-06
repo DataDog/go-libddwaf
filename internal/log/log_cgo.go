@@ -17,7 +17,7 @@ package log
 //   uint64_t message_len
 // );
 import "C"
-import "github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+import "github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 
 // CallbackFunctionPointer returns a pointer to the log callback function which
 // can be used with libddwaf.

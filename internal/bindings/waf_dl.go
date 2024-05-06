@@ -11,9 +11,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/DataDog/go-libddwaf/v2/internal/lib"
-	"github.com/DataDog/go-libddwaf/v2/internal/log"
-	"github.com/DataDog/go-libddwaf/v2/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v3/internal/lib"
+	"github.com/DataDog/go-libddwaf/v3/internal/log"
+	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 	"github.com/ebitengine/purego"
 )
 
