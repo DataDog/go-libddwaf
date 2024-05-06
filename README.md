@@ -6,7 +6,7 @@ It consists of 2 separate entities: the bindings for the calls to libddwaf, and 
 An example usage would be:
 
 ```go
-import waf "github.com/DataDog/go-libddwaf/v2"
+import waf "github.com/DataDog/go-libddwaf/v3"
 
 //go:embed
 var ruleset []byte
@@ -15,12 +15,12 @@ func main() {
     var parsedRuleset any
 
     if err := json.Unmarshal(ruleset, &parsedRuleset); err != nil {
-        return 1
+        panic(err)
     }
 
     wafHandle, err := waf.NewHandle(parsedRuleset, "", "")
     if err != nil {
-        return 1
+        panic(err)
     }
 
     defer wafHandle.Close()
@@ -36,7 +36,7 @@ func main() {
 }
 ```
 
-The API documentation details can be found on [pkg.go.dev](https://pkg.go.dev/github.com/DataDog/go-libddwaf/v2).
+The API documentation details can be found on [pkg.go.dev](https://pkg.go.dev/github.com/DataDog/go-libddwaf/v3).
 
 Originally this project was only here to provide CGO Wrappers to the calls to libddwaf.
 But with the appearance of `ddwaf_object` tree like structure,
