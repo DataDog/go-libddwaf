@@ -65,7 +65,7 @@ func (d RunAddressData) isEmpty() bool {
 // Struct fields having the tag `ddwaf:"ignore"` will not be encoded and sent to the WAF
 // if the output of TotalTime() exceeds the value of Timeout, the function will immediately return with errors.ErrTimeout
 // The second parameter is deprecated and should be passed to NewContextWithBudget instead.
-func (context *Context) Run(addressData RunAddressData, _ time.Duration) (res Result, err error) {
+func (context *Context) Run(addressData RunAddressData) (res Result, err error) {
 	if addressData.isEmpty() {
 		return
 	}
