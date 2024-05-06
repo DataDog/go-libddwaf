@@ -10,7 +10,6 @@ package waf
 import (
 	"context"
 	"encoding/json"
-	"github.com/DataDog/go-libddwaf/v3/timer"
 	"reflect"
 	"sort"
 	"testing"
@@ -19,6 +18,7 @@ import (
 	"github.com/DataDog/go-libddwaf/v3/errors"
 	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v3/timer"
 
 	"github.com/stretchr/testify/require"
 )

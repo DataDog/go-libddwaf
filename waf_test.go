@@ -12,7 +12,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"github.com/DataDog/go-libddwaf/v3/timer"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -23,9 +22,10 @@ import (
 	"time"
 
 	"github.com/DataDog/go-libddwaf/v3/errors"
-
 	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v3/internal/lib"
+	"github.com/DataDog/go-libddwaf/v3/timer"
+
 	"github.com/stretchr/testify/require"
 )
 

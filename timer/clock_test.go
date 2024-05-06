@@ -1,9 +1,10 @@
 package timer
 
 import (
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 	"testing"
 	"time"
+
+	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 )
 
 func BenchmarkMostUsedFunctions(b *testing.B) {

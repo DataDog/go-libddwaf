@@ -6,12 +6,14 @@
 package timer_test
 
 import (
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v3/timer"
-	"github.com/stretchr/testify/require"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v3/timer"
+
+	"github.com/stretchr/testify/require"
 )
 
 func hasExpired(t *testing.T, timer timer.Timer, duration time.Duration) {

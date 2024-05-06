@@ -8,10 +8,10 @@ package waf
 import (
 	"errors"
 	"fmt"
-	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
 	"sync"
 	"time"
 
+	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
 	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v3/internal/support"
 )
