@@ -32,7 +32,7 @@ func main() {
         Persistent: map[string]any{
             "server.request.path_params": "/rfiinc.txt",
         },
-    }, time.Minute)
+    })
 }
 ```
 
