@@ -27,6 +27,11 @@ type cgoRefPool struct {
 	arrayRefs  [][]bindings.WafObject
 }
 
+// This is used when passing empty Go strings to the WAF in order to avoid passing null string pointers,
+// which are not handled by the WAF in all cases.
+// FIXME: to be removed when the WAF handles null ptr strings in all expected places
+var emptyWAFStringValue = unsafe.NativeStringUnwrap("\x00").Data
+
 func (refPool *cgoRefPool) append(newRefs cgoRefPool) {
 	refPool.stringRefs = append(refPool.stringRefs, newRefs.stringRefs...)
 	refPool.arrayRefs = append(refPool.arrayRefs, newRefs.arrayRefs...)
@@ -51,7 +56,8 @@ func (refPool *cgoRefPool) AllocWafString(obj *bindings.WafObject, str string) {
 
 	if len(str) == 0 {
 		obj.NbEntries = 0
-		obj.Value = 0
+		// FIXME: use obj.Value = 0 when the WAF handles null string ptr in all expected places
+		obj.Value = emptyWAFStringValue
 		return
 	}
 
