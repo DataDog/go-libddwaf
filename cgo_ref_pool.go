@@ -51,7 +51,7 @@ func (refPool *cgoRefPool) AllocWafString(obj *bindings.WafObject, str string) {
 
 	if len(str) == 0 {
 		obj.NbEntries = 0
-		obj.Value = 0
+		obj.Value = 1
 		return
 	}
 
