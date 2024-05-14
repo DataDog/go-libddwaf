@@ -1083,6 +1083,27 @@ func TestMetrics(t *testing.T) {
 	  ],
 	  "transformers": []
 	}
+  ],
+  "actions": [
+    {
+      "id": "block",
+      "type": "block_request",
+      "parameters": {
+        "status_code": 403,
+        "type": "auto"
+      }
+    },
+    {
+      "id": "redirect",
+      "type": "redirect_request",
+      "parameters": {
+        "status_code": 303,
+        "location": "/tmp"
+      }
+    },
+    {
+      "id": "block2"
+    }
   ]
 }
 `
@@ -1103,6 +1124,13 @@ func TestMetrics(t *testing.T) {
 		require.Contains(t, waf.diagnostics.Rules.Loaded, "valid-rule")
 		require.Equal(t, waf.diagnostics.Version, "1.2.7")
 		require.Len(t, waf.diagnostics.Rules.Errors, 1)
+
+		// Action diagnostics
+		require.Len(t, waf.diagnostics.Actions.Loaded, 2)
+		require.Len(t, waf.diagnostics.Actions.Failed, 1)
+		require.Contains(t, waf.diagnostics.Actions.Loaded, "block")
+		require.Contains(t, waf.diagnostics.Actions.Loaded, "redirect")
+		require.Contains(t, waf.diagnostics.Actions.Failed, "block2")
 	})
 
 	t.Run("RunDuration", func(t *testing.T) {
