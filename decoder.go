@@ -52,6 +52,8 @@ func decodeDiagnostics(obj *bindings.WafObject) (*Diagnostics, error) {
 		objElem := unsafe.CastWithOffset[bindings.WafObject](obj.Value, i)
 		key := unsafe.GostringSized(unsafe.Cast[byte](objElem.ParameterName), objElem.ParameterNameLength)
 		switch key {
+		case "actions":
+			diags.Actions, err = decodeDiagnosticsEntry(objElem)
 		case "custom_rules":
 			diags.CustomRules, err = decodeDiagnosticsEntry(objElem)
 		case "exclusions":

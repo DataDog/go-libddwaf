@@ -24,6 +24,7 @@ const ErrTimeout = wafErrors.ErrTimeout
 type Diagnostics struct {
 	Rules          *DiagnosticEntry
 	CustomRules    *DiagnosticEntry
+	Actions        *DiagnosticEntry
 	Exclusions     *DiagnosticEntry
 	RulesOverrides *DiagnosticEntry
 	RulesData      *DiagnosticEntry
@@ -38,6 +39,7 @@ type Diagnostics struct {
 func (d *Diagnostics) TopLevelError() error {
 	fields := map[string]*DiagnosticEntry{
 		"rules":          d.Rules,
+		"actions":        d.Actions,
 		"custom_rules":   d.CustomRules,
 		"exclusions":     d.Exclusions,
 		"rules_override": d.RulesOverrides,
