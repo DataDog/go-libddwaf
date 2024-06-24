@@ -52,12 +52,12 @@ run() {
 
 run "$WAF_ENABLED" appsec                # WAF enabled (but not on windows)
 run false                                # CGO Disabled
-run false go1.23                         # Too recent go version (not tested)
-run false go1.23,appsec                  # CGO disabled with appsec explicitely enabled but too recent go version
+run false go1.24                         # Too recent go version (not tested)
+run false go1.24,appsec                  # CGO disabled with appsec explicitely enabled but too recent go version
 run false datadog.no_waf                 # WAF manually disabled
 run false datadog.no_waf,appsec          # CGO disabled with appsec explicitely enabled but WAF manually disabled
-run false datadog.no_waf,go1.23          # WAF manually disabled and go version to recent
-run false datadog.no_waf,go1.23,appsec   # CGO disabled, WAF manually disabled, too recent go version with appsec explicitely enabled
+run false datadog.no_waf,go1.24          # WAF manually disabled and go version to recent
+run false datadog.no_waf,go1.24,appsec   # CGO disabled, WAF manually disabled, too recent go version with appsec explicitely enabled
 
 # Check if we are running on Alpine and install the required dependencies for cgo
 if [ -f /etc/os-release ] && grep -q Alpine < /etc/os-release; then
@@ -65,6 +65,6 @@ if [ -f /etc/os-release ] && grep -q Alpine < /etc/os-release; then
 fi
 
 run "$WAF_ENABLED" cgo                   # WAF enabled (but not on windows)
-run false go1.23,cgo                     # CGO enabled and too recent go version
+run false go1.24,cgo                     # CGO enabled and too recent go version
 run false datadog.no_waf,cgo             # WAF manually disabled and CGO enabled
-run false datadog.no_waf,go1.23,cgo      # CGO enabled, WAF manually disabled, too recent go version
+run false datadog.no_waf,go1.24,cgo      # CGO enabled, WAF manually disabled, too recent go version
