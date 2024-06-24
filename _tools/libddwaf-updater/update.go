@@ -32,7 +32,7 @@ var (
 )
 
 const (
-	goVersionUnsupported = "go1.23"
+	goVersionUnsupported = "go1.24"
 )
 
 var (
