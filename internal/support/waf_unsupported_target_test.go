@@ -8,7 +8,6 @@
 package support_test
 
 import (
-	"runtime"
 	"testing"
 
 	waf "github.com/DataDog/go-libddwaf/v3"
