@@ -197,10 +197,12 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, assets map[str
 		}
 
 		var destPath string
+		var compress bool
 		switch name := header.FileInfo().Name(); name {
 		case "libddwaf.so", "libddwaf.dylib", "ddwaf.dll":
 			destPath = path.Join(libDir, tgt.binaryLibName())
 			foundLib = true
+			compress = true
 		case "ddwaf.h":
 			if !tgt.primary {
 				continue
@@ -211,8 +213,13 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, assets map[str
 			continue
 		}
 
+		pipe := script.NewPipe().WithReader(arch)
+		if compress {
+			pipe = pipe.Filter(compressFilter)
+		}
+
 		fmt.Printf("... downloaded %s\n", destPath)
-		if _, err := script.NewPipe().WithReader(arch).WriteFile(destPath); err != nil {
+		if _, err := pipe.WriteFile(destPath); err != nil {
 			panic(err)
 		}
 		if path.Ext(destPath) != ".h" {
@@ -238,6 +245,13 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, assets map[str
 	if _, err = os.Stat(path.Join(libDir, tgt.embedSourceFilename())); errors.Is(err, os.ErrNotExist) || force {
 		createEmbedSource(tgt)
 	}
+}
+
+func compressFilter(r io.Reader, w io.Writer) error {
+	gz := gzip.NewWriter(w)
+	defer gz.Close()
+	_, err := io.Copy(gz, r)
+	return err
 }
 
 type target struct {
@@ -290,7 +304,7 @@ var targets = []target{
 }
 
 func (t target) binaryLibName() string {
-	return fmt.Sprintf("%s-%s-%s.%s", t.base, t.os, t.arch, t.ext)
+	return fmt.Sprintf("%s-%s-%s.%s.gz", t.base, t.os, t.arch, t.ext)
 }
 
 func (t target) embedSourceFilename() string {
