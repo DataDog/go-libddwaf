@@ -8,6 +8,7 @@
 package bindings
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -43,24 +44,17 @@ type wafSymbols struct {
 // The caller is responsible for calling wafDl.Close on the returned object once they
 // are done with it so that associated resources can be released.
 func NewWafDl() (dl *WafDl, err error) {
-	var file string
-	file, err = lib.DumpEmbeddedWAF()
+	var handle uintptr
+	file, err := lib.DumpEmbeddedWAF()
 	if err != nil {
 		return
 	}
 	defer func() {
-		rmErr := os.Remove(file)
-		if rmErr != nil {
-			if err == nil {
-				err = rmErr
-			} else {
-				// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-				err = fmt.Errorf("%w; along with an error while removing %s: %v", err, file, rmErr)
-			}
+		if rmErr := os.Remove(file); rmErr != nil {
+			err = errors.Join(err, fmt.Errorf("error removing %s: %w", file, rmErr))
 		}
 	}()
 
-	var handle uintptr
 	if handle, err = purego.Dlopen(file, purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
 		return
 	}
@@ -68,8 +62,7 @@ func NewWafDl() (dl *WafDl, err error) {
 	var symbols wafSymbols
 	if symbols, err = resolveWafSymbols(handle); err != nil {
 		if closeErr := purego.Dlclose(handle); closeErr != nil {
-			// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-			err = fmt.Errorf("%w; along with an error while releasing the shared libddwaf library: %v", err, closeErr)
+			err = errors.Join(err, fmt.Errorf("error released the shared libddwaf library: %w", closeErr))
 		}
 		return
 	}
@@ -83,8 +76,7 @@ func NewWafDl() (dl *WafDl, err error) {
 	})
 	if err != nil {
 		if closeErr := purego.Dlclose(handle); closeErr != nil {
-			// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-			err = fmt.Errorf("%w; along with an error while releasing the shared libddwaf library: %v", err, closeErr)
+			err = errors.Join(err, fmt.Errorf("error released the shared libddwaf library: %w", closeErr))
 		}
 		return
 	}

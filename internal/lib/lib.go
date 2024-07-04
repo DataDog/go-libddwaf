@@ -10,6 +10,7 @@ package lib
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,20 +29,17 @@ func DumpEmbeddedWAF() (path string, err error) {
 	path = file.Name()
 
 	defer func() {
+		allErrors := []error{err}
 		if closeErr := file.Close(); closeErr != nil {
-			if err != nil {
-				// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-				err = fmt.Errorf("%w; along with an error while releasingclosing the temporary file: %v", err, closeErr)
-			} else {
-				err = fmt.Errorf("error closing file: %w", closeErr)
-			}
+			allErrors = append(allErrors, fmt.Errorf("error closing file: %w", closeErr))
 		}
 		if path != "" && err != nil {
 			if rmErr := os.Remove(path); rmErr != nil {
-				// TODO: rely on errors.Join() once go1.20 is our min supported Go version
-				err = fmt.Errorf("%w; along with an error while releasingclosing the temporary file: %v", err, rmErr)
+				allErrors = append(allErrors, fmt.Errorf("error removing file: %w", rmErr))
 			}
 		}
+
+		err = errors.Join(allErrors...)
 	}()
 
 	gr, err := gzip.NewReader(bytes.NewReader(libddwaf))
