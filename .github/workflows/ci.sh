@@ -7,11 +7,6 @@ GOVERSION="$(go env GOVERSION)"
 GOOS="$(go env GOOS)"
 GOARCH="$(go env GOARCH)"
 
-case $GOVERSION in
-    *1.20* ) CGOCHECK="GODEBUG=cgocheck=2";;
-    *) CGOCHECK="GOEXPERIMENT=cgocheck2";;
-esac
-
 contains() {
     case $1 in
         *$2*) echo true;;
@@ -47,7 +42,7 @@ run() {
 
     if [ "$cgo" = "1" ]; then
         echo "Running again with cgocheck enabled..."
-        env "$CGOCHECK" CGO_ENABLED=1 go test -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+        env "GOEXPERIMENT=cgocheck2" CGO_ENABLED=1 go test -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
     fi
 
     # TODO: remove condition once we have native arm64 linux runners
