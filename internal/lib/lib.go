@@ -29,17 +29,14 @@ func DumpEmbeddedWAF() (path string, err error) {
 	path = file.Name()
 
 	defer func() {
-		allErrors := []error{err}
 		if closeErr := file.Close(); closeErr != nil {
-			allErrors = append(allErrors, fmt.Errorf("error closing file: %w", closeErr))
+			err = errors.Join(err, fmt.Errorf("error closing file: %w", closeErr))
 		}
 		if path != "" && err != nil {
 			if rmErr := os.Remove(path); rmErr != nil {
-				allErrors = append(allErrors, fmt.Errorf("error removing file: %w", rmErr))
+				err = errors.Join(err, fmt.Errorf("error removing file: %w", rmErr))
 			}
 		}
-
-		err = errors.Join(allErrors...)
 	}()
 
 	gr, err := gzip.NewReader(bytes.NewReader(libddwaf))
