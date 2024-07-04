@@ -8,7 +8,10 @@
 package lib
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"os"
 
 	_ "embed"
@@ -41,7 +44,21 @@ func DumpEmbeddedWAF() (path string, err error) {
 		}
 	}()
 
-	if err := os.WriteFile(file.Name(), libddwaf, 0400); err != nil {
+	gr, err := gzip.NewReader(bytes.NewReader(libddwaf))
+	if err != nil {
+		return path, fmt.Errorf("error creating gzip reader: %w", err)
+	}
+
+	uncompressedLibddwaf, err := io.ReadAll(gr)
+	if err != nil {
+		return path, fmt.Errorf("error reading gzip content: %w", err)
+	}
+
+	if err := gr.Close(); err != nil {
+		return path, fmt.Errorf("error closing gzip reader: %w", err)
+	}
+
+	if err := os.WriteFile(file.Name(), uncompressedLibddwaf, 0400); err != nil {
 		return path, fmt.Errorf("error writing file: %w", err)
 	}
 
