@@ -82,6 +82,7 @@ type native interface {
 func newLimitedEncoder(timer timer.Timer) encoder {
 	return encoder{
 		timer:            timer,
+		cgoRefs:          newCgoRefPool(),
 		containerMaxSize: bindings.WafMaxContainerSize,
 		stringMaxSize:    bindings.WafMaxStringLength,
 		objectMaxDepth:   bindings.WafMaxContainerDepth,
@@ -92,6 +93,7 @@ func newMaxEncoder() encoder {
 	timer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
 	return encoder{
 		timer:            timer,
+		cgoRefs:          newCgoRefPool(),
 		containerMaxSize: math.MaxInt,
 		stringMaxSize:    math.MaxInt,
 		objectMaxDepth:   math.MaxInt,

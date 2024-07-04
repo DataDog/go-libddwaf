@@ -11,7 +11,6 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v3/errors"
 	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 	"github.com/DataDog/go-libddwaf/v3/timer"
 
 	"sync/atomic"
@@ -114,6 +113,8 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 		return res, err
 	}
 
+	defer ephemeralEncoder.cgoRefs.release()
+
 	wafEncodeTimer.Stop()
 
 	// ddwaf_run cannot run concurrently and we are going to mutate the context.cgoRefs, so we need to lock the context
@@ -132,10 +133,6 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	res, err = context.run(persistentData, ephemeralData, wafDecodeTimer, runTimer.SumRemaining())
 
 	runTimer.AddTime(wafDurationTag, res.TimeSpent)
-
-	// Ensure the ephemerals don't get optimized away by the compiler before the WAF had a chance to use them.
-	unsafe.KeepAlive(ephemeralEncoder.cgoRefs)
-	unsafe.KeepAlive(persistentEncoder.cgoRefs)
 
 	return
 }
@@ -260,11 +257,10 @@ func (context *Context) Close() {
 	defer context.mutex.Unlock()
 
 	wafLib.WafContextDestroy(context.cContext)
-	unsafe.KeepAlive(context.cgoRefs) // Keep the Go pointer references until the max of the context
-	defer context.handle.release()    // Reduce the reference counter of the Handle.
+	defer context.cgoRefs.release()
+	defer context.handle.release() // Reduce the reference counter of the Handle.
 
-	context.cgoRefs = cgoRefPool{} // The data in context.cgoRefs is no longer needed, explicitly release
-	context.cContext = 0           // Makes it easy to spot use-after-free/double-free issues
+	context.cContext = 0 // Makes it easy to spot use-after-free/double-free issues
 }
 
 // TotalRuntime returns the cumulated WAF runtime across various run calls within the same WAF context.
