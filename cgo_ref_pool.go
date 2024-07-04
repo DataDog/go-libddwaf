@@ -6,6 +6,7 @@
 package waf
 
 import (
+	"runtime"
 	"strconv"
 
 	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
@@ -22,19 +23,25 @@ import (
 // built to make sure there is no gap for the Garbage Collector to exploit. From there, since underlying values of the
 // wafObject are either arrays (for maps, structs and arrays) or string (for all ints, booleans and strings),
 // we can store 2 slices of arrays and use runtime.KeepAlive in each code path to protect them from the GC.
-type cgoRefPool struct {
-	stringRefs []string
-	arrayRefs  [][]bindings.WafObject
-}
+type cgoRefPool []runtime.Pinner
 
 // This is used when passing empty Go strings to the WAF in order to avoid passing null string pointers,
 // which are not handled by the WAF in all cases.
 // FIXME: to be removed when the WAF handles null ptr strings in all expected places
 var emptyWAFStringValue = unsafe.NativeStringUnwrap("\x00").Data
 
+func newCgoRefPool() cgoRefPool {
+	return make(cgoRefPool, 1)
+}
+
 func (refPool *cgoRefPool) append(newRefs cgoRefPool) {
-	refPool.stringRefs = append(refPool.stringRefs, newRefs.stringRefs...)
-	refPool.arrayRefs = append(refPool.arrayRefs, newRefs.arrayRefs...)
+	*refPool = append(*refPool, newRefs...)
+}
+
+func (refPool *cgoRefPool) release() {
+	for _, ref := range *refPool {
+		ref.Unpin()
+	}
 }
 
 // AllocCString is used in the rare cases where we need the WAF to receive standard null-terminated strings.
@@ -44,7 +51,7 @@ func (refPool *cgoRefPool) AllocCString(str string) uintptr {
 		str = str + "\x00"
 	}
 
-	refPool.stringRefs = append(refPool.stringRefs, str)
+	(*refPool)[0].Pin(unsafe.StringData(str))
 	return unsafe.NativeStringUnwrap(str).Data
 }
 
@@ -61,7 +68,7 @@ func (refPool *cgoRefPool) AllocWafString(obj *bindings.WafObject, str string) {
 		return
 	}
 
-	refPool.stringRefs = append(refPool.stringRefs, str)
+	(*refPool)[0].Pin(unsafe.StringData(str))
 	stringHeader := unsafe.NativeStringUnwrap(str)
 	obj.Value = stringHeader.Data
 	obj.NbEntries = uint64(stringHeader.Len)
@@ -85,7 +92,7 @@ func (refPool *cgoRefPool) AllocWafArray(obj *bindings.WafObject, typ bindings.W
 	}
 
 	goArray := make([]bindings.WafObject, size)
-	refPool.arrayRefs = append(refPool.arrayRefs, goArray)
+	(*refPool)[0].Pin(unsafe.SliceData(goArray))
 
 	obj.Value = unsafe.SliceToUintptr(goArray)
 	return goArray
@@ -99,7 +106,7 @@ func (refPool *cgoRefPool) AllocWafMapKey(obj *bindings.WafObject, str string) {
 		return
 	}
 
-	refPool.stringRefs = append(refPool.stringRefs, str)
+	(*refPool)[0].Pin(unsafe.StringData(str))
 	stringHeader := unsafe.NativeStringUnwrap(str)
 	obj.ParameterName = stringHeader.Data
 	obj.ParameterNameLength = uint64(stringHeader.Len)

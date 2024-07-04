@@ -31,6 +31,16 @@ func NativeStringUnwrap(str string) reflect.StringHeader {
 	return *(*reflect.StringHeader)(stdUnsafe.Pointer(&str))
 }
 
+// StringData calls unsafe.StringData
+func StringData(str string) *byte {
+	return stdUnsafe.StringData(str)
+}
+
+// SliceData calls unsafe.SliceData
+func SliceData[T any](slice []T) *T {
+	return stdUnsafe.SliceData(slice)
+}
+
 func GostringSized(ptr *byte, size uint64) string {
 	if ptr == nil {
 		return ""

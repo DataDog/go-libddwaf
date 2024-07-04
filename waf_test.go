@@ -357,6 +357,7 @@ func TestTimeout(t *testing.T) {
 	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
+	defer waf.Close()
 
 	largeValue := map[string]any{
 		"my.input": maxWafValueEncoder(encoder{
@@ -1291,14 +1292,17 @@ func BenchmarkEncoder(b *testing.B) {
 	n, err := rnd.Read(buf)
 	fullstr := string(buf)
 	encodeTimer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
+
 	for _, l := range []int{1024, 4096, 8192, 16384} {
-		encoder := encoder{
-			objectMaxDepth:   10,
-			stringMaxSize:    1 * 1024 * 1024,
-			containerMaxSize: 100,
-			timer:            encodeTimer,
-		}
 		b.Run(fmt.Sprintf("%d", l), func(b *testing.B) {
+			encoder := encoder{
+				cgoRefs:          newCgoRefPool(),
+				objectMaxDepth:   10,
+				stringMaxSize:    1 * 1024 * 1024,
+				containerMaxSize: 100,
+				timer:            encodeTimer,
+			}
+			defer encoder.cgoRefs.release()
 			b.ReportAllocs()
 			str := fullstr[:l]
 			slice := []string{str, str, str, str, str, str, str, str, str, str}

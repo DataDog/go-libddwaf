@@ -45,6 +45,9 @@ func TestEncodeDecode(t *testing.T) {
 	// So we use this value in case we need a real nil output value
 	nilOutput := make(chan any, 1)
 
+	encoder := newMaxEncoder()
+	defer encoder.cgoRefs.release()
+
 	for _, tc := range []struct {
 		Name        string
 		Input       any
@@ -321,8 +324,6 @@ func TestEncodeDecode(t *testing.T) {
 			if tc.Output == nilOutput {
 				tc.Output = nil
 			}
-
-			encoder := newMaxEncoder()
 			encoded, err := encoder.Encode(tc.Input)
 
 			t.Run("equal", func(t *testing.T) {
@@ -347,7 +348,6 @@ func TestEncodeDecode(t *testing.T) {
 
 			t.Run("run", func(t *testing.T) {
 				wafTest(t, encoded)
-				unsafe.KeepAlive(encoder.cgoRefs)
 			})
 		})
 	}
@@ -356,6 +356,9 @@ func TestEncodeDecode(t *testing.T) {
 func TestEncoderLimits(t *testing.T) {
 	var selfPointer any
 	selfPointer = &selfPointer // This now points to itself!
+
+	pool := newCgoRefPool()
+	defer pool.release()
 
 	for _, tc := range []struct {
 		Name               string
@@ -535,6 +538,7 @@ func TestEncoderLimits(t *testing.T) {
 		encodeTimer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
 		encoder := encoder{
 			timer:            encodeTimer,
+			cgoRefs:          pool,
 			objectMaxDepth:   maxValueDepth,
 			stringMaxSize:    maxStringLength,
 			containerMaxSize: maxContainerLength,
@@ -571,7 +575,6 @@ func TestEncoderLimits(t *testing.T) {
 
 		t.Run(tc.Name+"/run", func(t *testing.T) {
 			wafTest(t, encoded)
-			unsafe.KeepAlive(encoder.cgoRefs)
 		})
 	}
 }
@@ -610,6 +613,8 @@ func sortValues[K comparable](m map[K][]int) map[K][]int {
 }
 
 func TestEncoderTypeTree(t *testing.T) {
+	encoder := newMaxEncoder()
+	defer encoder.cgoRefs.release()
 
 	for _, tc := range []struct {
 		Name   string
@@ -758,7 +763,6 @@ func TestEncoderTypeTree(t *testing.T) {
 			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafNilType}, {_type: bindings.WafNilType}, {_type: bindings.WafNilType}}},
 		},
 	} {
-		encoder := newMaxEncoder()
 		encoded, err := encoder.Encode(tc.Input)
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
 			if tc.Error != nil {
@@ -773,17 +777,18 @@ func TestEncoderTypeTree(t *testing.T) {
 
 		t.Run(tc.Name+"/run", func(t *testing.T) {
 			wafTest(t, encoded)
-			unsafe.KeepAlive(encoder.cgoRefs)
 		})
 	}
 }
 
 // This test needs a working encoder to function properly, as it first encodes the objects before decoding them
 func TestDecoder(t *testing.T) {
+	encoder := newMaxEncoder()
+	defer encoder.cgoRefs.release()
+
 	t.Run("Errors", func(t *testing.T) {
-		e := newMaxEncoder()
 		objBuilder := func(value any) *bindings.WafObject {
-			encoded, err := e.Encode(value)
+			encoded, err := encoder.Encode(value)
 			require.NoError(t, err, "Encoding object failed")
 			return encoded
 		}
@@ -822,9 +827,6 @@ func TestDecoder(t *testing.T) {
 				require.Equal(t, tc.ExpectedValue, val)
 			})
 		}
-
-		unsafe.KeepAlive(e.cgoRefs.arrayRefs)
-		unsafe.KeepAlive(e.cgoRefs.stringRefs)
 	})
 }
 

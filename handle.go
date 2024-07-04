@@ -12,7 +12,6 @@ import (
 
 	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
 	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 	"github.com/DataDog/go-libddwaf/v3/timer"
 
 	"sync/atomic"
@@ -58,6 +57,8 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	}
 
 	encoder := newMaxEncoder()
+	defer encoder.cgoRefs.release()
+
 	obj, err := encoder.Encode(rules)
 	if err != nil {
 		return nil, fmt.Errorf("could not encode the WAF ruleset into a WAF object: %w", err)
@@ -95,8 +96,6 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 		return nil, fmt.Errorf("could not decode the WAF diagnostics: %w", diagsErr)
 	}
 
-	unsafe.KeepAlive(encoder.cgoRefs)
-
 	handle := &Handle{
 		cHandle:     cHandle,
 		diagnostics: *diags,
@@ -133,7 +132,7 @@ func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, erro
 		return nil, err
 	}
 
-	return &Context{handle: handle, cContext: cContext, timer: timer, metrics: metricsStore{data: make(map[string]time.Duration, 5)}}, nil
+	return &Context{handle: handle, cgoRefs: newCgoRefPool(), cContext: cContext, timer: timer, metrics: metricsStore{data: make(map[string]time.Duration, 5)}}, nil
 }
 
 // Diagnostics returns the rules initialization metrics for the current WAF handle
@@ -150,6 +149,8 @@ func (handle *Handle) Addresses() []string {
 // the previous handle still needs to be closed manually
 func (handle *Handle) Update(newRules any) (*Handle, error) {
 	encoder := newMaxEncoder()
+	defer encoder.cgoRefs.release()
+
 	obj, err := encoder.Encode(newRules)
 	if err != nil {
 		return nil, fmt.Errorf("could not encode the WAF ruleset into a WAF object: %w", err)
@@ -158,7 +159,6 @@ func (handle *Handle) Update(newRules any) (*Handle, error) {
 	diagnosticsWafObj := new(bindings.WafObject)
 
 	cHandle := wafLib.WafUpdate(handle.cHandle, obj, diagnosticsWafObj)
-	unsafe.KeepAlive(encoder.cgoRefs)
 	if cHandle == 0 {
 		return nil, errors.New("could not update the WAF instance")
 	}
