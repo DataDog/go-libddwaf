@@ -40,22 +40,22 @@ type wafSymbols struct {
 	run            uintptr
 }
 
-// newWafDl loads the libddwaf shared library and resolves all tge relevant symbols.
+// NewWafDl loads the libddwaf shared library and resolves all tge relevant symbols.
 // The caller is responsible for calling wafDl.Close on the returned object once they
 // are done with it so that associated resources can be released.
 func NewWafDl() (dl *WafDl, err error) {
-	file, err := lib.DumpEmbeddedWAF()
+	file, closer, err := lib.DumpEmbeddedWAF()
 	if err != nil {
 		return
 	}
 	defer func() {
-		if rmErr := os.Remove(file); rmErr != nil {
-			err = errors.Join(err, fmt.Errorf("error removing %s: %w", file, rmErr))
+		if rmErr := closer(); rmErr != nil {
+			err = errors.Join(err, fmt.Errorf("error removing %s: %w", file.Name(), rmErr))
 		}
 	}()
 
 	var handle uintptr
-	if handle, err = purego.Dlopen(file, purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
+	if handle, err = purego.Dlopen(file.Name(), purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
 		return
 	}
 
@@ -97,12 +97,12 @@ func (waf *WafDl) Close() error {
 	return purego.Dlclose(waf.handle)
 }
 
-// wafGetVersion returned string is a static string so we do not need to free it
+// WafGetVersion returned string is a static string so we do not need to free it
 func (waf *WafDl) WafGetVersion() string {
 	return unsafe.Gostring(unsafe.Cast[byte](waf.syscall(waf.getVersion)))
 }
 
-// wafInit initializes a new WAF with the provided ruleset, configuration and info objects. A
+// WafInit initializes a new WAF with the provided ruleset, configuration and info objects. A
 // cgoRefPool ensures that the provided input values are not moved or garbage collected by the Go
 // runtime during the WAF call.
 func (waf *WafDl) WafInit(ruleset *WafObject, config *WafConfig, info *WafObject) WafHandle {
@@ -125,7 +125,7 @@ func (waf *WafDl) WafDestroy(handle WafHandle) {
 	unsafe.KeepAlive(handle)
 }
 
-// wafKnownAddresses returns static strings so we do not need to free them
+// WafKnownAddresses returns static strings so we do not need to free them
 func (waf *WafDl) WafKnownAddresses(handle WafHandle) []string {
 	var nbAddresses uint32
 
