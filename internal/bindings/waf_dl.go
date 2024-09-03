@@ -44,18 +44,18 @@ type wafSymbols struct {
 // The caller is responsible for calling wafDl.Close on the returned object once they
 // are done with it so that associated resources can be released.
 func NewWafDl() (dl *WafDl, err error) {
-	file, closer, err := lib.DumpEmbeddedWAF()
+	path, closer, err := lib.DumpEmbeddedWAF()
 	if err != nil {
 		return
 	}
 	defer func() {
 		if rmErr := closer(); rmErr != nil {
-			err = errors.Join(err, fmt.Errorf("error removing %s: %w", file.Name(), rmErr))
+			err = errors.Join(err, fmt.Errorf("error removing %s: %w", path, rmErr))
 		}
 	}()
 
 	var handle uintptr
-	if handle, err = purego.Dlopen(file.Name(), purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
+	if handle, err = purego.Dlopen(path, purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
 		return
 	}
 

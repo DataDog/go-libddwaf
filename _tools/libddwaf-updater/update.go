@@ -125,8 +125,6 @@ func createEmbedSource(tgt target) {
 			"",
 			tgt.embedSourceDirective(),
 			"var libddwaf []byte",
-			"",
-			tgt.tempFilePatternStatement(),
 			"", // Trailing new line...
 		},
 		"\n",
@@ -313,10 +311,6 @@ func (t target) embedSourceFilename() string {
 
 func (t target) buildConstraintDirective() string {
 	return fmt.Sprintf("//go:build %s && %s && !%s && !datadog.no_waf && (cgo || appsec)", t.os, t.arch, goVersionUnsupported)
-}
-
-func (t target) tempFilePatternStatement() string {
-	return fmt.Sprintf("const embedNamePattern = \"%s-*.%s\"", t.base, t.ext)
 }
 
 func (t target) embedSourceDirective() string {

@@ -10,21 +10,21 @@ package lib
 import (
 	"bytes"
 	"compress/gzip"
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-
-	_ "embed"
 )
 
-//go:embed .version
-var EmbeddedWAFVersion string
-
-func DumpEmbeddedWAF() (file *os.File, closer func() error, err error) {
-	file, err = os.CreateTemp("", embedNamePattern)
+// DumpEmbeddedWAF for darwin platform.
+// DumpEmbeddedWAF creates a temporary file with the embedded WAF library content and returns the path to the file,
+// a closer function and an error. This is the only way to make all implementations of DumpEmbeddedWAF consistent
+// across all platforms.
+func DumpEmbeddedWAF() (path string, closer func() error, err error) {
+	file, err := os.CreateTemp("", "libddwaf-*.dylib")
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating temp file: %w", err)
+		return "", nil, fmt.Errorf("error creating temp file: %w", err)
 	}
 
 	defer func() {
@@ -40,18 +40,18 @@ func DumpEmbeddedWAF() (file *os.File, closer func() error, err error) {
 
 	gr, err := gzip.NewReader(bytes.NewReader(libddwaf))
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating gzip reader: %w", err)
+		return "", nil, fmt.Errorf("error creating gzip reader: %w", err)
 	}
 
 	if _, err := io.Copy(file, gr); err != nil {
-		return nil, nil, fmt.Errorf("error copying gzip content to file: %w", err)
+		return "", nil, fmt.Errorf("error copying gzip content to file: %w", err)
 	}
 
 	if err := gr.Close(); err != nil {
-		return nil, nil, fmt.Errorf("error closing gzip reader: %w", err)
+		return "", nil, fmt.Errorf("error closing gzip reader: %w", err)
 	}
 
-	return file, func() error {
+	return file.Name(), func() error {
 		return errors.Join(file.Close(), os.Remove(file.Name()))
 	}, nil
 }
