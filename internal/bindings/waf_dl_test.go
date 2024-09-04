@@ -11,7 +11,6 @@ import (
 	"debug/elf"
 	"debug/macho"
 	"fmt"
-	"os"
 	"runtime"
 	"testing"
 
@@ -33,14 +32,14 @@ func TestVerifyHeader(t *testing.T) {
 // testVerifyELFHeader is here to ease the debug cases that will likely need
 // to dive in the linker to debug because the error handling is very poor
 func testVerifyELFHeader(t *testing.T) {
-	file, err := lib.DumpEmbeddedWAF()
+	path, closer, err := lib.DumpEmbeddedWAF()
 	require.NoError(t, err)
 
 	defer func() {
-		_ = os.Remove(file)
+		_ = closer()
 	}()
 
-	elfFile, err := elf.Open(file)
+	elfFile, err := elf.Open(path)
 	require.NoError(t, err)
 
 	switch runtime.GOARCH {
@@ -60,14 +59,14 @@ func testVerifyELFHeader(t *testing.T) {
 // testVerifyMachOHeader is here to ease the debug cases that will likely need
 // to dive in the linker to debug because the error handling is very poor
 func testVerifyMachOHeader(t *testing.T) {
-	file, err := lib.DumpEmbeddedWAF()
+	path, closer, err := lib.DumpEmbeddedWAF()
 	require.NoError(t, err)
 
 	defer func() {
-		_ = os.Remove(file)
+		_ = closer()
 	}()
 
-	machOFile, err := macho.Open(file)
+	machOFile, err := macho.Open(path)
 	require.NoError(t, err)
 
 	switch runtime.GOARCH {
