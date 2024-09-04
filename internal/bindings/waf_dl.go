@@ -47,7 +47,7 @@ type wafSymbols struct {
 func NewWafDl() (dl *WafDl, err error) {
 	path, closer, err := lib.DumpEmbeddedWAF()
 	if err != nil {
-		return
+		return nil, fmt.Errorf("dump embedded WAF: %w", err)
 	}
 	defer func() {
 		if rmErr := closer(); rmErr != nil {
@@ -57,7 +57,7 @@ func NewWafDl() (dl *WafDl, err error) {
 
 	var handle uintptr
 	if handle, err = purego.Dlopen(path, purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
-		return
+		return nil, fmt.Errorf("load a dynamic library file: %w", err)
 	}
 
 	var symbols wafSymbols
@@ -85,7 +85,7 @@ func NewWafDl() (dl *WafDl, err error) {
 	if val := os.Getenv(log.EnvVarLogLevel); val != "" {
 		setLogSym, symErr := purego.Dlsym(handle, "ddwaf_set_log_cb")
 		if symErr != nil {
-			return
+			return nil, fmt.Errorf("get symbol: %w", symErr)
 		}
 		logLevel := log.LevelNamed(val)
 		dl.syscall(setLogSym, log.CallbackFunctionPointer(), uintptr(logLevel))
