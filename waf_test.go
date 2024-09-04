@@ -733,6 +733,13 @@ func TestAddresses(t *testing.T) {
 	require.Equal(t, expectedAddresses, waf.Addresses())
 }
 
+func TestKnownActions(t *testing.T) {
+	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.first.input"}}, []string{"block"}))
+	require.NoError(t, err)
+	defer waf.Close()
+	require.Equal(t, []string{"block_request"}, waf.Actions())
+}
+
 func TestConcurrency(t *testing.T) {
 	// Start 200 goroutines that will use the WAF 500 times each
 	nbUsers := 200

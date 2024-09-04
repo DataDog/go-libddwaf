@@ -32,6 +32,7 @@ type wafSymbols struct {
 	update         uintptr
 	destroy        uintptr
 	knownAddresses uintptr
+	knownActions   uintptr
 	getVersion     uintptr
 	contextInit    uintptr
 	contextDestroy uintptr
@@ -125,15 +126,15 @@ func (waf *WafDl) WafDestroy(handle WafHandle) {
 	unsafe.KeepAlive(handle)
 }
 
-// WafKnownAddresses returns static strings so we do not need to free them
-func (waf *WafDl) WafKnownAddresses(handle WafHandle) []string {
+func (waf *WafDl) wafKnownX(handle WafHandle, symbol uintptr) []string {
 	var nbAddresses uint32
 
-	arrayVoidC := waf.syscall(waf.knownAddresses, uintptr(handle), unsafe.PtrToUintptr(&nbAddresses))
+	arrayVoidC := waf.syscall(symbol, uintptr(handle), unsafe.PtrToUintptr(&nbAddresses))
 	if arrayVoidC == 0 {
 		return nil
 	}
 
+	// These C strings are static strings so we do not need to free them
 	addresses := make([]string, int(nbAddresses))
 	for i := 0; i < int(nbAddresses); i++ {
 		addresses[i] = unsafe.Gostring(*unsafe.CastWithOffset[*byte](arrayVoidC, uint64(i)))
@@ -143,6 +144,14 @@ func (waf *WafDl) WafKnownAddresses(handle WafHandle) []string {
 	unsafe.KeepAlive(handle)
 
 	return addresses
+}
+
+func (waf *WafDl) WafKnownAddresses(handle WafHandle) []string {
+	return waf.wafKnownX(handle, waf.knownAddresses)
+}
+
+func (waf *WafDl) WafKnownActions(handle WafHandle) []string {
+	return waf.wafKnownX(handle, waf.knownActions)
 }
 
 func (waf *WafDl) WafContextInit(handle WafHandle) WafContext {
@@ -205,6 +214,9 @@ func resolveWafSymbols(handle uintptr) (symbols wafSymbols, err error) {
 		return
 	}
 	if symbols.knownAddresses, err = purego.Dlsym(handle, "ddwaf_known_addresses"); err != nil {
+		return
+	}
+	if symbols.knownActions, err = purego.Dlsym(handle, "ddwaf_known_actions"); err != nil {
 		return
 	}
 	if symbols.getVersion, err = purego.Dlsym(handle, "ddwaf_get_version"); err != nil {

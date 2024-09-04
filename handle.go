@@ -8,14 +8,13 @@ package waf
 import (
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
 	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 	"github.com/DataDog/go-libddwaf/v3/timer"
-
-	"sync/atomic"
 )
 
 // Handle represents an instance of the WAF for a given ruleset.
@@ -141,9 +140,14 @@ func (handle *Handle) Diagnostics() Diagnostics {
 	return handle.diagnostics
 }
 
-// Addresses returns the list of addresses the WAF rule is expecting.
+// Addresses returns the list of addresses the WAF has been configured to monitor based on the input ruleset
 func (handle *Handle) Addresses() []string {
 	return wafLib.WafKnownAddresses(handle.cHandle)
+}
+
+// Actions returns the list of actions the WAF has been configured to monitor based on the input ruleset
+func (handle *Handle) Actions() []string {
+	return wafLib.WafKnownActions(handle.cHandle)
 }
 
 // Update the ruleset of a WAF instance into a new handle on its own
