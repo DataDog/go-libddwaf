@@ -48,7 +48,8 @@ const (
 	wafTruncationTag = "truncations"
 )
 
-// Metrics transform the stats returned by the WAF into a map of key value metrics for datadog backend
+// Metrics transform the stats returned by the WAF into a map of key value metrics with values in microseconds.
+// ex. {"waf.encode": 100, "waf.duration_ext": 300, "waf.duration": 200, "rasp.encode": 100, "rasp.duration_ext": 300, "rasp.duration": 200}
 func (stats Stats) Metrics() map[string]any {
 	tags := make(map[string]any, len(stats.Timers)+len(stats.Truncations)+1)
 	for k, v := range stats.Timers {
