@@ -379,10 +379,10 @@ func TestTimeout(t *testing.T) {
 		_, err = context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Stats())
-		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.decode"])
-		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.encode"])
-		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.duration_ext"])
-		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.duration"])
+		require.NotZero(t, context.Stats().Timers["waf.decode"])
+		require.NotZero(t, context.Stats().Timers["waf.encode"])
+		require.NotZero(t, context.Stats().Timers["waf.duration_ext"])
+		require.NotZero(t, context.Stats().Timers["waf.duration"])
 	})
 
 	t.Run("not-empty-metrics-no-match", func(t *testing.T) {
@@ -394,10 +394,10 @@ func TestTimeout(t *testing.T) {
 		_, err = context.Run(RunAddressData{Persistent: map[string]any{"my.input": "curl/7.88"}})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Stats())
-		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.decode"])
-		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.encode"])
-		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.duration_ext"])
-		require.NotZero(t, context.Stats().Timers["_dd.appsec.waf.duration"])
+		require.NotZero(t, context.Stats().Timers["waf.decode"])
+		require.NotZero(t, context.Stats().Timers["waf.encode"])
+		require.NotZero(t, context.Stats().Timers["waf.duration_ext"])
+		require.NotZero(t, context.Stats().Timers["waf.duration"])
 	})
 
 	t.Run("timeout-persistent-encoder", func(t *testing.T) {
@@ -408,8 +408,8 @@ func TestTimeout(t *testing.T) {
 
 		_, err = context.Run(RunAddressData{Persistent: largeValue})
 		require.Equal(t, errors.ErrTimeout, err)
-		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.duration_ext"], time.Millisecond)
-		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.encode"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Stats().Timers["waf.duration_ext"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Stats().Timers["waf.encode"], time.Millisecond)
 	})
 
 	t.Run("timeout-ephemeral-encoder", func(t *testing.T) {
@@ -420,8 +420,8 @@ func TestTimeout(t *testing.T) {
 
 		_, err = context.Run(RunAddressData{Ephemeral: largeValue})
 		require.Equal(t, errors.ErrTimeout, err)
-		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.duration_ext"], time.Millisecond)
-		require.GreaterOrEqual(t, context.Stats().Timers["_dd.appsec.waf.encode"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Stats().Timers["waf.duration_ext"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Stats().Timers["waf.encode"], time.Millisecond)
 	})
 
 	t.Run("many-runs", func(t *testing.T) {
@@ -435,6 +435,37 @@ func TestTimeout(t *testing.T) {
 		}
 
 		require.Equal(t, errors.ErrTimeout, err)
+	})
+
+	t.Run("rasp-simple", func(t *testing.T) {
+		waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+		require.NoError(t, err)
+		require.NotNil(t, waf)
+
+		context, err := waf.NewContext()
+		require.NoError(t, err)
+		require.NotNil(t, context)
+		defer context.Close()
+
+		_, err = context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue, Scope: RASPScope})
+		require.NoError(t, err)
+		require.NotZero(t, context.Stats().Timers["rasp.duration_ext"])
+		require.NotZero(t, context.Stats().Timers["rasp.duration"])
+		require.NotZero(t, context.Stats().Timers["rasp.encode"])
+		require.NotZero(t, context.Stats().Timers["rasp.decode"])
+	})
+
+	t.Run("rasp-timeout", func(t *testing.T) {
+		context, err := waf.NewContextWithBudget(time.Millisecond)
+		require.NoError(t, err)
+		require.NotNil(t, context)
+		defer context.Close()
+
+		_, err = context.Run(RunAddressData{Persistent: largeValue, Scope: RASPScope})
+		require.Equal(t, errors.ErrTimeout, err)
+		require.GreaterOrEqual(t, context.Stats().Timers["rasp.duration_ext"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Stats().Timers["rasp.encode"], time.Millisecond)
+		require.EqualValues(t, 1, context.Stats().TimeoutRASPCount)
 	})
 }
 
@@ -1289,7 +1320,7 @@ func TestTruncationInformation(t *testing.T) {
 	require.Equal(t, map[TruncationReason][]int{
 		StringTooLong:     {bindings.WafMaxStringLength + extra + 2, bindings.WafMaxStringLength + extra},
 		ContainerTooLarge: {bindings.WafMaxContainerSize + extra + 2, bindings.WafMaxContainerSize + extra},
-	}, ctx.truncations)
+	}, ctx.truncations[DefaultScope])
 }
 
 func BenchmarkEncoder(b *testing.B) {
