@@ -69,7 +69,7 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	cHandle := wafLib.WafInit(obj, config, diagnosticsWafObj)
 	// Upon failure, the WAF may have produced some diagnostics to help signal what went wrong...
 	var (
-		diags    *Diagnostics
+		diags    = new(Diagnostics)
 		diagsErr error
 	)
 	if !diagnosticsWafObj.IsInvalid() {
@@ -132,7 +132,17 @@ func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, erro
 		return nil, err
 	}
 
-	return &Context{handle: handle, cContext: cContext, timer: timer, metrics: metricsStore{data: make(map[string]time.Duration, 5)}}, nil
+	return &Context{
+		handle:      handle,
+		cContext:    cContext,
+		timer:       timer,
+		metrics:     metricsStore{data: make(map[metricKey]time.Duration, 5)},
+		truncations: make(map[Scope]map[TruncationReason][]int, 2),
+		timeoutCount: map[Scope]*atomic.Uint64{
+			DefaultScope: new(atomic.Uint64),
+			RASPScope:    new(atomic.Uint64),
+		},
+	}, nil
 }
 
 // Diagnostics returns the rules initialization metrics for the current WAF handle
