@@ -25,9 +25,10 @@ type Context struct {
 	cgoRefs  cgoRefPool          // Used to retain go data referenced by WAF Objects the context holds
 	cContext bindings.WafContext // The C ddwaf_context pointer
 
-	timeoutCount map[Scope]*atomic.Uint64 // Cumulative timeout count for this context.
+	// timeoutCount count all calls which have timeout'ed by scope. Keys are fixed at creation time.
+	timeoutCount map[Scope]*atomic.Uint64
 
-	// Mutex protecting the use of cContext which is not thread-safe and cgoRefs.
+	// mutex protecting the use of cContext which is not thread-safe and cgoRefs.
 	mutex sync.Mutex
 
 	// timer registers the time spent in the WAF and go-libddwaf
@@ -317,7 +318,7 @@ func (context *Context) Stats() Stats {
 	}
 
 	return Stats{
-		Timers:           context.metrics.copy(),
+		Timers:           context.metrics.timers(),
 		TimeoutCount:     timeoutDefault,
 		TimeoutRASPCount: timeoutRASP,
 		Truncations:      truncations,

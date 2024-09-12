@@ -6,34 +6,45 @@
 package waf
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 )
 
 // Stats stores the metrics collected by the WAF.
-type Stats struct {
-	// Timers returns a map of metrics and their durations.
-	Timers map[string]time.Duration
+type (
+	Stats struct {
+		// Timers returns a map of metrics and their durations.
+		Timers map[string]time.Duration
 
-	// TimeoutCount for the Default Scope i.e. "waf"
-	TimeoutCount uint64
+		// TimeoutCount for the Default Scope i.e. "waf"
+		TimeoutCount uint64
 
-	// TimeoutRASPCount for the RASP Scope i.e. "rasp"
-	TimeoutRASPCount uint64
+		// TimeoutRASPCount for the RASP Scope i.e. "rasp"
+		TimeoutRASPCount uint64
 
-	// Truncations provides details about truncations that occurred while
-	// encoding address data for WAF execution.
-	Truncations map[TruncationReason][]int
+		// Truncations provides details about truncations that occurred while
+		// encoding address data for WAF execution.
+		Truncations map[TruncationReason][]int
 
-	// TruncationsRASP provides details about truncations that occurred while
-	// encoding address data for RASP execution.
-	TruncationsRASP map[TruncationReason][]int
-}
+		// TruncationsRASP provides details about truncations that occurred while
+		// encoding address data for RASP execution.
+		TruncationsRASP map[TruncationReason][]int
+	}
 
-// Scope is the way to classify the different runs in the same context in order to have different metrics
-type Scope string
+	// Scope is the way to classify the different runs in the same context in order to have different metrics
+	Scope string
+
+	metricKey struct {
+		scope     Scope
+		component string
+	}
+
+	metricsStore struct {
+		data  map[metricKey]time.Duration
+		mutex sync.RWMutex
+	}
+)
 
 const (
 	DefaultScope Scope = "waf"
@@ -49,6 +60,10 @@ const (
 	wafTruncationTag = "truncations"
 )
 
+func dot(parts ...string) string {
+	return strings.Join(parts, ".")
+}
+
 // Metrics transform the stats returned by the WAF into a map of key value metrics with values in microseconds.
 // ex. {"waf.encode": 100, "waf.duration_ext": 300, "waf.duration": 200, "rasp.encode": 100, "rasp.duration_ext": 300, "rasp.duration": 200}
 func (stats Stats) Metrics() map[string]any {
@@ -58,66 +73,52 @@ func (stats Stats) Metrics() map[string]any {
 	}
 
 	if stats.TimeoutCount > 0 {
-		tags[key(DefaultScope, wafTimeoutTag)] = stats.TimeoutCount
+		tags[dot(string(DefaultScope), wafTimeoutTag)] = stats.TimeoutCount
 	}
 
 	if stats.TimeoutRASPCount > 0 {
-		tags[key(RASPScope, wafTimeoutTag)] = stats.TimeoutRASPCount
+		tags[dot(string(RASPScope), wafTimeoutTag)] = stats.TimeoutRASPCount
 	}
 
 	for reason, list := range stats.Truncations {
-		tags[fmt.Sprintf("%s.%s", key(DefaultScope, wafTruncationTag), reason.String())] = list
+		tags[dot(string(DefaultScope), wafTruncationTag, reason.String())] = list
 	}
 
 	for reason, list := range stats.TruncationsRASP {
-		tags[fmt.Sprintf("%s.%s", key(RASPScope, wafTruncationTag), reason.String())] = list
-
+		tags[dot(string(RASPScope), wafTruncationTag, reason.String())] = list
 	}
 
 	return tags
-}
-
-type metricsStore struct {
-	data  map[string]time.Duration
-	mutex sync.RWMutex
-}
-
-func key(scope Scope, component string) string {
-	var builder strings.Builder
-	builder.WriteString(string(scope))
-	builder.WriteByte('.')
-	builder.WriteString(component)
-	return builder.String()
 }
 
 func (metrics *metricsStore) add(scope Scope, component string, duration time.Duration) {
 	metrics.mutex.Lock()
 	defer metrics.mutex.Unlock()
 	if metrics.data == nil {
-		metrics.data = make(map[string]time.Duration, 5)
+		metrics.data = make(map[metricKey]time.Duration, 5)
 	}
 
-	metrics.data[key(scope, component)] += duration
+	metrics.data[metricKey{scope, component}] += duration
 }
 
 func (metrics *metricsStore) get(scope Scope, component string) time.Duration {
 	metrics.mutex.RLock()
 	defer metrics.mutex.RUnlock()
-	return metrics.data[key(scope, component)]
+	return metrics.data[metricKey{scope, component}]
 }
 
-func (metrics *metricsStore) copy() map[string]time.Duration {
+func (metrics *metricsStore) timers() map[string]time.Duration {
 	metrics.mutex.Lock()
 	defer metrics.mutex.Unlock()
 	if metrics.data == nil {
 		return nil
 	}
 
-	copy := make(map[string]time.Duration, len(metrics.data))
+	timers := make(map[string]time.Duration, len(metrics.data))
 	for k, v := range metrics.data {
-		copy[k] = v
+		timers[dot(string(k.scope), k.component)] = v
 	}
-	return copy
+	return timers
 }
 
 // merge merges the current metrics with new ones
@@ -125,11 +126,11 @@ func (metrics *metricsStore) merge(scope Scope, other map[string]time.Duration) 
 	metrics.mutex.Lock()
 	defer metrics.mutex.Unlock()
 	if metrics.data == nil {
-		metrics.data = make(map[string]time.Duration, 5)
+		metrics.data = make(map[metricKey]time.Duration, 5)
 	}
 
 	for component, val := range other {
-		key := key(scope, component)
+		key := metricKey{scope, component}
 		prev, ok := metrics.data[key]
 		if !ok {
 			prev = 0
