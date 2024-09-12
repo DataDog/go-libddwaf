@@ -76,13 +76,9 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	}
 
 	defer func() {
-		if err != errors.ErrTimeout {
-			return
+		if err == errors.ErrTimeout {
+			context.timeoutCount[addressData.Scope].Add(1)
 		}
-		if _, ok := context.timeoutCount[addressData.Scope]; !ok {
-			context.timeoutCount[addressData.Scope] = new(atomic.Uint64)
-		}
-		context.timeoutCount[addressData.Scope].Add(1)
 	}()
 
 	// If the context has already timed out, we don't need to run the WAF again

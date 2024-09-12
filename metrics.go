@@ -7,6 +7,7 @@ package waf
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -82,7 +83,11 @@ type metricsStore struct {
 }
 
 func key(scope Scope, component string) string {
-	return fmt.Sprintf("%s.%s", scope, component)
+	var builder strings.Builder
+	builder.WriteString(string(scope))
+	builder.WriteByte('.')
+	builder.WriteString(component)
+	return builder.String()
 }
 
 func (metrics *metricsStore) add(scope Scope, component string, duration time.Duration) {

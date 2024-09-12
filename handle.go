@@ -133,12 +133,15 @@ func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, erro
 	}
 
 	return &Context{
-		handle:       handle,
-		cContext:     cContext,
-		timer:        timer,
-		metrics:      metricsStore{data: make(map[string]time.Duration, 5)},
-		truncations:  make(map[Scope]map[TruncationReason][]int, 2),
-		timeoutCount: make(map[Scope]*atomic.Uint64, 2),
+		handle:      handle,
+		cContext:    cContext,
+		timer:       timer,
+		metrics:     metricsStore{data: make(map[string]time.Duration, 5)},
+		truncations: make(map[Scope]map[TruncationReason][]int, 2),
+		timeoutCount: map[Scope]*atomic.Uint64{
+			DefaultScope: new(atomic.Uint64),
+			RASPScope:    new(atomic.Uint64),
+		},
 	}, nil
 }
 
