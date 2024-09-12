@@ -136,7 +136,7 @@ func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, erro
 		handle:      handle,
 		cContext:    cContext,
 		timer:       timer,
-		metrics:     metricsStore{data: make(map[string]time.Duration, 5)},
+		metrics:     metricsStore{data: make(map[metricKey]time.Duration, 5)},
 		truncations: make(map[Scope]map[TruncationReason][]int, 2),
 		timeoutCount: map[Scope]*atomic.Uint64{
 			DefaultScope: new(atomic.Uint64),
