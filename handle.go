@@ -66,39 +66,35 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	diagnosticsWafObj := new(bindings.WafObject)
 	defer wafLib.WafObjectFree(diagnosticsWafObj)
 
-	cHandle := wafLib.WafInit(obj, config, diagnosticsWafObj)
-	// Upon failure, the WAF may have produced some diagnostics to help signal what went wrong...
-	var (
-		diags    = new(Diagnostics)
-		diagsErr error
-	)
-	if !diagnosticsWafObj.IsInvalid() {
-		diags, diagsErr = decodeDiagnostics(diagnosticsWafObj)
+	unsafe.KeepAlive(encoder.cgoRefs)
+
+	return newHandle(wafLib.WafInit(obj, config, diagnosticsWafObj), diagnosticsWafObj)
+}
+
+// newHandle creates a new Handle from a C handle (nullable) and a diagnostics object.
+// and it handles the multiple ways a WAF initialization can fail.
+func newHandle(cHandle bindings.WafHandle, diagnosticsWafObj *bindings.WafObject) (*Handle, error) {
+	diags, diagsErr := decodeDiagnostics(diagnosticsWafObj)
+	if cHandle == 0 && diagsErr != nil { // WAF Failed initialization and we manage to decode the diagnostics, return the diagnostics error
+		if err := diags.TopLevelError(); err != nil {
+			return nil, fmt.Errorf("could not instantiate the WAF: %w", err)
+		}
 	}
 
 	if cHandle == 0 {
 		// WAF Failed initialization, report the best possible error...
-		if diags != nil && diagsErr == nil {
-			// We were able to parse out some diagnostics from the WAF!
-			err = diags.TopLevelError()
-			if err != nil {
-				return nil, fmt.Errorf("could not instantiate the WAF: %w", err)
-			}
-		}
 		return nil, errors.New("could not instantiate the WAF")
 	}
 
-	// The WAF successfully initialized at this stage...
+	// The WAF successfully initialized at this stage but if the diagnostics decoding failed, we still need to cleanup
 	if diagsErr != nil {
 		wafLib.WafDestroy(cHandle)
 		return nil, fmt.Errorf("could not decode the WAF diagnostics: %w", diagsErr)
 	}
 
-	unsafe.KeepAlive(encoder.cgoRefs)
-
 	handle := &Handle{
 		cHandle:     cHandle,
-		diagnostics: *diags,
+		diagnostics: diags,
 	}
 
 	handle.refCounter.Store(1) // We count the handle itself in the counter
@@ -170,25 +166,9 @@ func (handle *Handle) Update(newRules any) (*Handle, error) {
 	}
 
 	diagnosticsWafObj := new(bindings.WafObject)
-
-	cHandle := wafLib.WafUpdate(handle.cHandle, obj, diagnosticsWafObj)
-	unsafe.KeepAlive(encoder.cgoRefs)
-	if cHandle == 0 {
-		return nil, errors.New("could not update the WAF instance")
-	}
-
 	defer wafLib.WafObjectFree(diagnosticsWafObj)
 
-	if err != nil { // Something is very wrong
-		return nil, fmt.Errorf("could not decode the WAF ruleset errors: %w", err)
-	}
-
-	newHandle := &Handle{
-		cHandle: cHandle,
-	}
-
-	newHandle.refCounter.Store(1) // We count the handle itself in the counter
-	return newHandle, nil
+	return newHandle(wafLib.WafUpdate(handle.cHandle, obj, diagnosticsWafObj), diagnosticsWafObj)
 }
 
 // Close puts the handle in termination state, when all the contexts are closed the handle will be destroyed

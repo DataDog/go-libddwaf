@@ -7,9 +7,10 @@ package bindings
 
 import (
 	"errors"
-	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
 	"strconv"
 	"testing"
+
+	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
 
 	"github.com/stretchr/testify/require"
 )
@@ -21,7 +22,7 @@ func TestTryCall(t *testing.T) {
 	t.Run("panic", func(t *testing.T) {
 		t.Run("error", func(t *testing.T) {
 			// panic called with an error
-			err := tryCall(func() error {
+			_, err := tryCall(func() error {
 				panic(myPanicErr)
 			})
 			require.Error(t, err)
@@ -33,7 +34,7 @@ func TestTryCall(t *testing.T) {
 		t.Run("string", func(t *testing.T) {
 			// panic called with a string
 			str := "woops"
-			err := tryCall(func() error {
+			_, err := tryCall(func() error {
 				panic(str)
 			})
 			require.Error(t, err)
@@ -45,7 +46,7 @@ func TestTryCall(t *testing.T) {
 		t.Run("int", func(t *testing.T) {
 			// panic called with an int to cover the default fallback in tryCall
 			var i int64 = 42
-			err := tryCall(func() error {
+			_, err := tryCall(func() error {
 				panic(i)
 			})
 			require.Error(t, err)
@@ -56,14 +57,14 @@ func TestTryCall(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		err := tryCall(func() error {
+		err, _ := tryCall(func() error {
 			return myErr
 		})
 		require.Equal(t, myErr, err)
 	})
 
 	t.Run("no error", func(t *testing.T) {
-		err := tryCall(func() error {
+		err, _ := tryCall(func() error {
 			return nil
 		})
 		require.NoError(t, err)
