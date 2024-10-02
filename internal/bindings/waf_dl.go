@@ -18,7 +18,7 @@ import (
 	"github.com/ebitengine/purego"
 )
 
-// wafDl is the type wrapper for all C calls to the waf
+// WafDl is the type wrapper for all C calls to the waf
 // It uses `libwaf` to make C calls
 // All calls must go through this one-liner to be type safe
 // since purego calls are not type safe
@@ -71,11 +71,7 @@ func NewWafDl() (dl *WafDl, err error) {
 	dl = &WafDl{symbols, handle}
 
 	// Try calling the waf to make sure everything is fine
-	err = tryCall(func() error {
-		dl.WafGetVersion()
-		return nil
-	})
-	if err != nil {
+	if _, err = tryCall(dl.WafGetVersion); err != nil {
 		if closeErr := purego.Dlclose(handle); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("error released the shared libddwaf library: %w", closeErr))
 		}
