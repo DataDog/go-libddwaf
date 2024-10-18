@@ -64,7 +64,7 @@ jobs:
             -eGOMODCACHE="/go/pkg/mod"                                          \
             "${{ format(matrix.image, matrix.go-version) }}"
       - name: Install AmazonLinux 2 requirements
-        if: matrix.image == 'amazonlinux:2'
+        if: matrix.image == 'amazonlinux:2' || matrix.image == 'amazonlinux:2023'
         run: |-
           sudo docker exec -i gha-${{ github.run_id }}                          \
             yum install -y golang
