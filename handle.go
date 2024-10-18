@@ -66,9 +66,10 @@ func NewHandle(rules any, keyObfuscatorRegex string, valueObfuscatorRegex string
 	diagnosticsWafObj := new(bindings.WafObject)
 	defer wafLib.WafObjectFree(diagnosticsWafObj)
 
-	unsafe.KeepAlive(encoder.cgoRefs)
+	cHandle := wafLib.WafInit(obj, config, diagnosticsWafObj)
+	unsafe.KeepAlive(encoder.cgoRefs) // Keep this AFTER the call to wafLib.WafInit
 
-	return newHandle(wafLib.WafInit(obj, config, diagnosticsWafObj), diagnosticsWafObj)
+	return newHandle(cHandle, diagnosticsWafObj)
 }
 
 // newHandle creates a new Handle from a C handle (nullable) and a diagnostics object.
