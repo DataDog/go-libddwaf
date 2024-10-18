@@ -109,6 +109,8 @@ func decodeDiagnosticsEntry(obj *bindings.WafObject) (*DiagnosticEntry, error) {
 			entry.Failed, err = decodeStringArray(objElem)
 		case "loaded":
 			entry.Loaded, err = decodeStringArray(objElem)
+		case "skipped":
+			entry.Skipped, err = decodeStringArray(objElem)
 		default:
 			return nil, errors.ErrUnsupportedValue
 		}

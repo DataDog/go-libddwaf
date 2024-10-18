@@ -70,6 +70,7 @@ type DiagnosticEntry struct {
 	Error     string              // If the entire entry was in error (e.g: invalid format)
 	Loaded    []string            // Successfully loaded entity identifiers (or index:#)
 	Failed    []string            // Failed entity identifiers (or index:#)
+	Skipped   []string            // Skipped entity identifiers (or index:#)
 }
 
 // DiagnosticAddresses stores the information - provided by the WAF - about the known addresses and
