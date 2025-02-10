@@ -8,12 +8,12 @@ jobs:
       fail-fast: false
       matrix:
         runs-on: [ macos-15, macos-14, macos-13, ubuntu-24.04, ubuntu-22.04, ubuntu-20.04, windows-latest, arm-4core-linux ]
-        go-version: [ '1.23', '1.22' ]
+        go-version: [ stable, oldstable ]
         include:
           # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go version)
-          - go-version: '1.22'
+          - go-version: oldstable
             waf-log-level: TRACE
-    name: ${{ matrix.runs-on }} go${{ matrix.go-version }}${{ matrix.waf-log-level && format(' (DD_APPSEC_WAF_LOG_LEVEL={0})', matrix.waf-log-level) || '' }}
+    name: ${{ matrix.runs-on }} ${{ matrix.go-version }}${{ matrix.waf-log-level && format(' (DD_APPSEC_WAF_LOG_LEVEL={0})', matrix.waf-log-level) || '' }}
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +21,7 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
+          cache-dependency-path: "**/go.mod"
       # ARM runners (at least during early access) don't have GCC installed
       - if: matrix.runs-on == 'arm-4core-linux'
         name: Install build requirements (ARM only)
