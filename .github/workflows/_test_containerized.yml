@@ -3,7 +3,25 @@ on:
   workflow_call: # This is called by test.yml
 
 jobs:
+  go-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      stable: ${{ steps.stable.outputs.go-version }}
+      oldstable: ${{ steps.oldstable.outputs.go-version }}
+    steps:
+      - uses: actions/setup-go@v5
+        id: oldstable
+        with:
+          go-version: 'oldstable'
+          cache: false
+      - uses: actions/setup-go@v5
+        id: stable
+        with:
+          go-version: 'stable'
+          cache: false
+
   test:
+    needs: [go-versions]
     strategy:
       fail-fast: false
       matrix:
@@ -16,17 +34,19 @@ jobs:
           # RPM-based image
           - amazonlinux:2 # pretty popular on AWS workloads
           - amazonlinux:2023
-        go-version: [ "1.23", "1.22" ]
+        go-version:
+          - ${{ needs.go-versions.outputs.stable }}
+          - ${{ needs.go-versions.outputs.oldstable }}
         include:
           # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go, without any particular tag)
-          - go-version: '1.23'
+          - go-version: ${{ needs.go-versions.outputs.stable }}
             waf-log-level: TRACE
         exclude:
           # The amazonlinux:2 variant is only relevant for the default go version yum ships (currently 1.22)
-          - go-version: '1.23'
+          - go-version: ${{ needs.go-versions.outputs.stable }}
             image: amazonlinux:2
           # The amazonlinux:2023 variant is only relevant for the default go version yum ships (currently 1.22)
-          - go-version: '1.23'
+          - go-version: ${{ needs.go-versions.outputs.stable }}
             image: amazonlinux:2023
     name: ${{ matrix.arch }} ${{ format(matrix.image, matrix.go-version) }} go${{ matrix.go-version }}${{ matrix.waf-log-level && format(' (DD_APPSEC_WAF_LOG_LEVEL={0})', matrix.waf-log-level) || '' }}
     # We use ARM runners when needed to avoid the performance hit of QEMU
@@ -51,7 +71,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
-          key: go-pkg-mod-${{ hashFiles('**/go.sum') }}
+          key: go-pkg-mod-${{ hashFiles('**/go.mod') }}
           restore-keys: go-pkg-mod-
       - name: Create container
         id: container
