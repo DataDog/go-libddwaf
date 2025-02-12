@@ -122,8 +122,8 @@ var (
 // libddwaf is usable but some non-critical errors happened, such as failures
 // to remove temporary files. It is safe to continue using libddwaf in such
 // case.
-func Load() (ok bool, err error) {
-	if ok, err = Health(); !ok {
+func Load() (bool, error) {
+	if ok, err := Health(); !ok {
 		return false, err
 	}
 

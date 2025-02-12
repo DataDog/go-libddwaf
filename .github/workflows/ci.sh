@@ -41,25 +41,18 @@ run() {
     fi
 
     if [ "$cgo" = "1" ]; then
-        echo "Running again with cgocheck enabled..."
-        env "GOEXPERIMENT=cgocheck2" CGO_ENABLED=1 go test -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+        echo "Running again with cgo options (cgocheck & race) enabled..."
+        env "GOEXPERIMENT=cgocheck2" CGO_ENABLED=1 go test -race -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
     fi
 
-    # TODO: remove condition once we have native arm64 linux runners
-    if [ "$GOARCH" = "amd64" ]; then
-        echo "Running again $nproc times in parralel"
-        env CGO_ENABLED="$cgo" go test -shuffle=on -parallel $((nproc / 4 + 1)) -count="$nproc" -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
-    fi
+    echo "Running again $nproc times in parralel"
+    env CGO_ENABLED="$cgo" go test -shuffle=on -parallel $((nproc / 4 + 1)) -count="$nproc" -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
 }
 
 run "$WAF_ENABLED" appsec                # WAF enabled (but not on windows)
 run false                                # CGO Disabled
-run false go1.24                         # Too recent go version (not tested)
-run false go1.24,appsec                  # CGO disabled with appsec explicitely enabled but too recent go version
 run false datadog.no_waf                 # WAF manually disabled
 run false datadog.no_waf,appsec          # CGO disabled with appsec explicitely enabled but WAF manually disabled
-run false datadog.no_waf,go1.24          # WAF manually disabled and go version to recent
-run false datadog.no_waf,go1.24,appsec   # CGO disabled, WAF manually disabled, too recent go version with appsec explicitely enabled
 
 # Check if we are running on Alpine and install the required dependencies for cgo
 if [ -f /etc/os-release ] && grep -q Alpine < /etc/os-release; then
@@ -67,6 +60,4 @@ if [ -f /etc/os-release ] && grep -q Alpine < /etc/os-release; then
 fi
 
 run "$WAF_ENABLED" cgo                   # WAF enabled (but not on windows)
-run false go1.24,cgo                     # CGO enabled and too recent go version
 run false datadog.no_waf,cgo             # WAF manually disabled and CGO enabled
-run false datadog.no_waf,go1.24,cgo      # CGO enabled, WAF manually disabled, too recent go version
