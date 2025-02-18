@@ -17,6 +17,10 @@ contains() {
 # Return true if the current OS is not Windows
 WAF_ENABLED=$([ "$GOOS" = "windows" ] && echo false || echo true)
 
+if $(contains "$GOVERSION" devel); then
+    WAF_ENABLED=false
+fi
+
 # run is the main function that runs the tests
 # It takes 2 arguments:
 # - $1: whether the WAF is enabled or not (true or false)
@@ -27,11 +31,6 @@ run() {
     nproc=$(getconf _NPROCESSORS_ONLN)
     test_tags="$2,$GOOS,$GOARCH"
     cgo=$($(contains "$2" cgo) && echo 1 || echo 0)
-
-    # Go 1.23 does not allow go version build tags
-    if $(contains "$GOVERSION" go1.23) && $(contains "$test_tags" go1); then
-        return
-    fi
 
     echo "Running matrix $test_tags where the WAF is" "$($waf_enabled && echo "supported" || echo "not supported")" "..."
     env CGO_ENABLED="$cgo" go test -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
