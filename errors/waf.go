@@ -52,6 +52,15 @@ func (e RunError) Error() string {
 	return description
 }
 
+// ToWafErrorCode converts an error to a WAF error code, returns zero if the error is not a WAF run error.
+func ToWafErrorCode(in error) int {
+	var runError RunError
+	if !errors.As(in, &runError) {
+		return 0
+	}
+	return int(runError)
+}
+
 // PanicError is an error type wrapping a recovered panic value that happened
 // during a function call. Such error must be considered unrecoverable and be
 // used to try to gracefully abort. Keeping using this package after such an

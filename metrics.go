@@ -58,6 +58,7 @@ const (
 	wafDecodeTag     = "decode"
 	wafTimeoutTag    = "timeouts"
 	wafTruncationTag = "truncations"
+	raspTimeoutTag   = "timeout"
 )
 
 func dot(parts ...string) string {
@@ -77,7 +78,7 @@ func (stats Stats) Metrics() map[string]any {
 	}
 
 	if stats.TimeoutRASPCount > 0 {
-		tags[dot(string(RASPScope), wafTimeoutTag)] = stats.TimeoutRASPCount
+		tags[dot(string(RASPScope), raspTimeoutTag)] = stats.TimeoutRASPCount
 	}
 
 	for reason, list := range stats.Truncations {

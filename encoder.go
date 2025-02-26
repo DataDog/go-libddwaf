@@ -60,11 +60,11 @@ const (
 func (reason TruncationReason) String() string {
 	switch reason {
 	case ObjectTooDeep:
-		return "depth"
+		return "container_depth"
 	case ContainerTooLarge:
-		return "container-size"
+		return "container_size"
 	case StringTooLong:
-		return "string-size"
+		return "string_length"
 	default:
 		return fmt.Sprintf("TruncationReason(%v)", int(reason))
 	}
