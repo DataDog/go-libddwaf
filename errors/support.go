@@ -26,7 +26,10 @@ func (e UnsupportedOSArchError) Error() string {
 type UnsupportedGoVersionError struct{}
 
 func (e UnsupportedGoVersionError) Error() string {
-	return fmt.Sprintf("unsupported Go version: %s", runtime.Version())
+	return fmt.Sprintf(
+		"unsupported Go version: %s (try running `go get github.com/DataDog/go-libddwaf@latest`)",
+		runtime.Version(),
+	)
 }
 
 type CgoDisabledError struct{}
