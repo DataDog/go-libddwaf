@@ -10,12 +10,14 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/internal/pin"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 )
@@ -28,13 +30,15 @@ import (
 // reference now or in the future, are stored and referenced in the `cgoRefs` field. The user MUST leverage
 // `keepAlive()` with it according to its ddwaf use-case.
 type encoder struct {
+	// pinner is used to pin the data referenced by the encoded wafObjects.
+	pinner pin.Pinner
+
 	// timer makes sure the encoder doesn't spend too much time doing its job.
 	timer timer.Timer
 
 	// For each TruncationReason, holds the size that is required to avoid truncation for each truncation that happened.
 	truncations map[TruncationReason][]int
 
-	cgoRefs          cgoRefPool
 	containerMaxSize int
 	stringMaxSize    int
 	objectMaxDepth   int
@@ -79,8 +83,9 @@ type native interface {
 	int64 | uint64 | uintptr
 }
 
-func newLimitedEncoder(timer timer.Timer) encoder {
+func newLimitedEncoder(pinner pin.Pinner, timer timer.Timer) encoder {
 	return encoder{
+		pinner:           pinner,
 		timer:            timer,
 		containerMaxSize: bindings.WafMaxContainerSize,
 		stringMaxSize:    bindings.WafMaxStringLength,
@@ -88,9 +93,10 @@ func newLimitedEncoder(timer timer.Timer) encoder {
 	}
 }
 
-func newMaxEncoder() encoder {
+func newMaxEncoder(pinner *runtime.Pinner) encoder {
 	timer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
 	return encoder{
+		pinner:           pinner,
 		timer:            timer,
 		containerMaxSize: math.MaxInt,
 		stringMaxSize:    math.MaxInt,
@@ -222,7 +228,7 @@ func (encoder *encoder) encodeString(str string, obj *bindings.WafObject) {
 		str = str[:encoder.stringMaxSize]
 		encoder.addTruncation(StringTooLong, size)
 	}
-	encoder.cgoRefs.AllocWafString(obj, str)
+	obj.SetString(encoder.pinner, str)
 }
 
 func getFieldNameFromType(field reflect.StructField) (string, bool) {
@@ -266,7 +272,7 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WafObjec
 		capacity = encoder.containerMaxSize
 	}
 
-	objArray := encoder.cgoRefs.AllocWafArray(obj, bindings.WafMapType, uint64(capacity))
+	objArray := obj.SetMap(encoder.pinner, uint64(capacity))
 	for i := 0; i < nbFields; i++ {
 		if encoder.timer.Exhausted() {
 			return
@@ -311,7 +317,7 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WafObject, 
 		capacity = encoder.containerMaxSize
 	}
 
-	objArray := encoder.cgoRefs.AllocWafArray(obj, bindings.WafMapType, uint64(capacity))
+	objArray := obj.SetMap(encoder.pinner, uint64(capacity))
 
 	length := 0
 	for iter := value.MapRange(); iter.Next(); {
@@ -372,7 +378,7 @@ func (encoder *encoder) encodeMapKeyFromString(keyStr string, obj *bindings.WafO
 		encoder.addTruncation(StringTooLong, size)
 	}
 
-	encoder.cgoRefs.AllocWafMapKey(obj, keyStr)
+	obj.SetMapKey(encoder.pinner, keyStr)
 }
 
 // encodeArray takes a reflect.Value and a wafObject pointer and iterates on the elements and returns
@@ -389,7 +395,7 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WafObject
 
 	currIndex := 0
 
-	objArray := encoder.cgoRefs.AllocWafArray(obj, bindings.WafArrayType, uint64(capacity))
+	objArray := obj.SetArray(encoder.pinner, uint64(capacity))
 
 	for i := 0; i < length; i++ {
 		if encoder.timer.Exhausted() {
@@ -407,7 +413,7 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WafObject
 
 		// If the element is null or invalid it has no impact on the waf execution, therefore we can skip its
 		// encoding. In this specific case we just overwrite it at the next loop iteration.
-		if objElem == nil || objElem.IsUnusable() {
+		if objElem.IsUnusable() {
 			continue
 		}
 

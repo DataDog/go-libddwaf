@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"runtime"
 	"sort"
 	"testing"
 	"time"
@@ -322,7 +323,10 @@ func TestEncodeDecode(t *testing.T) {
 				tc.Output = nil
 			}
 
-			encoder := newMaxEncoder()
+			var pinner runtime.Pinner
+			defer pinner.Unpin()
+
+			encoder := newMaxEncoder(&pinner)
 			encoded, err := encoder.Encode(tc.Input)
 
 			t.Run("equal", func(t *testing.T) {
@@ -347,7 +351,6 @@ func TestEncodeDecode(t *testing.T) {
 
 			t.Run("run", func(t *testing.T) {
 				wafTest(t, encoded)
-				unsafe.KeepAlive(encoder.cgoRefs)
 			})
 		})
 	}
@@ -532,8 +535,11 @@ func TestEncoderLimits(t *testing.T) {
 		if max := tc.MaxStringLength; max != nil {
 			maxStringLength = max.(int)
 		}
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
 		encodeTimer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
 		encoder := encoder{
+			pinner:           &pinner,
 			timer:            encodeTimer,
 			objectMaxDepth:   maxValueDepth,
 			stringMaxSize:    maxStringLength,
@@ -571,7 +577,6 @@ func TestEncoderLimits(t *testing.T) {
 
 		t.Run(tc.Name+"/run", func(t *testing.T) {
 			wafTest(t, encoded)
-			unsafe.KeepAlive(encoder.cgoRefs)
 		})
 	}
 }
@@ -758,7 +763,10 @@ func TestEncoderTypeTree(t *testing.T) {
 			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafNilType}, {_type: bindings.WafNilType}, {_type: bindings.WafNilType}}},
 		},
 	} {
-		encoder := newMaxEncoder()
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		encoder := newMaxEncoder(&pinner)
 		encoded, err := encoder.Encode(tc.Input)
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
 			if tc.Error != nil {
@@ -773,7 +781,6 @@ func TestEncoderTypeTree(t *testing.T) {
 
 		t.Run(tc.Name+"/run", func(t *testing.T) {
 			wafTest(t, encoded)
-			unsafe.KeepAlive(encoder.cgoRefs)
 		})
 	}
 }
@@ -781,7 +788,10 @@ func TestEncoderTypeTree(t *testing.T) {
 // This test needs a working encoder to function properly, as it first encodes the objects before decoding them
 func TestDecoder(t *testing.T) {
 	t.Run("Errors", func(t *testing.T) {
-		e := newMaxEncoder()
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		e := newMaxEncoder(&pinner)
 		objBuilder := func(value any) *bindings.WafObject {
 			encoded, err := e.Encode(value)
 			require.NoError(t, err, "Encoding object failed")
@@ -826,9 +836,6 @@ func TestDecoder(t *testing.T) {
 				require.Equal(t, tc.ExpectedValue, val)
 			})
 		}
-
-		unsafe.KeepAlive(e.cgoRefs.arrayRefs)
-		unsafe.KeepAlive(e.cgoRefs.stringRefs)
 	})
 }
 

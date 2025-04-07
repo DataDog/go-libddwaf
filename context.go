@@ -6,13 +6,14 @@
 package waf
 
 import (
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/internal/pin"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 )
 
@@ -22,7 +23,6 @@ import (
 type Context struct {
 	handle *Handle // Instance of the WAF
 
-	cgoRefs  cgoRefPool          // Used to retain go data referenced by WAF Objects the context holds
 	cContext bindings.WafContext // The C ddwaf_context pointer
 
 	// timeoutCount count all calls which have timeout'ed by scope. Keys are fixed at creation time.
@@ -40,6 +40,11 @@ type Context struct {
 	// truncations provides details about truncations that occurred while encoding address data for
 	// WAF execution.
 	truncations map[Scope]map[TruncationReason][]int
+
+	// pinner is used to retain Go data that is being passed to the WAF as part of
+	// [RunAddressData.Persistent] until the [Context.Close] method results in the context being
+	// destroyed.
+	pinner pin.ConcurrentPinner
 }
 
 // RunAddressData provides address data to the [Context.Run] method. If a given key is present in
@@ -107,7 +112,7 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 
 	wafEncodeTimer := runTimer.MustLeaf(wafEncodeTag)
 	wafEncodeTimer.Start()
-	persistentData, persistentEncoder, err := context.encodeOneAddressType(addressData.Scope, addressData.Persistent, wafEncodeTimer)
+	persistentData, err := context.encodeOneAddressType(&context.pinner, addressData.Scope, addressData.Persistent, wafEncodeTimer)
 	if err != nil {
 		wafEncodeTimer.Stop()
 		return res, err
@@ -116,7 +121,9 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	// The WAF releases ephemeral address data at the max of each run call, so we need not keep the Go
 	// values live beyond that in the same way we need for persistent data. We hence use a separate
 	// encoder.
-	ephemeralData, ephemeralEncoder, err := context.encodeOneAddressType(addressData.Scope, addressData.Ephemeral, wafEncodeTimer)
+	var ephemeralPinner runtime.Pinner
+	defer ephemeralPinner.Unpin()
+	ephemeralData, err := context.encodeOneAddressType(&ephemeralPinner, addressData.Scope, addressData.Ephemeral, wafEncodeTimer)
 	if err != nil {
 		wafEncodeTimer.Stop()
 		return res, err
@@ -138,20 +145,10 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 		return res, errors.ErrTimeout
 	}
 
-	// Save the Go pointer references to addressesToData that were referenced by the encoder
-	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the
-	// ddwaf_context.
-	defer context.cgoRefs.append(persistentEncoder.cgoRefs)
-
 	wafDecodeTimer := runTimer.MustLeaf(wafDecodeTag)
 	res, err = context.run(persistentData, ephemeralData, wafDecodeTimer, runTimer.SumRemaining())
 
 	runTimer.AddTime(wafDurationTag, res.TimeSpent)
-
-	// Ensure the ephemerals don't get optimized away by the compiler before the WAF had a chance to
-	// use them.
-	unsafe.KeepAlive(ephemeralEncoder.cgoRefs)
-	unsafe.KeepAlive(persistentEncoder.cgoRefs)
 
 	return
 }
@@ -197,10 +194,10 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // top level object is a nil map, but this  behaviour is expected since either persistent or
 // ephemeral addresses are allowed to be null one at a time. In this case, Encode will return nil,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
-func (context *Context) encodeOneAddressType(scope Scope, addressData map[string]any, timer timer.Timer) (*bindings.WafObject, encoder, error) {
-	encoder := newLimitedEncoder(timer)
+func (context *Context) encodeOneAddressType(pinner pin.Pinner, scope Scope, addressData map[string]any, timer timer.Timer) (*bindings.WafObject, error) {
+	encoder := newLimitedEncoder(pinner, timer)
 	if addressData == nil {
-		return nil, encoder, nil
+		return nil, nil
 	}
 
 	data, _ := encoder.Encode(addressData)
@@ -212,10 +209,10 @@ func (context *Context) encodeOneAddressType(scope Scope, addressData map[string
 	}
 
 	if timer.Exhausted() {
-		return nil, encoder, errors.ErrTimeout
+		return nil, errors.ErrTimeout
 	}
 
-	return data, encoder, nil
+	return data, nil
 }
 
 // run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
@@ -277,11 +274,10 @@ func (context *Context) Close() {
 	defer context.mutex.Unlock()
 
 	wafLib.WafContextDestroy(context.cContext)
-	unsafe.KeepAlive(context.cgoRefs) // Keep the Go pointer references until the max of the context
-	defer context.handle.release()    // Reduce the reference counter of the Handle.
-
-	context.cgoRefs = cgoRefPool{} // The data in context.cgoRefs is no longer needed, explicitly release
+	defer context.handle.release() // Reduce the reference counter of the Handle.
 	context.cContext = 0           // Makes it easy to spot use-after-free/double-free issues
+
+	context.pinner.Unpin() // The pinned data is no longer needed, explicitly release
 }
 
 // Stats returns the cumulative time spent in various parts of the WAF, all in nanoseconds

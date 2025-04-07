@@ -7,10 +7,12 @@ package waf
 
 import (
 	"fmt"
+	"runtime"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
-	wafErrors "github.com/DataDog/go-libddwaf/v4/errors"
+	"github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 )
@@ -141,7 +143,7 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 	}
 }
 
-func newConfig(cgoRefs *cgoRefPool, keyObfuscatorRegex string, valueObfuscatorRegex string) *bindings.WafConfig {
+func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscatorRegex string) *bindings.WafConfig {
 	return &bindings.WafConfig{
 		Limits: bindings.WafConfigLimits{
 			MaxContainerDepth: bindings.WafMaxContainerDepth,
@@ -149,22 +151,32 @@ func newConfig(cgoRefs *cgoRefPool, keyObfuscatorRegex string, valueObfuscatorRe
 			MaxStringLength:   bindings.WafMaxStringLength,
 		},
 		Obfuscator: bindings.WafConfigObfuscator{
-			KeyRegex:   cgoRefs.AllocCString(keyObfuscatorRegex),
-			ValueRegex: cgoRefs.AllocCString(valueObfuscatorRegex),
+			KeyRegex:   cString(pinner, keyObfuscatorRegex),
+			ValueRegex: cString(pinner, valueObfuscatorRegex),
 		},
 		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
 		FreeFn: 0,
 	}
 }
 
+// cString allocates a C-string with the contents of str and pins it using the
+// provided [*runtime.Pinner].
+func cString(pinner *runtime.Pinner, str string) uintptr {
+	cstr := make([]byte, len(str)+1)
+	copy(cstr, []byte(str))
+	data := unsafe.Pointer(unsafe.SliceData(cstr))
+	pinner.Pin(data)
+	return uintptr(data)
+}
+
 func goRunError(rc bindings.WafReturnCode) error {
 	switch rc {
 	case bindings.WafErrInternal:
-		return wafErrors.ErrInternal
+		return errors.ErrInternal
 	case bindings.WafErrInvalidObject:
-		return wafErrors.ErrInvalidObject
+		return errors.ErrInvalidObject
 	case bindings.WafErrInvalidArgument:
-		return wafErrors.ErrInvalidArgument
+		return errors.ErrInvalidArgument
 	case bindings.WafOK, bindings.WafMatch:
 		// No error...
 		return nil

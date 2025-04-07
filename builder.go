@@ -8,10 +8,10 @@ package waf
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"sync"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 )
 
 // Builder manages an evolving WAF configuration over time. Its lifecycle is
@@ -32,9 +32,9 @@ func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builde
 		return nil, err
 	}
 
-	var refPool cgoRefPool
-	hdl := wafLib.WafBuilderInit(newConfig(&refPool, keyObfuscatorRegex, valueObfuscatorRegex))
-	unsafe.KeepAlive(refPool)
+	var pinner runtime.Pinner
+	hdl := wafLib.WafBuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
+	pinner.Unpin()
 
 	if hdl == 0 {
 		return nil, errors.New("failed to initialize the WAF builder")
@@ -77,7 +77,10 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 		return Diagnostics{}, errBuilderClosed
 	}
 
-	encoder := newMaxEncoder()
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	encoder := newMaxEncoder(&pinner)
 	frag, err := encoder.Encode(fragment)
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("could not encode the config fragment into a WAF object; %w", err)
@@ -87,7 +90,6 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 	defer wafLib.WafObjectFree(&diagnosticsWafObj)
 
 	res := wafLib.WafBuilderAddOrUpdateConfig(b.handle, path, frag, &diagnosticsWafObj)
-	unsafe.KeepAlive(encoder.cgoRefs)
 
 	diags, err := decodeDiagnostics(&diagnosticsWafObj)
 	if err != nil {

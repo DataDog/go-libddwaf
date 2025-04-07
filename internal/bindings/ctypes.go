@@ -7,6 +7,9 @@ package bindings
 
 import (
 	"structs"
+	"unsafe"
+
+	"github.com/DataDog/go-libddwaf/v4/internal/pin"
 )
 
 const (
@@ -82,6 +85,58 @@ func (w *WafObject) IsMap() bool {
 // But we still need this kind of objects to forward map keys in case the value of the map is invalid
 func (w *WafObject) IsUnusable() bool {
 	return w.Type == WafInvalidType || w.Type == WafNilType
+}
+
+// SetArray sets the receiving [WafObject] to a new array with the given
+// capacity.
+func (w *WafObject) SetArray(pinner pin.Pinner, capacity uint64) []WafObject {
+	return w.setArrayTyped(pinner, capacity, WafArrayType)
+}
+
+// SetMap sets the receiving [WafObject] to a new map with the given capacity.
+func (w *WafObject) SetMap(pinner pin.Pinner, capacity uint64) []WafObject {
+	return w.setArrayTyped(pinner, capacity, WafMapType)
+}
+
+// SetMapKey sets the receiving [WafObject] to a new map key with the given
+// string.
+func (w *WafObject) SetMapKey(pinner pin.Pinner, key string) {
+	w.ParameterNameLength = uint64(len(key))
+	if w.ParameterNameLength == 0 {
+		w.ParameterName = 0
+		return
+	}
+	data := unsafe.Pointer(unsafe.StringData(key))
+	pinner.Pin(data)
+	w.ParameterName = uintptr(data)
+}
+
+// SetString sets the receiving [WafObject] value to the given string.
+func (w *WafObject) SetString(pinner pin.Pinner, str string) {
+	w.Type = WafStringType
+	w.NbEntries = uint64(len(str))
+	if w.NbEntries == 0 {
+		w.Value = 0
+		return
+	}
+	data := unsafe.Pointer(unsafe.StringData(str))
+	pinner.Pin(data)
+	w.Value = uintptr(data)
+}
+
+func (w *WafObject) setArrayTyped(pinner pin.Pinner, capacity uint64, t WafObjectType) []WafObject {
+	w.Type = t
+	w.NbEntries = capacity
+	if w.NbEntries == 0 {
+		w.Value = 0
+		return nil
+	}
+
+	arr := make([]WafObject, capacity)
+	data := unsafe.Pointer(unsafe.SliceData(arr))
+	pinner.Pin(data)
+	w.Value = uintptr(data)
+	return arr
 }
 
 type WafConfig struct {

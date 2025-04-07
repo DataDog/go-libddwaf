@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1225,8 +1226,12 @@ func BenchmarkEncoder(b *testing.B) {
 	n, err := rnd.Read(buf)
 	fullstr := string(buf)
 	encodeTimer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
 	for _, l := range []int{1024, 4096, 8192, 16384} {
 		encoder := encoder{
+			pinner:           &pinner,
 			objectMaxDepth:   10,
 			stringMaxSize:    1 * 1024 * 1024,
 			containerMaxSize: 100,
