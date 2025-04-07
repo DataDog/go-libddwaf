@@ -16,5 +16,5 @@ import (
 )
 
 func init() {
-	wafSupportErrors = append(wafSupportErrors, errors.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
+	wafSupportErrors = append(wafSupportErrors, errors.UnsupportedOSArchError{OS: runtime.GOOS, Arch: runtime.GOARCH})
 }

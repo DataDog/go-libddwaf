@@ -91,14 +91,14 @@ func decodeDiagnostics(obj *bindings.WafObject) (Diagnostics, error) {
 	return diags, nil
 }
 
-func decodeDiagnosticsEntry(obj *bindings.WafObject) (*DiagnosticEntry, error) {
+func decodeDiagnosticsEntry(obj *bindings.WafObject) (*Feature, error) {
 	if !obj.IsMap() {
 		return nil, errors.ErrInvalidObjectType
 	}
 	if obj.Value == 0 && obj.NbEntries > 0 {
 		return nil, errors.ErrNilObjectPtr
 	}
-	var entry DiagnosticEntry
+	var entry Feature
 	var err error
 
 	for i := uint64(0); i < obj.NbEntries; i++ {

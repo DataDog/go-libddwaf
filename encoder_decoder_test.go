@@ -28,7 +28,7 @@ func wafTest(t *testing.T, obj *bindings.WafObject) {
 	// Pass the encoded value to the WAF to make sure it doesn't return an error
 	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
 	require.NoError(t, err)
-	defer waf.Close()
+	defer waf.Release()
 	wafCtx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)

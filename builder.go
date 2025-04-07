@@ -137,7 +137,7 @@ func (b *Builder) ConfigPaths(filter string) []string {
 
 // Build creates a new [Handle] instance that uses the current configuration.
 // Returns nil if an error occurs when building the handle. The caller is
-// responsible for calling [Handle.Close] when the handle is no longer needed.
+// responsible for calling [Handle.Release] when the handle is no longer needed.
 // This function may return nil.
 func (b *Builder) Build() *Handle {
 	if b == nil {

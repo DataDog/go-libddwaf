@@ -17,23 +17,17 @@ import (
 )
 
 func TestUnsupportedPlatform(t *testing.T) {
-
-	t.Run("SupportsTarget", func(t *testing.T) {
-		supported, err := waf.SupportsTarget()
-		require.False(t, supported)
-		require.Error(t, err)
-		require.ErrorIs(t, err, errors.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
-	})
+	expectedErr := errors.UnsupportedOSArchError{OS: runtime.GOOS, Arch: runtime.GOARCH}
 
 	t.Run("Load", func(t *testing.T) {
 		ok, err := waf.Load()
 		require.False(t, ok)
-		require.Error(t, err)
+		require.ErrorIs(t, err, expectedErr)
 	})
 
-	t.Run("Health", func(t *testing.T) {
-		ok, err := waf.Health()
+	t.Run("Usable", func(t *testing.T) {
+		ok, err := waf.Usable()
 		require.False(t, ok)
-		require.Error(t, err)
+		require.ErrorIs(t, err, expectedErr)
 	})
 }

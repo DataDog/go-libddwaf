@@ -19,7 +19,8 @@ import (
 
 // Context is a WAF execution context. It allows running the WAF incrementally when calling it
 // multiple times to run its rules every time new addresses become available. Each request must have
-// its own Context.
+// its own [Context]. New [Context] instances can be created by calling
+// [Handle.NewContextWithBudget].
 type Context struct {
 	handle *Handle // Instance of the WAF
 
@@ -265,23 +266,24 @@ func unwrapWafResult(ret bindings.WafReturnCode, result *bindings.WafResult) (re
 	return res, err
 }
 
-// Close the underlying `ddwaf_context` and releases the associated internal
-// data. Also decreases the reference count of the `ddwaf_hadnle` which created
-// this context, possibly releasing it completely (if this was the last context
-// created from this handle & it was released by its creator).
+// Close disposes of the underlying `ddwaf_context` and releases the associated
+// internal data. It also decreases the reference count of the [Handle] which
+// created this [Context], possibly releasing it completely (if this was the
+// last [Context] created from it, and it is no longer in use by its creator).
 func (context *Context) Close() {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
 	wafLib.WafContextDestroy(context.cContext)
-	defer context.handle.release() // Reduce the reference counter of the Handle.
+	defer context.handle.Release() // Reduce the reference counter of the Handle.
 	context.cContext = 0           // Makes it easy to spot use-after-free/double-free issues
 
 	context.pinner.Unpin() // The pinned data is no longer needed, explicitly release
 }
 
-// Stats returns the cumulative time spent in various parts of the WAF, all in nanoseconds
-// and the timeout value used
+// Stats returns the cumulative time spent in various parts of the WAF, at
+// nanosecond resolution, as well as the timeout value used, and other
+// information about this [Context]'s usage.
 func (context *Context) Stats() Stats {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()

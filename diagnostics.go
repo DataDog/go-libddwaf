@@ -10,26 +10,27 @@ import (
 	"fmt"
 )
 
-// Diagnostics stores the information - provided by the WAF - about WAF rules initialization.
+// Diagnostics stores the information as provided by the WAF about WAF rules parsing and loading. It
+// is returned by [Builder.AddOrUpdateConfig].
 type Diagnostics struct {
 	// Rules contains information about the loaded rules.
-	Rules *DiagnosticEntry
+	Rules *Feature
 	// CustomRules contains information about the loaded custom rules.
-	CustomRules *DiagnosticEntry
+	CustomRules *Feature
 	// Actions contains information about the loaded actions.
-	Actions *DiagnosticEntry
+	Actions *Feature
 	// Exclusions contains information about the loaded exclusions.
-	Exclusions *DiagnosticEntry
+	Exclusions *Feature
 	// RulesOverrides contains information about the loaded rules overrides.
-	RulesOverrides *DiagnosticEntry
+	RulesOverrides *Feature
 	// RulesData contains information about the loaded rules data.
-	RulesData *DiagnosticEntry
+	RulesData *Feature
 	// ExclusionData contains information about the loaded exclusion data.
-	ExclusionData *DiagnosticEntry
+	ExclusionData *Feature
 	// Processors contains information about the loaded processors.
-	Processors *DiagnosticEntry
+	Processors *Feature
 	// Scanners contains information about the loaded scanners.
-	Scanners *DiagnosticEntry
+	Scanners *Feature
 	// Version is the version of the parsed ruleset if available.
 	Version string
 }
@@ -38,7 +39,7 @@ type Diagnostics struct {
 // entries, rolled up into a single error value. Returns nil if no top-level errors were reported.
 // Individual, item-level errors might still exist.
 func (d *Diagnostics) TopLevelError() error {
-	fields := map[string]*DiagnosticEntry{
+	fields := map[string]*Feature{
 		"rules":          d.Rules,
 		"actions":        d.Actions,
 		"custom_rules":   d.CustomRules,
@@ -62,10 +63,9 @@ func (d *Diagnostics) TopLevelError() error {
 	return err
 }
 
-// DiagnosticEntry stores the information - provided by the WAF - about loaded and failed rules
-// for a specific entry in the WAF ruleset
-type DiagnosticEntry struct {
-	Addresses *DiagnosticAddresses
+// Feature stores the information as provided by the WAF about loaded and failed
+// rules for a specific feature of the WAF ruleset.
+type Feature struct {
 	// Errors is a map of parsing errors to a list of unique identifiers from the elements which
 	// failed loading due to this specific error.
 	Errors map[string][]string
@@ -80,13 +80,4 @@ type DiagnosticEntry struct {
 	Failed []string
 	// Skipped is a list of the unique identifiers from the elements which were skipped.
 	Skipped []string
-}
-
-// DiagnosticAddresses stores the information - provided by the WAF - about the known addresses and
-// whether they are required or optional. Addresses used by WAF rules are always required. Addresses
-// used by WAF exclusion filters may be required or (rarely) optional. Addresses used by WAF
-// processors may be required or optional.
-type DiagnosticAddresses struct {
-	Required []string
-	Optional []string
 }

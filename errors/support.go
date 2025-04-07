@@ -13,12 +13,12 @@ import (
 // UnsupportedOSArchError is a wrapper error type helping to handle the error
 // case of trying to execute this package when the OS or architecture is not supported.
 type UnsupportedOSArchError struct {
-	Os   string
+	OS   string
 	Arch string
 }
 
 func (e UnsupportedOSArchError) Error() string {
-	return fmt.Sprintf("unsupported OS/Arch: %s/%s", e.Os, e.Arch)
+	return fmt.Sprintf("unsupported OS/Arch: %s/%s", e.OS, e.Arch)
 }
 
 // UnsupportedGoVersionError is a wrapper error type helping to handle the error

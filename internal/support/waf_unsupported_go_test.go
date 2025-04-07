@@ -16,22 +16,15 @@ import (
 )
 
 func TestUnsupportedGoRuntime(t *testing.T) {
-	t.Run("TestSupportsTarget", func(t *testing.T) {
-		supported, err := waf.SupportsTarget()
-		require.False(t, supported)
-		require.Error(t, err)
+	t.Run("Load", func(t *testing.T) {
+		ok, err := waf.Load()
+		require.False(t, ok)
 		require.ErrorIs(t, err, errors.UnsupportedGoVersionError{})
 	})
 
-	t.Run("TestLoad", func(t *testing.T) {
-		ok, err := waf.Load()
+	t.Run("Usable", func(t *testing.T) {
+		ok, err := waf.Usable()
 		require.False(t, ok)
-		require.Error(t, err)
-	})
-
-	t.Run("TestHealth", func(t *testing.T) {
-		ok, err := waf.Health()
-		require.False(t, ok)
-		require.Error(t, err)
+		require.ErrorIs(t, err, errors.UnsupportedGoVersionError{})
 	})
 }

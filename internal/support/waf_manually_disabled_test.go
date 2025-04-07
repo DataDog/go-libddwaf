@@ -17,16 +17,15 @@ import (
 )
 
 func TestManuallyDisabled(t *testing.T) {
-	t.Run("TestLoad", func(t *testing.T) {
+	t.Run("Load", func(t *testing.T) {
 		ok, err := waf.Load()
 		require.False(t, ok)
-		require.Error(t, err)
+		require.ErrorIs(t, err, errors.ManuallyDisabledError{})
 	})
 
-	t.Run("TestHealth", func(t *testing.T) {
-		ok, err := waf.Health()
+	t.Run("Usable", func(t *testing.T) {
+		ok, err := waf.Usable()
 		require.False(t, ok)
-		require.Error(t, err)
 		require.ErrorIs(t, err, errors.ManuallyDisabledError{})
 	})
 }

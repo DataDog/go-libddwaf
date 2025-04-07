@@ -18,15 +18,15 @@ import (
 )
 
 // Handle represents an instance of the WAF for a given ruleset. It is obtained
-// from [Builder.Build]; and must be disposed of by calling [Handle.Close] once
-// no longer in use.
+// from [Builder.Build]; and must be disposed of by calling [Handle.Release]
+// once no longer in use.
 type Handle struct {
-	// Lock-less reference counter avoiding blocking calls to the Close() method
-	// while WAF contexts are still using the WAF handle. Instead, we let the
-	// release actually happen only when the reference counter reaches 0.
+	// Lock-less reference counter avoiding blocking calls to the [Handle.Release]
+	// method while WAF [Context]s are still using the WAF handle. Instead, we let
+	// the release actually happen only when the reference counter reaches 0.
 	// This can happen either from a request handler calling its WAF context's
-	// Close() method, or either from the appsec instance calling the WAF
-	// handle's Close() method when creating a new WAF handle with new rules.
+	// [Context.Close] method, or either from the appsec instance calling the WAF
+	// [Handle.Release] method when creating a new WAF handle with new rules.
 	// Note that this means several instances of the WAF can exist at the same
 	// time with their own set of rules. This choice was done to be able to
 	// efficiently update the security rules concurrently, without having to
@@ -58,7 +58,7 @@ func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, erro
 
 	cContext := wafLib.WafContextInit(handle.cHandle)
 	if cContext == 0 {
-		handle.release() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
+		handle.Release() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
 		return nil, fmt.Errorf("could not get C context")
 	}
 
@@ -90,8 +90,9 @@ func (handle *Handle) Actions() []string {
 	return wafLib.WafKnownActions(handle.cHandle)
 }
 
-// Close puts the handle in termination state, when all the contexts are closed the handle will be destroyed
-func (handle *Handle) Close() {
+// Release decrements the reference counter of this [Handle], possibly allowing it to be destroyed
+// and all the resources associated with it to be released.
+func (handle *Handle) Release() {
 	if handle.addRefCounter(-1) != 0 {
 		// Either the counter is still positive (this Handle is still referenced), or it had previously
 		// reached 0 and some other call has done the cleanup already.
@@ -102,17 +103,12 @@ func (handle *Handle) Close() {
 	handle.cHandle = 0 // Makes it easy to spot use-after-free/double-free issues
 }
 
-// retain increments the reference counter of this Handle. Returns true if the
-// Handle is still valid, false if it is no longer usable. Calls to retain()
-// must be balanced with calls to release() in order to avoid leaking Handles.
+// retain increments the reference counter of this [Handle]. Returns true if the
+// [Handle] is still valid, false if it is no longer usable. Calls to
+// [Handle.retain] must be balanced with calls to [Handle.Release] in order to
+// avoid leaking [Handle]s.
 func (handle *Handle) retain() bool {
 	return handle.addRefCounter(1) > 0
-}
-
-// release decrements the reference counter of this Handle, possibly causing it
-// to be completely closed if no other reference to it exist.
-func (handle *Handle) release() {
-	handle.Close()
 }
 
 // addRefCounter adds x to Handle.refCounter. The return valid indicates whether the refCounter reached 0 as part of

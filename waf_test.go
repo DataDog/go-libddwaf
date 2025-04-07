@@ -47,14 +47,8 @@ func TestLoad(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestSupportsTarget(t *testing.T) {
-	supported, err := SupportsTarget()
-	require.True(t, supported)
-	require.NoError(t, err)
-}
-
-func TestHealth(t *testing.T) {
-	supported, err := Health()
+func TestUsable(t *testing.T) {
+	supported, err := Usable()
 	require.True(t, supported)
 	require.NoError(t, err)
 }
@@ -422,7 +416,7 @@ func TestMatching(t *testing.T) {
 	require.Nil(t, res.Actions)
 
 	wafCtx.Close()
-	waf.Close()
+	waf.Release()
 	// Using the WAF instance after it was closed leads to a nil WAF context
 	ctx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 	require.Nil(t, ctx)
@@ -433,7 +427,7 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 	// This test validates the WAF behavior when a given address is provided both as ephemeral and persistent.
 	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
-	defer waf.Close()
+	defer waf.Release()
 
 	wafCtx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 	require.NoError(t, err)
@@ -544,7 +538,7 @@ func TestMatchingEphemeral(t *testing.T) {
 	require.Nil(t, res.Actions)
 
 	wafCtx.Close()
-	waf.Close()
+	waf.Release()
 	// Using the WAF instance after it was closed leads to a nil WAF context
 	ctx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 	require.Nil(t, ctx)
@@ -605,7 +599,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	require.Nil(t, res.Actions)
 
 	wafCtx.Close()
-	waf.Close()
+	waf.Release()
 	// Using the WAF instance after it was closed leads to a nil WAF context
 	ctx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 	require.Nil(t, ctx)
@@ -619,7 +613,7 @@ func TestActions(t *testing.T) {
 			waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, expectedActions))
 			require.NoError(t, err)
 			require.NotNil(t, waf)
-			defer waf.Close()
+			defer waf.Release()
 
 			wafCtx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 			require.NoError(t, err)
@@ -651,14 +645,14 @@ func TestAddresses(t *testing.T) {
 	addresses := []ruleInput{{Address: "my.first.input"}, {Address: "my.second.input"}, {Address: "my.third.input"}, {Address: "my.indexed.input", KeyPath: []string{"indexed"}}}
 	waf, _, err := newDefaultHandle(newArachniTestRule(addresses, nil))
 	require.NoError(t, err)
-	defer waf.Close()
+	defer waf.Release()
 	require.Equal(t, expectedAddresses, waf.Addresses())
 }
 
 func TestKnownActions(t *testing.T) {
 	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.first.input"}}, []string{"block"}))
 	require.NoError(t, err)
-	defer waf.Close()
+	defer waf.Release()
 	require.Equal(t, []string{"block_request"}, waf.Actions())
 }
 
@@ -670,7 +664,7 @@ func TestConcurrency(t *testing.T) {
 	t.Run("concurrent-waf-context-usage", func(t *testing.T) {
 		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
-		defer waf.Close()
+		defer waf.Release()
 
 		wafCtx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 		require.NoError(t, err)
@@ -742,7 +736,7 @@ func TestConcurrency(t *testing.T) {
 	t.Run("concurrent-waf-instance-usage", func(t *testing.T) {
 		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
-		defer waf.Close()
+		defer waf.Release()
 
 		// User agents that won't match the rule so that it doesn't get pruned.
 		// Said otherwise, the User-Agent rule will run as long as it doesn't match, otherwise it gets ignored.
@@ -850,7 +844,7 @@ func TestConcurrency(t *testing.T) {
 			startBarrier.Wait()      // Sync the starts of the goroutines
 			defer stopBarrier.Done() // Signal we are done when returning
 			time.Sleep(time.Microsecond)
-			waf.Close()
+			waf.Release()
 		}()
 
 		// Save the test start time to compare it to the first metricsStore store's
@@ -919,7 +913,7 @@ func TestConcurrency(t *testing.T) {
 
 			// We also asynchronously release the WAF handle, which is fine to do as the WAF context is
 			// still in use, as the WAF handle has a reference counter guarding it's destruction.
-			waf.Close()
+			waf.Release()
 		}()
 
 		startBarrier.Done()
@@ -1047,7 +1041,7 @@ func TestMetrics(t *testing.T) {
 
 	waf, diags, err := newDefaultHandle(parsed)
 	require.NoError(t, err)
-	defer waf.Close()
+	defer waf.Release()
 	t.Run("Diagnostics", func(t *testing.T) {
 		require.NotNil(t, diags.Rules)
 		require.Len(t, diags.Rules.Failed, 3)
@@ -1121,7 +1115,7 @@ func TestObfuscatorConfig(t *testing.T) {
 	t.Run("key", func(t *testing.T) {
 		waf, _, err := newDefaultHandle(rule)
 		require.NoError(t, err)
-		defer waf.Close()
+		defer waf.Release()
 		wafCtx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
@@ -1144,7 +1138,7 @@ func TestObfuscatorConfig(t *testing.T) {
 	t.Run("val", func(t *testing.T) {
 		waf, _, err := newDefaultHandle(rule)
 		require.NoError(t, err)
-		defer waf.Close()
+		defer waf.Release()
 		wafCtx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
@@ -1167,7 +1161,7 @@ func TestObfuscatorConfig(t *testing.T) {
 	t.Run("off", func(t *testing.T) {
 		waf, _, err := newDefaultHandle(rule)
 		require.NoError(t, err)
-		defer waf.Close()
+		defer waf.Release()
 		wafCtx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
@@ -1191,7 +1185,7 @@ func TestObfuscatorConfig(t *testing.T) {
 func TestTruncationInformation(t *testing.T) {
 	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
-	defer waf.Close()
+	defer waf.Release()
 
 	ctx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 	require.NoError(t, err)

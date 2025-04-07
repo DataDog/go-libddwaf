@@ -16,7 +16,7 @@ import (
 )
 
 func TestBuilder(t *testing.T) {
-	if supported, err := Health(); !supported || err != nil {
+	if supported, err := Usable(); !supported || err != nil {
 		t.Skipf("target is not supported by the WAF: %v", err)
 		return
 	}
@@ -59,12 +59,12 @@ func TestBuilder(t *testing.T) {
 		}
 		diag, err := builder.AddOrUpdateConfig("test/config", rules)
 		require.NoError(t, err)
-		require.Equal(t, Diagnostics{Rules: &DiagnosticEntry{Loaded: []string{"ua0-600-12x"}}}, diag)
+		require.Equal(t, Diagnostics{Rules: &Feature{Loaded: []string{"ua0-600-12x"}}}, diag)
 
 		require.Equal(t, []string{"test/config"}, builder.ConfigPaths(""))
 		handle = builder.Build()
 		require.NotNil(t, handle)
-		defer handle.Close()
+		defer handle.Release()
 
 		ctx, err := handle.NewContextWithBudget(timer.UnlimitedBudget)
 		require.NoError(t, err)
@@ -146,7 +146,7 @@ func TestBuilder(t *testing.T) {
 				// ... but we can still obtain a valid handle since there is 1 valid rule...
 				waf := builder.Build()
 				require.NotNil(t, waf)
-				waf.Close()
+				waf.Release()
 			})
 		}
 	})
@@ -189,7 +189,7 @@ func TestBuilder(t *testing.T) {
 		// Check with the original, non-blocking rules
 		waf := builder.Build()
 		require.NotNil(t, waf)
-		defer waf.Close()
+		defer waf.Release()
 		ctx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
@@ -230,7 +230,7 @@ func TestBuilder(t *testing.T) {
 		// Check with the updated, blocking rules
 		waf = builder.Build()
 		require.NotNil(t, waf)
-		defer waf.Close()
+		defer waf.Release()
 		ctx, err = waf.NewContextWithBudget(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
