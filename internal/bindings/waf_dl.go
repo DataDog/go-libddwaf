@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/DataDog/go-libddwaf/v3/internal/lib"
-	"github.com/DataDog/go-libddwaf/v3/internal/log"
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/internal/lib"
+	"github.com/DataDog/go-libddwaf/v4/internal/log"
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 	"github.com/ebitengine/purego"
 )
 
@@ -27,18 +27,25 @@ type WafDl struct {
 	handle uintptr
 }
 
+//go:generate go run ./resolvergen.go -type=wafSymbols
 type wafSymbols struct {
-	init           uintptr
-	update         uintptr
-	destroy        uintptr
-	knownAddresses uintptr
-	knownActions   uintptr
-	getVersion     uintptr
-	contextInit    uintptr
-	contextDestroy uintptr
-	objectFree     uintptr
-	resultFree     uintptr
-	run            uintptr
+	builderInit              uintptr `sym:"ddwaf_builder_init"`
+	builderAddOrUpdateConfig uintptr `sym:"ddwaf_builder_add_or_update_config"`
+	builderRemoveConfig      uintptr `sym:"ddwaf_builder_remove_config"`
+	builderBuildInstance     uintptr `sym:"ddwaf_builder_build_instance"`
+	builderGetConfigPaths    uintptr `sym:"ddwaf_builder_get_config_paths"`
+	builderDestroy           uintptr `sym:"ddwaf_builder_destroy"`
+
+	setLogCb       uintptr `sym:"ddwaf_set_log_cb"`
+	destroy        uintptr `sym:"ddwaf_destroy"`
+	knownAddresses uintptr `sym:"ddwaf_known_addresses"`
+	knownActions   uintptr `sym:"ddwaf_known_actions"`
+	getVersion     uintptr `sym:"ddwaf_get_version"`
+	contextInit    uintptr `sym:"ddwaf_context_init"`
+	contextDestroy uintptr `sym:"ddwaf_context_destroy"`
+	objectFree     uintptr `sym:"ddwaf_object_free"`
+	resultFree     uintptr `sym:"ddwaf_result_free"`
+	run            uintptr `sym:"ddwaf_run"`
 }
 
 // NewWafDl loads the libddwaf shared library and resolves all tge relevant symbols.
@@ -61,7 +68,7 @@ func NewWafDl() (dl *WafDl, err error) {
 	}
 
 	var symbols wafSymbols
-	if symbols, err = resolveWafSymbols(handle); err != nil {
+	if symbols, err = newWafSymbols(handle); err != nil {
 		if closeErr := purego.Dlclose(handle); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("error released the shared libddwaf library: %w", closeErr))
 		}
@@ -99,24 +106,82 @@ func (waf *WafDl) WafGetVersion() string {
 	return unsafe.Gostring(unsafe.Cast[byte](waf.syscall(waf.getVersion)))
 }
 
-// WafInit initializes a new WAF with the provided ruleset, configuration and info objects. A
-// cgoRefPool ensures that the provided input values are not moved or garbage collected by the Go
-// runtime during the WAF call.
-func (waf *WafDl) WafInit(ruleset *WafObject, config *WafConfig, info *WafObject) WafHandle {
-	handle := WafHandle(waf.syscall(waf.init, unsafe.PtrToUintptr(ruleset), unsafe.PtrToUintptr(config), unsafe.PtrToUintptr(info)))
-	unsafe.KeepAlive(ruleset)
+// WafBuilderInit initializes a new WAF builder with the provided configuration,
+// which may be nil. Returns nil in case of an error.
+func (waf *WafDl) WafBuilderInit(cfg *WafConfig) WafBuilder {
+	builder := WafBuilder(waf.syscall(waf.builderInit, unsafe.PtrToUintptr(cfg)))
+	unsafe.KeepAlive(cfg)
+	return builder
+}
+
+// WafBuilderAddOrUpdateConfig adds or updates a configuration based on the
+// given path, which must be a unique identifier for the provided configuration.
+// Returns false in case of an error.
+func (waf *WafDl) WafBuilderAddOrUpdateConfig(builder WafBuilder, path string, config *WafObject, diags *WafObject) bool {
+	res := waf.syscall(waf.builderAddOrUpdateConfig,
+		uintptr(builder),
+		unsafe.PtrToUintptr(unsafe.Cstring(path)),
+		uintptr(len(path)),
+		unsafe.PtrToUintptr(config),
+		unsafe.PtrToUintptr(diags),
+	)
+	unsafe.KeepAlive(path)
 	unsafe.KeepAlive(config)
-	unsafe.KeepAlive(info)
-	return handle
+	unsafe.KeepAlive(diags)
+	return res != 0
 }
 
-func (waf *WafDl) WafUpdate(handle WafHandle, ruleset *WafObject, info *WafObject) WafHandle {
-	newHandle := WafHandle(waf.syscall(waf.update, uintptr(handle), unsafe.PtrToUintptr(ruleset), unsafe.PtrToUintptr(info)))
-	unsafe.KeepAlive(ruleset)
-	unsafe.KeepAlive(info)
-	return newHandle
+// WafBuilderRemoveConfig removes a configuration based on the provided path.
+// Returns false in case of an error.
+func (waf *WafDl) WafBuilderRemoveConfig(builder WafBuilder, path string) bool {
+	res := waf.syscall(waf.builderRemoveConfig,
+		uintptr(builder),
+		unsafe.PtrToUintptr(unsafe.Cstring(path)),
+		uintptr(len(path)),
+	)
+	unsafe.KeepAlive(path)
+	return res != 0
 }
 
+// WafBuilderBuildInstance builds a WAF instance based on the current set of configurations.
+// Returns nil in case of an error.
+func (waf *WafDl) WafBuilderBuildInstance(builder WafBuilder) WafHandle {
+	return WafHandle(waf.syscall(waf.builderBuildInstance, uintptr(builder)))
+}
+
+// WafBuilderGetConfigPaths returns the list of currently loaded paths.
+// Returns nil in case of an error.
+func (waf *WafDl) WafBuilderGetConfigPaths(builder WafBuilder, filter string) []string {
+	var paths WafObject
+
+	count := waf.syscall(waf.builderGetConfigPaths,
+		uintptr(builder),
+		unsafe.PtrToUintptr(&paths),
+		unsafe.PtrToUintptr(unsafe.Cstring(filter)),
+		uintptr(len(filter)),
+	)
+	defer waf.WafObjectFree(&paths)
+
+	list := make([]string, 0, count)
+	for i := range uint64(count) {
+		obj := unsafe.CastWithOffset[WafObject](paths.Value, i)
+		path := unsafe.GostringSized(unsafe.Cast[byte](obj.Value), obj.NbEntries)
+		list = append(list, path)
+	}
+	return list
+}
+
+// WafBuilderDestroy destroys a WAF builder instance.
+func (waf *WafDl) WafBuilderDestroy(builder WafBuilder) {
+	waf.syscall(waf.builderDestroy, uintptr(builder))
+}
+
+// WafSetLogCb sets the log callback function for the WAF.
+func (waf *WafDl) WafSetLogCb(cb uintptr, level log.Level) {
+	waf.syscall(waf.setLogCb, cb, uintptr(level))
+}
+
+// WafDestroy destroys a WAF instance.
 func (waf *WafDl) WafDestroy(handle WafHandle) {
 	waf.syscall(waf.destroy, uintptr(handle))
 	unsafe.KeepAlive(handle)
@@ -195,44 +260,4 @@ func (waf *WafDl) Handle() uintptr {
 func (waf *WafDl) syscall(fn uintptr, args ...uintptr) uintptr {
 	ret, _, _ := purego.SyscallN(fn, args...)
 	return ret
-}
-
-// resolveWafSymbols resolves relevant symbols from the libddwaf shared library using the provided
-// purego.Dlopen handle.
-func resolveWafSymbols(handle uintptr) (symbols wafSymbols, err error) {
-	if symbols.init, err = purego.Dlsym(handle, "ddwaf_init"); err != nil {
-		return
-	}
-	if symbols.update, err = purego.Dlsym(handle, "ddwaf_update"); err != nil {
-		return
-	}
-	if symbols.destroy, err = purego.Dlsym(handle, "ddwaf_destroy"); err != nil {
-		return
-	}
-	if symbols.knownAddresses, err = purego.Dlsym(handle, "ddwaf_known_addresses"); err != nil {
-		return
-	}
-	if symbols.knownActions, err = purego.Dlsym(handle, "ddwaf_known_actions"); err != nil {
-		return
-	}
-	if symbols.getVersion, err = purego.Dlsym(handle, "ddwaf_get_version"); err != nil {
-		return
-	}
-	if symbols.contextInit, err = purego.Dlsym(handle, "ddwaf_context_init"); err != nil {
-		return
-	}
-	if symbols.contextDestroy, err = purego.Dlsym(handle, "ddwaf_context_destroy"); err != nil {
-		return
-	}
-	if symbols.resultFree, err = purego.Dlsym(handle, "ddwaf_result_free"); err != nil {
-		return
-	}
-	if symbols.objectFree, err = purego.Dlsym(handle, "ddwaf_object_free"); err != nil {
-		return
-	}
-	if symbols.run, err = purego.Dlsym(handle, "ddwaf_run"); err != nil {
-		return
-	}
-
-	return
 }

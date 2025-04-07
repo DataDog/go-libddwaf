@@ -14,10 +14,10 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/DataDog/go-libddwaf/v3/errors"
-	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v3/timer"
+	"github.com/DataDog/go-libddwaf/v4/errors"
+	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/timer"
 )
 
 // Encode Go values into wafObjects. Only the subset of Go types representable into wafObjects

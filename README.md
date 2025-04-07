@@ -6,7 +6,7 @@ It consists of 2 separate entities: the bindings for the calls to libddwaf, and 
 An example usage would be:
 
 ```go
-import waf "github.com/DataDog/go-libddwaf/v3"
+import waf "github.com/DataDog/go-libddwaf/v4"
 
 //go:embed
 var ruleset []byte
@@ -18,11 +18,19 @@ func main() {
         panic(err)
     }
 
-    wafHandle, err := waf.NewHandle(parsedRuleset, "", "")
+    builder, err := waf.NewBuilder("", "")
+    if err != nil {
+        panic(err)
+    }
+    _, err := builder.AddOrUpdateConfig(parsedRuleset)
     if err != nil {
         panic(err)
     }
 
+    wafHandle := builder.Build()
+    if wafHandle == nil {
+        panic("WAF handle is nil")
+    }
     defer wafHandle.Close()
 
     wafCtx := wafHandle.NewContext()
@@ -36,7 +44,7 @@ func main() {
 }
 ```
 
-The API documentation details can be found on [pkg.go.dev](https://pkg.go.dev/github.com/DataDog/go-libddwaf/v3).
+The API documentation details can be found on [pkg.go.dev](https://pkg.go.dev/github.com/DataDog/go-libddwaf/v4).
 
 Originally this project was only here to provide CGO Wrappers to the calls to libddwaf.
 But with the appearance of `ddwaf_object` tree like structure,
@@ -65,17 +73,19 @@ Note that:
 
 The WAF bindings have multiple moving parts that are necessary to understand:
 
-- Handle: a object wrapper over the pointer to the C WAF Handle
-- Context: a object wrapper over a pointer to the C WAF Context
+- `Builder`: an object wrapper over the pointer to the C WAF Builder
+- `Handle`: an object wrapper over the pointer to the C WAF Handle
+- `Context`: an object wrapper over a pointer to the C WAF Context
 - Encoder: its goal is to construct a tree of Waf Objects to send to the WAF
-- CGORefPool: Does all allocation operations for the construction of Waf Objects and keeps track of the equivalent go pointers
+- `CGORefPool`: Does all allocation operations for the construction of Waf Objects and keeps track of the equivalent go pointers
 - Decoder: Transforms Waf Objects returned from the WAF to usual go objects (e.g. maps, arrays, ...)
 - Library: The low-level go bindings to the C library, providing improved typing
 
 ```mermaid
 flowchart LR
+    START:::hidden -->|NewBuilder| Builder -->|Build| Handle
 
-    START:::hidden -->|NewHandle| Handle -->|NewContext| Context
+    Handle -->|NewContext| Context
 
     Context -->|Encode Inputs| Encoder
 
@@ -117,7 +127,7 @@ All these objects stored in the reference pool need to live throughout the use o
 
 ### Typical call to Run()
 
-Here is an example of the flow of operations on a simple call to Run():
+Here is an example of the flow of operations on a simple call to `Run()`:
 
 - Encode input data into WAF Objects and store references in the temporary pool
 - Lock the context mutex until the end of the call

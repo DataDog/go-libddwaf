@@ -12,6 +12,7 @@ import (
 
 // Encoder/Decoder errors
 var (
+	ErrContextClosed       = errors.New("closed WAF context")
 	ErrMaxDepthExceeded    = errors.New("max depth exceeded")
 	ErrUnsupportedValue    = errors.New("unsupported Go value")
 	ErrInvalidMapKey       = errors.New("invalid WAF object map key")

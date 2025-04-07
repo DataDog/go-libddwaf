@@ -11,8 +11,8 @@ import (
 	"flag"
 	"testing"
 
-	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
-	"github.com/DataDog/go-libddwaf/v3/internal/support"
+	wafErrors "github.com/DataDog/go-libddwaf/v4/errors"
+	"github.com/DataDog/go-libddwaf/v4/internal/support"
 
 	"github.com/stretchr/testify/require"
 )

@@ -102,12 +102,6 @@ func (metrics *metricsStore) add(scope Scope, component string, duration time.Du
 	metrics.data[metricKey{scope, component}] += duration
 }
 
-func (metrics *metricsStore) get(scope Scope, component string) time.Duration {
-	metrics.mutex.RLock()
-	defer metrics.mutex.RUnlock()
-	return metrics.data[metricKey{scope, component}]
-}
-
 func (metrics *metricsStore) timers() map[string]time.Duration {
 	metrics.mutex.Lock()
 	defer metrics.mutex.Unlock()

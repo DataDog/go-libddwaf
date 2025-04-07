@@ -15,20 +15,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v3/errors"
-	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v3/timer"
+	"github.com/DataDog/go-libddwaf/v4/errors"
+	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/timer"
 
 	"github.com/stretchr/testify/require"
 )
 
 func wafTest(t *testing.T, obj *bindings.WafObject) {
 	// Pass the encoded value to the WAF to make sure it doesn't return an error
-	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
+	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
 	require.NoError(t, err)
 	defer waf.Close()
-	wafCtx, err := waf.NewContext()
+	wafCtx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()
@@ -328,7 +328,7 @@ func TestEncodeDecode(t *testing.T) {
 			t.Run("equal", func(t *testing.T) {
 				if tc.EncodeError != nil {
 					require.Error(t, err, "expected an encoding error when encoding %v", tc.Input)
-					require.Equal(t, tc.EncodeError, err)
+					require.ErrorIs(t, err, tc.EncodeError)
 					return
 				}
 
@@ -337,7 +337,7 @@ func TestEncodeDecode(t *testing.T) {
 
 				if tc.DecodeError != nil {
 					require.Error(t, err, "expected a decoding error when decoding %v", tc.Input)
-					require.Equal(t, tc.DecodeError, err)
+					require.ErrorIs(t, err, tc.DecodeError)
 					return
 				}
 
@@ -552,7 +552,7 @@ func TestEncoderLimits(t *testing.T) {
 
 			if tc.EncodeError != nil {
 				require.Error(t, err, "expected an encoding error when encoding %v", tc.EncodeError)
-				require.Equal(t, tc.EncodeError, err)
+				require.ErrorIs(t, err, tc.EncodeError)
 				return
 			}
 
@@ -561,7 +561,7 @@ func TestEncoderLimits(t *testing.T) {
 			val, err := decodeObject(encoded)
 			if tc.DecodeError != nil {
 				require.Error(t, err, "expected a decoding error when decoding %v", tc.DecodeError)
-				require.Equal(t, tc.DecodeError, err)
+				require.ErrorIs(t, err, tc.DecodeError)
 				return
 			}
 
@@ -794,7 +794,7 @@ func TestDecoder(t *testing.T) {
 		}{
 			{
 				Name:          "empty",
-				ExpectedValue: map[string][]string{},
+				ExpectedValue: nil,
 			},
 			{
 				Name: "one-empty-entry",
@@ -817,7 +817,11 @@ func TestDecoder(t *testing.T) {
 			},
 		} {
 			t.Run(tc.Name, func(t *testing.T) {
-				val, err := decodeErrors(objBuilder(tc.ExpectedValue))
+				input := tc.ExpectedValue
+				if input == nil {
+					input = map[string][]string{} // So it encodes to an empty map, not nil.
+				}
+				val, err := decodeErrors(objBuilder(input))
 				require.NoErrorf(t, err, "Error decoding the object: %v", err)
 				require.Equal(t, tc.ExpectedValue, val)
 			})

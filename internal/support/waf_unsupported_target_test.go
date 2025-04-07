@@ -8,10 +8,11 @@
 package support_test
 
 import (
+	"runtime"
 	"testing"
 
-	waf "github.com/DataDog/go-libddwaf/v3"
-	"github.com/DataDog/go-libddwaf/v3/errors"
+	waf "github.com/DataDog/go-libddwaf/v4"
+	"github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/stretchr/testify/require"
 )
 

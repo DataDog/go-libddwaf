@@ -10,15 +10,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v3/errors"
-	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v3/timer"
+	"github.com/DataDog/go-libddwaf/v4/errors"
+	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/timer"
 )
 
-// Context is a WAF execution context. It allows running the WAF incrementally
-// when calling it multiple times to run its rules every time new addresses
-// become available. Each request must have its own Context.
+// Context is a WAF execution context. It allows running the WAF incrementally when calling it
+// multiple times to run its rules every time new addresses become available. Each request must have
+// its own Context.
 type Context struct {
 	handle *Handle // Instance of the WAF
 
@@ -37,21 +37,26 @@ type Context struct {
 	// metrics stores the cumulative time spent in various parts of the WAF
 	metrics metricsStore
 
-	// truncations provides details about truncations that occurred while
-	// encoding address data for WAF execution.
+	// truncations provides details about truncations that occurred while encoding address data for
+	// WAF execution.
 	truncations map[Scope]map[TruncationReason][]int
 }
 
-// RunAddressData provides address data to the Context.Run method. If a given key is present in both
-// RunAddressData.Persistent and RunAddressData.Ephemeral, the value from RunAddressData.Persistent will take precedence.
+// RunAddressData provides address data to the [Context.Run] method. If a given key is present in
+// both [RunAddressData.Persistent] and [RunAddressData.Ephemeral], the value from
+// [RunAddressData.Persistent] will take precedence.
+// When encoding Go structs to the WAF-compatible format, fields with the `ddwaf:"ignore"` tag are
+// ignored and will not be visible to the WAF.
 type RunAddressData struct {
-	// Persistent address data is scoped to the lifetime of a given Context, and subsquent calls to Context.Run with the
-	// same address name will be silently ignored.
+	// Persistent address data is scoped to the lifetime of a given Context, and subsquent calls to
+	// [Context.Run] with the same address name will be silently ignored.
 	Persistent map[string]any
-	// Ephemeral address data is scoped to a given Context.Run call and is not persisted across calls. This is used for
-	// protocols such as gRPC client/server streaming or GraphQL, where a single request can incur multiple subrequests.
+	// Ephemeral address data is scoped to a given [Context.Run] call and is not persisted across
+	// calls. This is used for protocols such as gRPC client/server streaming or GraphQL, where a
+	// single request can incur multiple subrequests.
 	Ephemeral map[string]any
-	// Scope is the way to classify the different runs in the same context in order to have different metrics
+	// Scope is the way to classify the different runs in the same context in order to have different
+	// metrics.
 	Scope Scope
 }
 
@@ -59,14 +64,10 @@ func (d RunAddressData) isEmpty() bool {
 	return len(d.Persistent) == 0 && len(d.Ephemeral) == 0
 }
 
-// Run encodes the given addressData values and runs them against the WAF rules within the given timeout value. If a
-// given address is present both as persistent and ephemeral, the persistent value takes precedence. It returns the
-// matches as a JSON string (usually opaquely used) along with the corresponding actions in any. In case of an error,
-// matches and actions can still be returned, for instance in the case of a timeout error. Errors can be tested against
-// the RunError type.
-// Struct fields having the tag `ddwaf:"ignore"` will not be encoded and sent to the WAF
-// if the output of TotalTime() exceeds the value of Timeout, the function will immediately return with errors.ErrTimeout
-// The second parameter is deprecated and should be passed to NewContextWithBudget instead.
+// Run encodes the given [RunAddressData] values and runs them against the WAF rules.
+// Callers must check the returned [Result] object even when an error is returned, as the WAF might
+// have been able to match some rules and generate events or actions before the error was reached;
+// especially when the error is [errors.ErrTimeout].
 func (context *Context) Run(addressData RunAddressData) (res Result, err error) {
 	if addressData.isEmpty() {
 		return
@@ -112,8 +113,9 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 		return res, err
 	}
 
-	// The WAF releases ephemeral address data at the max of each run call, so we need not keep the Go values live beyond
-	// that in the same way we need for persistent data. We hence use a separate encoder.
+	// The WAF releases ephemeral address data at the max of each run call, so we need not keep the Go
+	// values live beyond that in the same way we need for persistent data. We hence use a separate
+	// encoder.
 	ephemeralData, ephemeralEncoder, err := context.encodeOneAddressType(addressData.Scope, addressData.Ephemeral, wafEncodeTimer)
 	if err != nil {
 		wafEncodeTimer.Stop()
@@ -122,16 +124,23 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 
 	wafEncodeTimer.Stop()
 
-	// ddwaf_run cannot run concurrently and we are going to mutate the context.cgoRefs, so we need to lock the context
+	// ddwaf_run cannot run concurrently and we are going to mutate the context.cgoRefs, so we need to
+	// lock the context
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
+
+	if context.cContext == 0 {
+		// Context has been closed, returning an empty result...
+		return res, errors.ErrContextClosed
+	}
 
 	if runTimer.SumExhausted() {
 		return res, errors.ErrTimeout
 	}
 
 	// Save the Go pointer references to addressesToData that were referenced by the encoder
-	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the ddwaf_context.
+	// into C ddwaf_objects. libddwaf's API requires to keep this data for the lifetime of the
+	// ddwaf_context.
 	defer context.cgoRefs.append(persistentEncoder.cgoRefs)
 
 	wafDecodeTimer := runTimer.MustLeaf(wafDecodeTag)
@@ -139,7 +148,8 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 
 	runTimer.AddTime(wafDurationTag, res.TimeSpent)
 
-	// Ensure the ephemerals don't get optimized away by the compiler before the WAF had a chance to use them.
+	// Ensure the ephemerals don't get optimized away by the compiler before the WAF had a chance to
+	// use them.
 	unsafe.KeepAlive(ephemeralEncoder.cgoRefs)
 	unsafe.KeepAlive(persistentEncoder.cgoRefs)
 
@@ -180,11 +190,12 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 	return
 }
 
-// encodeOneAddressType encodes the given addressData values and returns the corresponding WAF object and its refs.
-// If the addressData is empty, it returns nil for the WAF object and an empty ref pool.
-// At this point, if the encoder does not timeout, the only error we can get is an error in case the top level object
-// is a nil map, but this  behaviour is expected since either persistent or ephemeral addresses are allowed to be null
-// one at a time. In this case, Encode will return nil contrary to Encode which will return a nil wafObject,
+// encodeOneAddressType encodes the given addressData values and returns the corresponding WAF
+// object and its refs. If the addressData is empty, it returns nil for the WAF object and an empty
+// ref pool.
+// At this point, if the encoder does not timeout, the only error we can get is an error in case the
+// top level object is a nil map, but this  behaviour is expected since either persistent or
+// ephemeral addresses are allowed to be null one at a time. In this case, Encode will return nil,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
 func (context *Context) encodeOneAddressType(scope Scope, addressData map[string]any, timer timer.Timer) (*bindings.WafObject, encoder, error) {
 	encoder := newLimitedEncoder(timer)
@@ -271,19 +282,6 @@ func (context *Context) Close() {
 
 	context.cgoRefs = cgoRefPool{} // The data in context.cgoRefs is no longer needed, explicitly release
 	context.cContext = 0           // Makes it easy to spot use-after-free/double-free issues
-}
-
-// TotalRuntime returns the cumulated WAF runtime across various run calls within the same WAF context.
-// Returned time is in nanoseconds.
-// Deprecated: use Stats instead
-func (context *Context) TotalRuntime() (uint64, uint64) {
-	return uint64(context.metrics.get(DefaultScope, wafRunTag)), uint64(context.metrics.get(DefaultScope, wafDurationTag))
-}
-
-// TotalTimeouts returns the cumulated amount of WAF timeouts across various run calls within the same WAF context.
-// Deprecated: use Stats instead
-func (context *Context) TotalTimeouts() uint64 {
-	return context.timeoutCount[DefaultScope].Load()
 }
 
 // Stats returns the cumulative time spent in various parts of the WAF, all in nanoseconds

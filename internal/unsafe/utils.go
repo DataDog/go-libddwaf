@@ -6,7 +6,6 @@
 package unsafe
 
 import (
-	"reflect"
 	stdUnsafe "unsafe"
 )
 
@@ -16,19 +15,24 @@ func Gostring(ptr *byte) string {
 		return ""
 	}
 	var length int
-	for {
-		if *(*byte)(stdUnsafe.Add(stdUnsafe.Pointer(ptr), uintptr(length))) == '\x00' {
-			break
-		}
+	for *(*byte)(stdUnsafe.Add(stdUnsafe.Pointer(ptr), uintptr(length))) != '\x00' {
 		length++
 	}
 	//string builtin copies the slice
 	return string(stdUnsafe.Slice(ptr, length))
 }
 
-// NativeStringUnwrap cast a native string type into it's runtime value. Exported as the struct reflect.StringHeader
-func NativeStringUnwrap(str string) reflect.StringHeader {
-	return *(*reflect.StringHeader)(stdUnsafe.Pointer(&str))
+type StringHeader struct {
+	Len  int
+	Data uintptr
+}
+
+// NativeStringUnwrap cast a native string type into it's runtime value.
+func NativeStringUnwrap(str string) StringHeader {
+	return StringHeader{
+		Data: uintptr(stdUnsafe.Pointer(stdUnsafe.StringData(str))),
+		Len:  len(str),
+	}
 }
 
 func GostringSized(ptr *byte, size uint64) string {
@@ -84,7 +88,7 @@ func PtrToUintptr[T any](arg *T) uintptr {
 }
 
 func SliceToUintptr[T any](arg []T) uintptr {
-	return (*reflect.SliceHeader)(stdUnsafe.Pointer(&arg)).Data
+	return uintptr(stdUnsafe.Pointer(stdUnsafe.SliceData(arg)))
 }
 
 // KeepAlive() globals

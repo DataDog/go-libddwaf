@@ -113,6 +113,10 @@ type WafResult struct {
 	TotalRuntime uint64
 }
 
+// WafBuilder is a forward declaration in ddwaf.h header
+// We basically don't need to modify it, only to give it to the waf
+type WafBuilder uintptr
+
 // WafHandle is a forward declaration in ddwaf.h header
 // We basically don't need to modify it, only to give it to the waf
 type WafHandle uintptr

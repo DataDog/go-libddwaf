@@ -67,7 +67,7 @@ func (timer *baseTimer) Start() time.Time {
 
 func (timer *baseTimer) Spent() time.Duration {
 	// timer was never started
-	if timer.start == (time.Time{}) {
+	if timer.start.IsZero() {
 		return 0
 	}
 

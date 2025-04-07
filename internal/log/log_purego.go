@@ -8,8 +8,9 @@
 package log
 
 import (
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
 	"sync"
+
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 
 	"github.com/ebitengine/purego"
 )

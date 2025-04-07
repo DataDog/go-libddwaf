@@ -7,80 +7,12 @@ package waf
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
-	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
-	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v3/internal/support"
+	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/internal/support"
 )
-
-// ErrTimeout is the error returned when the WAF times out while processing a request.
-// Deprecated: use github.com/DataDog/go-libddwaf/errors.ErrTimeout instead.
-const ErrTimeout = wafErrors.ErrTimeout
-
-// Diagnostics stores the information - provided by the WAF - about WAF rules initialization.
-type Diagnostics struct {
-	Rules          *DiagnosticEntry
-	CustomRules    *DiagnosticEntry
-	Actions        *DiagnosticEntry
-	Exclusions     *DiagnosticEntry
-	RulesOverrides *DiagnosticEntry
-	RulesData      *DiagnosticEntry
-	ExclusionData  *DiagnosticEntry
-	Processors     *DiagnosticEntry
-	Scanners       *DiagnosticEntry
-	Version        string
-}
-
-// TopLevelError returns the list of top-level errors reported by the WAF on any of the Diagnostics
-// entries, rolled up into a single error value. Returns nil if no top-level errors were reported.
-// Individual, item-level errors might still exist.
-func (d *Diagnostics) TopLevelError() error {
-	fields := map[string]*DiagnosticEntry{
-		"rules":          d.Rules,
-		"actions":        d.Actions,
-		"custom_rules":   d.CustomRules,
-		"exclusions":     d.Exclusions,
-		"rules_override": d.RulesOverrides,
-		"rules_data":     d.RulesData,
-		"exclusion_data": d.ExclusionData,
-		"processors":     d.Processors,
-		"scanners":       d.Scanners,
-	}
-
-	var errs []error
-	for field, entry := range fields {
-		if entry == nil || entry.Error == "" {
-			// No entry or no error => we're all good.
-			continue
-		}
-		errs = append(errs, fmt.Errorf("in %#v: %s", field, entry.Error))
-	}
-
-	return errors.Join(errs...)
-}
-
-// DiagnosticEntry stores the information - provided by the WAF - about loaded and failed rules
-// for a specific entry in the WAF ruleset
-type DiagnosticEntry struct {
-	Addresses *DiagnosticAddresses
-	Errors    map[string][]string // Item-level errors (map of error message to entity identifiers or index:#)
-	Error     string              // If the entire entry was in error (e.g: invalid format)
-	Loaded    []string            // Successfully loaded entity identifiers (or index:#)
-	Failed    []string            // Failed entity identifiers (or index:#)
-	Skipped   []string            // Skipped entity identifiers (or index:#)
-}
-
-// DiagnosticAddresses stores the information - provided by the WAF - about the known addresses and
-// whether they are required or optional. Addresses used by WAF rules are always required. Addresses
-// used by WAF exclusion filters may be required or (rarely) optional. Addresses used by WAF
-// processors may be required or optional.
-type DiagnosticAddresses struct {
-	Required []string
-	Optional []string
-}
 
 // Result stores the multiple values returned by a call to ddwaf_run
 type Result struct {
@@ -144,7 +76,7 @@ var wafVersion string
 // It relies on the dynamic loading of the library, which can fail and return
 // an empty string or the previously loaded version, if any.
 func Version() string {
-	Load()
+	_, _ = Load()
 	return wafVersion
 }
 

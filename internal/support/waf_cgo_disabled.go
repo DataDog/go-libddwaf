@@ -9,7 +9,7 @@
 
 package support
 
-import "github.com/DataDog/go-libddwaf/v3/errors"
+import "github.com/DataDog/go-libddwaf/v4/errors"
 
 func init() {
 	wafSupportErrors = append(wafSupportErrors, errors.CgoDisabledError{})

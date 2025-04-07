@@ -6,9 +6,11 @@
 package waf
 
 import (
-	"github.com/DataDog/go-libddwaf/v3/errors"
-	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
+	"fmt"
+
+	"github.com/DataDog/go-libddwaf/v4/errors"
+	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 )
 
 // decodeErrors transforms the wafObject received by the wafRulesetInfo after the call to wafDl.wafInit to a map where
@@ -16,6 +18,10 @@ import (
 func decodeErrors(obj *bindings.WafObject) (map[string][]string, error) {
 	if !obj.IsMap() {
 		return nil, errors.ErrInvalidObjectType
+	}
+
+	if obj.Value == 0 && obj.NbEntries == 0 {
+		return nil, nil
 	}
 
 	if obj.Value == 0 && obj.NbEntries > 0 {
@@ -99,8 +105,6 @@ func decodeDiagnosticsEntry(obj *bindings.WafObject) (*DiagnosticEntry, error) {
 		objElem := unsafe.CastWithOffset[bindings.WafObject](obj.Value, i)
 		key := unsafe.GostringSized(unsafe.Cast[byte](objElem.ParameterName), objElem.ParameterNameLength)
 		switch key {
-		case "addresses":
-			entry.Addresses, err = decodeDiagnosticAddresses(objElem)
 		case "error":
 			entry.Error = unsafe.GostringSized(unsafe.Cast[byte](objElem.Value), objElem.NbEntries)
 		case "errors":
@@ -111,8 +115,10 @@ func decodeDiagnosticsEntry(obj *bindings.WafObject) (*DiagnosticEntry, error) {
 			entry.Loaded, err = decodeStringArray(objElem)
 		case "skipped":
 			entry.Skipped, err = decodeStringArray(objElem)
+		case "warnings":
+			entry.Warnings, err = decodeErrors(objElem)
 		default:
-			return nil, errors.ErrUnsupportedValue
+			return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedValue, key)
 		}
 
 		if err != nil {
@@ -121,39 +127,6 @@ func decodeDiagnosticsEntry(obj *bindings.WafObject) (*DiagnosticEntry, error) {
 	}
 
 	return &entry, nil
-}
-
-func decodeDiagnosticAddresses(obj *bindings.WafObject) (*DiagnosticAddresses, error) {
-	if !obj.IsMap() {
-		return nil, errors.ErrInvalidObjectType
-	}
-	if obj.Value == 0 && obj.NbEntries > 0 {
-		return nil, errors.ErrNilObjectPtr
-	}
-
-	addrs := &DiagnosticAddresses{}
-
-	var err error
-	for i := uint64(0); i < obj.NbEntries; i++ {
-		objElem := unsafe.CastWithOffset[bindings.WafObject](obj.Value, i)
-		key := unsafe.GostringSized(unsafe.Cast[byte](objElem.ParameterName), objElem.ParameterNameLength)
-		switch key {
-		case "required":
-			addrs.Required, err = decodeStringArray(objElem)
-			if err != nil {
-				return nil, err
-			}
-		case "optional":
-			addrs.Optional, err = decodeStringArray(objElem)
-			if err != nil {
-				return nil, err
-			}
-		default:
-			return nil, errors.ErrUnsupportedValue
-		}
-	}
-
-	return addrs, nil
 }
 
 func decodeStringArray(obj *bindings.WafObject) ([]string, error) {
@@ -202,7 +175,7 @@ func decodeObject(obj *bindings.WafObject) (any, error) {
 	case bindings.WafNilType:
 		return nil, nil
 	default:
-		return nil, errors.ErrUnsupportedValue
+		return nil, fmt.Errorf("%w: %d", errors.ErrUnsupportedValue, obj.Type)
 	}
 }
 

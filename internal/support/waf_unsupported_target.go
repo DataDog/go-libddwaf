@@ -12,7 +12,7 @@ package support
 import (
 	"runtime"
 
-	"github.com/DataDog/go-libddwaf/v3/errors"
+	"github.com/DataDog/go-libddwaf/v4/errors"
 )
 
 func init() {
