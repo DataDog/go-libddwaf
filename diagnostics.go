@@ -35,31 +35,47 @@ type Diagnostics struct {
 	Version string
 }
 
+// EachFeature calls the provided callback for each (non-nil) feature in this diagnostics object.
+func (d *Diagnostics) EachFeature(cb func(string, *Feature)) {
+	if d.Rules != nil {
+		cb("rules", d.Rules)
+	}
+	if d.CustomRules != nil {
+		cb("custom_rules", d.CustomRules)
+	}
+	if d.Actions != nil {
+		cb("actions", d.Actions)
+	}
+	if d.Exclusions != nil {
+		cb("exclusions", d.Exclusions)
+	}
+	if d.RulesOverrides != nil {
+		cb("rules_overrides", d.RulesOverrides)
+	}
+	if d.RulesData != nil {
+		cb("rules_data", d.RulesData)
+	}
+	if d.ExclusionData != nil {
+		cb("exclusion_data", d.ExclusionData)
+	}
+	if d.Processors != nil {
+		cb("processors", d.Processors)
+	}
+	if d.Scanners != nil {
+		cb("scanners", d.Scanners)
+	}
+}
+
 // TopLevelError returns the list of top-level errors reported by the WAF on any of the Diagnostics
 // entries, rolled up into a single error value. Returns nil if no top-level errors were reported.
 // Individual, item-level errors might still exist.
 func (d *Diagnostics) TopLevelError() error {
-	fields := map[string]*Feature{
-		"rules":          d.Rules,
-		"actions":        d.Actions,
-		"custom_rules":   d.CustomRules,
-		"exclusions":     d.Exclusions,
-		"rules_override": d.RulesOverrides,
-		"rules_data":     d.RulesData,
-		"exclusion_data": d.ExclusionData,
-		"processors":     d.Processors,
-		"scanners":       d.Scanners,
-	}
-
 	var err error
-	for field, entry := range fields {
-		if entry == nil || entry.Error == "" {
-			// No entry or no error => we're all good.
-			continue
+	d.EachFeature(func(name string, feat *Feature) {
+		if feat.Error != "" {
+			err = errors.Join(err, fmt.Errorf("%q: %s", name, feat.Error))
 		}
-		err = errors.Join(err, fmt.Errorf("in %q: %s", field, entry.Error))
-	}
-
+	})
 	return err
 }
 
