@@ -30,6 +30,8 @@ type baseTimer struct {
 
 	// spent is the time spent on the timer, set after calling stop
 	spent time.Duration
+	// stopped is true if the timer has been stopped
+	stopped bool
 }
 
 var _ Timer = (*baseTimer)(nil)
@@ -72,7 +74,7 @@ func (timer *baseTimer) Spent() time.Duration {
 	}
 
 	// timer was already stopped
-	if timer.spent != 0 {
+	if timer.stopped {
 		return timer.spent
 	}
 
@@ -102,11 +104,12 @@ func (timer *baseTimer) Exhausted() bool {
 
 func (timer *baseTimer) Stop() time.Duration {
 	// If the current timer has already stopped, return the current spent time
-	if timer.spent != 0 {
+	if timer.stopped {
 		return timer.spent
 	}
 
 	timer.spent = timer.Spent()
+	timer.stopped = true
 	if timer.parent != nil {
 		timer.parent.childStopped(timer.componentName, timer.spent)
 	}

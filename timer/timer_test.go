@@ -267,7 +267,7 @@ func TestTree(t *testing.T) {
 			require.NoError(t, err)
 
 			leafTimer := nodeTimer.MustLeaf("a")
-			leafTimer.Timed(func(timer timer.Timer) {})
+			_ = leafTimer.Timed(func(timer timer.Timer) {})
 
 			sum += leafTimer.Spent()
 			require.Equal(t, nodeTimer.SumSpent(), leafTimer.Spent())
@@ -299,7 +299,7 @@ func TestTree(t *testing.T) {
 			var subSum time.Duration
 			for _, component := range components {
 				leafTimer := nodeTimer.MustLeaf(component)
-				leafTimer.Timed(func(timer timer.Timer) {})
+				_ = leafTimer.Timed(func(timer timer.Timer) {})
 
 				subSum += leafTimer.Spent()
 				require.Equal(t, subSum, nodeTimer.SumSpent())
