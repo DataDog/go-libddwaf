@@ -11,6 +11,8 @@ import (
 	"maps"
 	"testing"
 
+	"github.com/DataDog/appsec-internal-go/appsec"
+	"github.com/DataDog/go-libddwaf/v4/internal/log"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/stretchr/testify/require"
 )
@@ -246,5 +248,25 @@ func TestBuilder(t *testing.T) {
 			}},
 			res.Actions,
 		)
+	})
+
+	t.Run("appsec-internal-go/appsec", func(t *testing.T) {
+		wafLib.SetLogCb(log.CallbackFunctionPointer(), log.LevelInfo)
+		defer wafLib.SetLogCb(0, log.LevelOff)
+
+		rules, err := appsec.DefaultRulesetMap()
+		require.NoError(t, err)
+
+		builder, err := NewBuilder("", "")
+		require.NoError(t, err)
+		defer builder.Close()
+
+		diags, err := builder.AddOrUpdateConfig("/", rules)
+		t.Logf("diags: %#v", diags)
+		require.NoError(t, err)
+
+		handle := builder.Build()
+		require.NotNil(t, handle)
+		handle.Close()
 	})
 }

@@ -27,7 +27,6 @@ import (
 	"github.com/DataDog/go-libddwaf/v4/internal/lib"
 	"github.com/DataDog/go-libddwaf/v4/internal/log"
 	"github.com/DataDog/go-libddwaf/v4/timer"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -215,7 +214,7 @@ func newDefaultHandle(rule any) (*Handle, *Diagnostics, error) {
 
 func maxWafValueEncoder(encoder encoder) map[string]any {
 	rnd := rand.New(rand.NewSource(33))
-	buf := make([]byte, bindings.WafMaxStringLength)
+	buf := make([]byte, bindings.MaxStringLength)
 	rnd.Read(buf)
 	fullstr := string(buf)
 
@@ -861,8 +860,8 @@ func TestConcurrency(t *testing.T) {
 		// threads, with mixed calls to `ddwaf_run` and `ddwaf_context_destroy`,
 		// which are not thread-safe.
 
-		wafLib.WafSetLogCb(log.CallbackFunctionPointer(), log.LevelDebug)
-		t.Cleanup(func() { wafLib.WafSetLogCb(0, log.LevelOff) })
+		wafLib.SetLogCb(log.CallbackFunctionPointer(), log.LevelDebug)
+		t.Cleanup(func() { wafLib.SetLogCb(0, log.LevelOff) })
 
 		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
@@ -1196,21 +1195,21 @@ func TestTruncationInformation(t *testing.T) {
 	_, err = ctx.Run(RunAddressData{
 		Ephemeral: map[string]any{
 			"my.input": map[string]any{
-				"string_too_long":     strings.Repeat("Z", bindings.WafMaxStringLength+extra),
-				"container_too_large": make([]bool, bindings.WafMaxContainerSize+extra),
+				"string_too_long":     strings.Repeat("Z", bindings.MaxStringLength+extra),
+				"container_too_large": make([]bool, bindings.MaxContainerSize+extra),
 			},
 		},
 		Persistent: map[string]any{
 			"my.input.2": map[string]any{
-				"string_too_long":     strings.Repeat("Z", bindings.WafMaxStringLength+extra+2),
-				"container_too_large": make([]bool, bindings.WafMaxContainerSize+extra+2),
+				"string_too_long":     strings.Repeat("Z", bindings.MaxStringLength+extra+2),
+				"container_too_large": make([]bool, bindings.MaxContainerSize+extra+2),
 			},
 		},
 	})
 	require.NoError(t, err)
 	require.Equal(t, map[TruncationReason][]int{
-		StringTooLong:     {bindings.WafMaxStringLength + extra + 2, bindings.WafMaxStringLength + extra},
-		ContainerTooLarge: {bindings.WafMaxContainerSize + extra + 2, bindings.WafMaxContainerSize + extra},
+		StringTooLong:     {bindings.MaxStringLength + extra + 2, bindings.MaxStringLength + extra},
+		ContainerTooLarge: {bindings.MaxContainerSize + extra + 2, bindings.MaxContainerSize + extra},
 	}, ctx.truncations[DefaultScope])
 }
 

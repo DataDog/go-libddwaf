@@ -87,9 +87,9 @@ func newLimitedEncoder(pinner pin.Pinner, timer timer.Timer) encoder {
 	return encoder{
 		pinner:           pinner,
 		timer:            timer,
-		containerMaxSize: bindings.WafMaxContainerSize,
-		stringMaxSize:    bindings.WafMaxStringLength,
-		objectMaxDepth:   bindings.WafMaxContainerDepth,
+		containerMaxSize: bindings.MaxContainerSize,
+		stringMaxSize:    bindings.MaxStringLength,
+		objectMaxDepth:   bindings.MaxContainerDepth,
 	}
 }
 
@@ -108,9 +108,9 @@ func newMaxEncoder(pinner *runtime.Pinner) encoder {
 // The returned wafObject is the root of the tree of nested wafObjects representing the Go value.
 // The only error case is if the top-level object is "Unusable" which means that the data is nil or a non-data type
 // like a function or a channel.
-func (encoder *encoder) Encode(data any) (wo *bindings.WafObject, err error) {
+func (encoder *encoder) Encode(data any) (wo *bindings.WAFObject, err error) {
 	value := reflect.ValueOf(data)
-	wo = &bindings.WafObject{}
+	wo = &bindings.WAFObject{}
 
 	err = encoder.encode(value, wo, encoder.objectMaxDepth)
 
@@ -129,7 +129,7 @@ func (encoder *encoder) Truncations() map[TruncationReason][]int {
 	return result
 }
 
-func encodeNative[T native](val T, t bindings.WafObjectType, obj *bindings.WafObject) {
+func encodeNative[T native](val T, t bindings.WAFObjectType, obj *bindings.WAFObject) {
 	obj.Type = t
 	obj.Value = (uintptr)(val)
 }
@@ -151,7 +151,7 @@ func isValueNil(value reflect.Value) bool {
 	return nullable && value.IsNil()
 }
 
-func (encoder *encoder) encode(value reflect.Value, obj *bindings.WafObject, depth int) error {
+func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, depth int) error {
 	if encoder.timer.Exhausted() {
 		return errors.ErrTimeout
 	}
@@ -176,19 +176,19 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WafObject, dep
 		return errors.ErrUnsupportedValue
 	// 		Is nullable type: nil pointers, channels, maps or functions
 	case isValueNil(value):
-		encodeNative[uintptr](0, bindings.WafNilType, obj)
+		encodeNative[uintptr](0, bindings.WAFNilType, obj)
 
 	// 		Booleans
 	case kind == reflect.Bool:
-		encodeNative(unsafe.NativeToUintptr(value.Bool()), bindings.WafBoolType, obj)
+		encodeNative(unsafe.NativeToUintptr(value.Bool()), bindings.WAFBoolType, obj)
 
 	// 		Numbers
 	case value.CanInt(): // any int type or alias
-		encodeNative(value.Int(), bindings.WafIntType, obj)
+		encodeNative(value.Int(), bindings.WAFIntType, obj)
 	case value.CanUint(): // any Uint type or alias
-		encodeNative(value.Uint(), bindings.WafUintType, obj)
+		encodeNative(value.Uint(), bindings.WAFUintType, obj)
 	case value.CanFloat(): // any float type or alias
-		encodeNative(unsafe.NativeToUintptr(value.Float()), bindings.WafFloatType, obj)
+		encodeNative(unsafe.NativeToUintptr(value.Float()), bindings.WAFFloatType, obj)
 
 	//		Strings
 	case kind == reflect.String: // string type
@@ -222,7 +222,7 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WafObject, dep
 	return nil
 }
 
-func (encoder *encoder) encodeString(str string, obj *bindings.WafObject) {
+func (encoder *encoder) encodeString(str string, obj *bindings.WAFObject) {
 	size := len(str)
 	if size > encoder.stringMaxSize {
 		str = str[:encoder.stringMaxSize]
@@ -258,7 +258,7 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 // - If the field has a json tag it will become the field name
 // - Private fields and also values producing an error at encoding will be skipped
 // - Even if the element values are invalid or null we still keep them to report the field name
-func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WafObject, depth int) {
+func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	if encoder.timer.Exhausted() {
 		return
 	}
@@ -297,7 +297,7 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WafObjec
 
 		if err := encoder.encode(value.Field(i), objElem, depth); err != nil {
 			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
-			encodeNative[uintptr](0, bindings.WafInvalidType, objElem)
+			encodeNative[uintptr](0, bindings.WAFInvalidType, objElem)
 		}
 
 		length++
@@ -311,7 +311,7 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WafObjec
 // a wafObject map of type wafMapType. The specificities are the following:
 // - It will only take the first encoder.containerMaxSize elements of the map
 // - Even if the element values are invalid or null we still keep them to report the map key
-func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WafObject, depth int) {
+func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	capacity := value.Len()
 	if capacity > encoder.containerMaxSize {
 		capacity = encoder.containerMaxSize
@@ -337,7 +337,7 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WafObject, 
 
 		if err := encoder.encode(iter.Value(), objElem, depth); err != nil {
 			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
-			encodeNative[uintptr](0, bindings.WafInvalidType, objElem)
+			encodeNative[uintptr](0, bindings.WAFInvalidType, objElem)
 		}
 
 		length++
@@ -350,7 +350,7 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WafObject, 
 // encodeMapKey takes a reflect.Value and a wafObject and returns a wafObject ready to be considered a map entry. We use
 // the function cgoRefPool.AllocWafMapKey to store the key in the wafObject. But first we need to grab the real
 // underlying value by recursing through the pointer and interface values.
-func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WafObject) error {
+func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WAFObject) error {
 	value, kind := resolvePointer(value)
 
 	var keyStr string
@@ -371,7 +371,7 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WafObjec
 
 // encodeMapKeyFromString takes a string and a wafObject and sets the map key attribute on the wafObject to the supplied
 // string. The key may be truncated if it exceeds the maximum string size allowed by the encoder.
-func (encoder *encoder) encodeMapKeyFromString(keyStr string, obj *bindings.WafObject) {
+func (encoder *encoder) encodeMapKeyFromString(keyStr string, obj *bindings.WAFObject) {
 	size := len(keyStr)
 	if size > encoder.stringMaxSize {
 		keyStr = keyStr[:encoder.stringMaxSize]
@@ -385,7 +385,7 @@ func (encoder *encoder) encodeMapKeyFromString(keyStr string, obj *bindings.WafO
 // a wafObject array of type wafArrayType. The specificities are the following:
 // - It will only take the first encoder.containerMaxSize elements of the array
 // - Elements producing an error at encoding or null values will be skipped
-func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WafObject, depth int) {
+func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	length := value.Len()
 
 	capacity := length

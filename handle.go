@@ -34,14 +34,14 @@ type Handle struct {
 	refCounter atomic.Int32
 
 	// Instance of the WAF
-	cHandle bindings.WafHandle
+	cHandle bindings.WAFHandle
 }
 
 // wrapHandle wraps the provided C handle into a [Handle]. The caller is
 // responsible to ensure the cHandle value is not 0 (NULL). The returned
 // [Handle] has a reference count of 1, so callers need not call [Handle.retain]
 // on it.
-func wrapHandle(cHandle bindings.WafHandle) *Handle {
+func wrapHandle(cHandle bindings.WAFHandle) *Handle {
 	handle := &Handle{cHandle: cHandle}
 	handle.refCounter.Store(1) // We count the handle itself in the counter
 	return handle
@@ -56,7 +56,7 @@ func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, erro
 		return nil, fmt.Errorf("handle was released")
 	}
 
-	cContext := wafLib.WafContextInit(handle.cHandle)
+	cContext := wafLib.ContextInit(handle.cHandle)
 	if cContext == 0 {
 		handle.Close() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
 		return nil, fmt.Errorf("could not get C context")
@@ -83,13 +83,13 @@ func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, erro
 // Addresses returns the list of addresses the WAF has been configured to monitor based on the input
 // ruleset.
 func (handle *Handle) Addresses() []string {
-	return wafLib.WafKnownAddresses(handle.cHandle)
+	return wafLib.KnownAddresses(handle.cHandle)
 }
 
 // Actions returns the list of actions the WAF has been configured to monitor based on the input
 // ruleset.
 func (handle *Handle) Actions() []string {
-	return wafLib.WafKnownActions(handle.cHandle)
+	return wafLib.KnownActions(handle.cHandle)
 }
 
 // Close decrements the reference counter of this [Handle], possibly allowing it to be destroyed
@@ -101,7 +101,7 @@ func (handle *Handle) Close() {
 		return
 	}
 
-	wafLib.WafDestroy(handle.cHandle)
+	wafLib.Destroy(handle.cHandle)
 	handle.cHandle = 0 // Makes it easy to spot use-after-free/double-free issues
 }
 
@@ -142,14 +142,14 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 	}
 }
 
-func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscatorRegex string) *bindings.WafConfig {
-	return &bindings.WafConfig{
-		Limits: bindings.WafConfigLimits{
-			MaxContainerDepth: bindings.WafMaxContainerDepth,
-			MaxContainerSize:  bindings.WafMaxContainerSize,
-			MaxStringLength:   bindings.WafMaxStringLength,
+func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscatorRegex string) *bindings.WAFConfig {
+	return &bindings.WAFConfig{
+		Limits: bindings.WAFConfigLimits{
+			MaxContainerDepth: bindings.MaxContainerDepth,
+			MaxContainerSize:  bindings.MaxContainerSize,
+			MaxStringLength:   bindings.MaxStringLength,
 		},
-		Obfuscator: bindings.WafConfigObfuscator{
+		Obfuscator: bindings.WAFConfigObfuscator{
 			KeyRegex:   cString(pinner, keyObfuscatorRegex),
 			ValueRegex: cString(pinner, valueObfuscatorRegex),
 		},
@@ -168,15 +168,15 @@ func cString(pinner *runtime.Pinner, str string) uintptr {
 	return uintptr(data)
 }
 
-func goRunError(rc bindings.WafReturnCode) error {
+func goRunError(rc bindings.WAFReturnCode) error {
 	switch rc {
-	case bindings.WafErrInternal:
+	case bindings.WAFErrInternal:
 		return errors.ErrInternal
-	case bindings.WafErrInvalidObject:
+	case bindings.WAFErrInvalidObject:
 		return errors.ErrInvalidObject
-	case bindings.WafErrInvalidArgument:
+	case bindings.WAFErrInvalidArgument:
 		return errors.ErrInvalidArgument
-	case bindings.WafOK, bindings.WafMatch:
+	case bindings.WAFOK, bindings.WAFMatch:
 		// No error...
 		return nil
 	default:

@@ -6,6 +6,7 @@
 package bindings
 
 import (
+	"fmt"
 	"structs"
 	"unsafe"
 
@@ -13,45 +14,69 @@ import (
 )
 
 const (
-	WafMaxStringLength   = 4096
-	WafMaxContainerDepth = 20
-	WafMaxContainerSize  = 256
-	WafRunTimeout        = 5000
+	MaxStringLength   = 4096
+	MaxContainerDepth = 20
+	MaxContainerSize  = 256
 )
 
-type WafReturnCode int32
+type WAFReturnCode int32
 
 const (
-	WafErrInternal WafReturnCode = iota - 3
-	WafErrInvalidObject
-	WafErrInvalidArgument
-	WafOK
-	WafMatch
+	WAFErrInternal WAFReturnCode = iota - 3
+	WAFErrInvalidObject
+	WAFErrInvalidArgument
+	WAFOK
+	WAFMatch
 )
 
-// WafObjectType is an enum in C which has the size of DWORD.
+// WAFObjectType is an enum in C which has the size of DWORD.
 // But DWORD is 4 bytes in amd64 and arm64 so uint32 it is.
-type WafObjectType uint32
+type WAFObjectType uint32
 
-const WafInvalidType WafObjectType = 0
+const WAFInvalidType WAFObjectType = 0
 const (
-	WafIntType WafObjectType = 1 << iota
-	WafUintType
-	WafStringType
-	WafArrayType
-	WafMapType
-	WafBoolType
-	WafFloatType
-	WafNilType
+	WAFIntType WAFObjectType = 1 << iota
+	WAFUintType
+	WAFStringType
+	WAFArrayType
+	WAFMapType
+	WAFBoolType
+	WAFFloatType
+	WAFNilType
 )
 
-type WafObject struct {
+func (w WAFObjectType) String() string {
+	switch w {
+	case WAFInvalidType:
+		return "invalid"
+	case WAFIntType:
+		return "int"
+	case WAFUintType:
+		return "uint"
+	case WAFStringType:
+		return "string"
+	case WAFArrayType:
+		return "array"
+	case WAFMapType:
+		return "map"
+	case WAFBoolType:
+		return "bool"
+	case WAFFloatType:
+		return "float"
+	case WAFNilType:
+		return "nil"
+	default:
+		return fmt.Sprintf("unknown(%d)", w)
+	}
+}
+
+type WAFObject struct {
 	_                   structs.HostLayout
 	ParameterName       uintptr
 	ParameterNameLength uint64
 	Value               uintptr
 	NbEntries           uint64
-	Type                WafObjectType
+	Type                WAFObjectType
 	_                   [4]byte
 	// Forced padding
 	// We only support 2 archs and cgo generated the same padding to both.
@@ -62,45 +87,45 @@ type WafObject struct {
 }
 
 // IsInvalid determines whether this WAF Object has the invalid type (which is the 0-value).
-func (w *WafObject) IsInvalid() bool {
-	return w.Type == WafInvalidType
+func (w *WAFObject) IsInvalid() bool {
+	return w.Type == WAFInvalidType
 }
 
 // IsNil determines whether this WAF Object is nil or not.
-func (w *WafObject) IsNil() bool {
-	return w.Type == WafNilType
+func (w *WAFObject) IsNil() bool {
+	return w.Type == WAFNilType
 }
 
 // IsArray determines whether this WAF Object is an array or not.
-func (w *WafObject) IsArray() bool {
-	return w.Type == WafArrayType
+func (w *WAFObject) IsArray() bool {
+	return w.Type == WAFArrayType
 }
 
 // IsMap determines whether this WAF Object is a map or not.
-func (w *WafObject) IsMap() bool {
-	return w.Type == WafMapType
+func (w *WAFObject) IsMap() bool {
+	return w.Type == WAFMapType
 }
 
 // IsUnusable returns true if the wafObject has no impact on the WAF execution
 // But we still need this kind of objects to forward map keys in case the value of the map is invalid
-func (w *WafObject) IsUnusable() bool {
-	return w.Type == WafInvalidType || w.Type == WafNilType
+func (w *WAFObject) IsUnusable() bool {
+	return w.Type == WAFInvalidType || w.Type == WAFNilType
 }
 
-// SetArray sets the receiving [WafObject] to a new array with the given
+// SetArray sets the receiving [WAFObject] to a new array with the given
 // capacity.
-func (w *WafObject) SetArray(pinner pin.Pinner, capacity uint64) []WafObject {
-	return w.setArrayTyped(pinner, capacity, WafArrayType)
+func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint64) []WAFObject {
+	return w.setArrayTyped(pinner, capacity, WAFArrayType)
 }
 
-// SetMap sets the receiving [WafObject] to a new map with the given capacity.
-func (w *WafObject) SetMap(pinner pin.Pinner, capacity uint64) []WafObject {
-	return w.setArrayTyped(pinner, capacity, WafMapType)
+// SetMap sets the receiving [WAFObject] to a new map with the given capacity.
+func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint64) []WAFObject {
+	return w.setArrayTyped(pinner, capacity, WAFMapType)
 }
 
-// SetMapKey sets the receiving [WafObject] to a new map key with the given
+// SetMapKey sets the receiving [WAFObject] to a new map key with the given
 // string.
-func (w *WafObject) SetMapKey(pinner pin.Pinner, key string) {
+func (w *WAFObject) SetMapKey(pinner pin.Pinner, key string) {
 	w.ParameterNameLength = uint64(len(key))
 	if w.ParameterNameLength == 0 {
 		w.ParameterName = 0
@@ -111,9 +136,9 @@ func (w *WafObject) SetMapKey(pinner pin.Pinner, key string) {
 	w.ParameterName = uintptr(data)
 }
 
-// SetString sets the receiving [WafObject] value to the given string.
-func (w *WafObject) SetString(pinner pin.Pinner, str string) {
-	w.Type = WafStringType
+// SetString sets the receiving [WAFObject] value to the given string.
+func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
+	w.Type = WAFStringType
 	w.NbEntries = uint64(len(str))
 	if w.NbEntries == 0 {
 		w.Value = 0
@@ -124,7 +149,7 @@ func (w *WafObject) SetString(pinner pin.Pinner, str string) {
 	w.Value = uintptr(data)
 }
 
-func (w *WafObject) setArrayTyped(pinner pin.Pinner, capacity uint64, t WafObjectType) []WafObject {
+func (w *WAFObject) setArrayTyped(pinner pin.Pinner, capacity uint64, t WAFObjectType) []WAFObject {
 	w.Type = t
 	w.NbEntries = capacity
 	if w.NbEntries == 0 {
@@ -132,50 +157,50 @@ func (w *WafObject) setArrayTyped(pinner pin.Pinner, capacity uint64, t WafObjec
 		return nil
 	}
 
-	arr := make([]WafObject, capacity)
+	arr := make([]WAFObject, capacity)
 	data := unsafe.Pointer(unsafe.SliceData(arr))
 	pinner.Pin(data)
 	w.Value = uintptr(data)
 	return arr
 }
 
-type WafConfig struct {
+type WAFConfig struct {
 	_          structs.HostLayout
-	Limits     WafConfigLimits
-	Obfuscator WafConfigObfuscator
+	Limits     WAFConfigLimits
+	Obfuscator WAFConfigObfuscator
 	FreeFn     uintptr
 }
 
-type WafConfigLimits struct {
+type WAFConfigLimits struct {
 	_                 structs.HostLayout
 	MaxContainerSize  uint32
 	MaxContainerDepth uint32
 	MaxStringLength   uint32
 }
 
-type WafConfigObfuscator struct {
+type WAFConfigObfuscator struct {
 	_          structs.HostLayout
 	KeyRegex   uintptr // char *
 	ValueRegex uintptr // char *
 }
 
-type WafResult struct {
+type WAFResult struct {
 	_            structs.HostLayout
 	Timeout      byte
-	Events       WafObject
-	Actions      WafObject
-	Derivatives  WafObject
+	Events       WAFObject
+	Actions      WAFObject
+	Derivatives  WAFObject
 	TotalRuntime uint64
 }
 
-// WafBuilder is a forward declaration in ddwaf.h header
+// WAFBuilder is a forward declaration in ddwaf.h header
 // We basically don't need to modify it, only to give it to the waf
-type WafBuilder uintptr
+type WAFBuilder uintptr
 
-// WafHandle is a forward declaration in ddwaf.h header
+// WAFHandle is a forward declaration in ddwaf.h header
 // We basically don't need to modify it, only to give it to the waf
-type WafHandle uintptr
+type WAFHandle uintptr
 
-// WafContext is a forward declaration in ddwaf.h header
+// WAFContext is a forward declaration in ddwaf.h header
 // We basically don't need to modify it, only to give it to the waf
-type WafContext uintptr
+type WAFContext uintptr

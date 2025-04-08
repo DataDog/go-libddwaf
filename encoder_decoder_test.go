@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func wafTest(t *testing.T, obj *bindings.WafObject) {
+func wafTest(t *testing.T, obj *bindings.WAFObject) {
 	// Pass the encoded value to the WAF to make sure it doesn't return an error
 	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
 	require.NoError(t, err)
@@ -547,7 +547,7 @@ func TestEncoderLimits(t *testing.T) {
 		}
 
 		value := reflect.ValueOf(tc.Input)
-		encoded := &bindings.WafObject{}
+		encoded := &bindings.WAFObject{}
 		err := encoder.encode(value, encoded, encoder.objectMaxDepth)
 		if len(encoder.truncations[ObjectTooDeep]) != 0 {
 			encoder.measureObjectDepth(value, time.Hour) // Stupid-sized timeout for slow arm CI runners
@@ -582,14 +582,14 @@ func TestEncoderLimits(t *testing.T) {
 }
 
 type typeTree struct {
-	_type    bindings.WafObjectType
+	_type    bindings.WAFObjectType
 	children []typeTree
 }
 
-func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WafObject) {
+func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WAFObject) {
 	require.Equal(t, expected._type, actual.Type, "expected type %v, got type %v", expected._type, actual.Type)
 
-	if expected._type != bindings.WafMapType && expected._type != bindings.WafArrayType {
+	if expected._type != bindings.WAFMapType && expected._type != bindings.WAFArrayType {
 		return
 	}
 
@@ -598,7 +598,7 @@ func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WafObject
 	}
 
 	for i := range expected.children {
-		assertEqualType(t, expected.children[i], unsafe.CastWithOffset[bindings.WafObject](actual.Value, uint64(i)))
+		assertEqualType(t, expected.children[i], unsafe.CastWithOffset[bindings.WAFObject](actual.Value, uint64(i)))
 	}
 }
 
@@ -630,12 +630,12 @@ func TestEncoderTypeTree(t *testing.T) {
 		{
 			Name:   "nil-byte-slice",
 			Input:  []byte(nil),
-			Output: typeTree{_type: bindings.WafNilType},
+			Output: typeTree{_type: bindings.WAFNilType},
 		},
 		{
 			Name:   "nil-map",
 			Input:  map[string]any(nil),
-			Output: typeTree{_type: bindings.WafNilType},
+			Output: typeTree{_type: bindings.WAFNilType},
 		},
 		{
 			Name:  "invalid-interface-value",
@@ -645,12 +645,12 @@ func TestEncoderTypeTree(t *testing.T) {
 		{
 			Name:   "nil-str-pointer-value",
 			Input:  (*string)(nil),
-			Output: typeTree{_type: bindings.WafNilType},
+			Output: typeTree{_type: bindings.WAFNilType},
 		},
 		{
 			Name:   "nil-int-pointer-value",
 			Input:  (*int)(nil),
-			Output: typeTree{_type: bindings.WafNilType},
+			Output: typeTree{_type: bindings.WAFNilType},
 		},
 		{
 			Name:  "unsupported",
@@ -665,7 +665,7 @@ func TestEncoderTypeTree(t *testing.T) {
 		{
 			Name:   "slice-having-unsupported-values",
 			Input:  []any{33.12345, func() {}, "ok", 27, nil},
-			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafFloatType}, {_type: bindings.WafStringType}, {_type: bindings.WafIntType}}},
+			Output: typeTree{_type: bindings.WAFArrayType, children: []typeTree{{_type: bindings.WAFFloatType}, {_type: bindings.WAFStringType}, {_type: bindings.WAFIntType}}},
 		},
 		{
 			Name: "struct-with-nil-values",
@@ -680,7 +680,7 @@ func TestEncoderTypeTree(t *testing.T) {
 				a:       "a",
 				A:       nil,
 			},
-			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafNilType}}},
+			Output: typeTree{_type: bindings.WAFMapType, children: []typeTree{{_type: bindings.WAFStringType}, {_type: bindings.WAFNilType}}},
 		},
 		{
 			Name: "struct-with-invalid-values",
@@ -695,32 +695,32 @@ func TestEncoderTypeTree(t *testing.T) {
 				a:       "a",
 				A:       make(chan any),
 			},
-			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafInvalidType}}},
+			Output: typeTree{_type: bindings.WAFMapType, children: []typeTree{{_type: bindings.WAFStringType}, {_type: bindings.WAFInvalidType}}},
 		},
 		{
 			Name:   "unsupported-array-values",
 			Input:  []any{"supported", func() {}, "supported", make(chan struct{})},
-			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafStringType}}},
+			Output: typeTree{_type: bindings.WAFArrayType, children: []typeTree{{_type: bindings.WAFStringType}, {_type: bindings.WAFStringType}}},
 		},
 		{
 			Name:   "unsupported-array-values",
 			Input:  []any{"supported", func() {}, "supported", make(chan struct{})},
-			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafStringType}}},
+			Output: typeTree{_type: bindings.WAFArrayType, children: []typeTree{{_type: bindings.WAFStringType}, {_type: bindings.WAFStringType}}},
 		},
 		{
 			Name:   "unsupported-array-values",
 			Input:  []any{func() {}, "supported", make(chan struct{}), "supported"},
-			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafStringType}}},
+			Output: typeTree{_type: bindings.WAFArrayType, children: []typeTree{{_type: bindings.WAFStringType}, {_type: bindings.WAFStringType}}},
 		},
 		{
 			Name:   "unsupported-array-values",
 			Input:  []any{func() {}, "supported", make(chan struct{}), "supported"},
-			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafStringType}, {_type: bindings.WafStringType}}},
+			Output: typeTree{_type: bindings.WAFArrayType, children: []typeTree{{_type: bindings.WAFStringType}, {_type: bindings.WAFStringType}}},
 		},
 		{
 			Name:   "unsupported-array-values",
 			Input:  []any{func() {}, make(chan struct{}), "supported"},
-			Output: typeTree{_type: bindings.WafArrayType, children: []typeTree{{_type: bindings.WafStringType}}},
+			Output: typeTree{_type: bindings.WAFArrayType, children: []typeTree{{_type: bindings.WAFStringType}}},
 		},
 		{
 			Name: "unsupported-map-key-types",
@@ -732,7 +732,7 @@ func TestEncoderTypeTree(t *testing.T) {
 				(*string)(nil):        1,
 				make(chan struct{}):   1,
 			},
-			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafIntType}}},
+			Output: typeTree{_type: bindings.WAFMapType, children: []typeTree{{_type: bindings.WAFIntType}}},
 		},
 		{
 			Name: "unsupported-map-key-types",
@@ -743,7 +743,7 @@ func TestEncoderTypeTree(t *testing.T) {
 				(*string)(nil):        1,
 				make(chan struct{}):   1,
 			},
-			Output: typeTree{_type: bindings.WafMapType},
+			Output: typeTree{_type: bindings.WAFMapType},
 		},
 		{
 			Name: "unsupported-map-values",
@@ -751,7 +751,7 @@ func TestEncoderTypeTree(t *testing.T) {
 				"k0": func() {},
 				"k2": make(chan struct{}),
 			},
-			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafInvalidType}, {_type: bindings.WafInvalidType}}},
+			Output: typeTree{_type: bindings.WAFMapType, children: []typeTree{{_type: bindings.WAFInvalidType}, {_type: bindings.WAFInvalidType}}},
 		},
 		{
 			Name: "nil-map-values",
@@ -760,7 +760,7 @@ func TestEncoderTypeTree(t *testing.T) {
 				"k1": (*string)(nil),
 				"k2": (*int)(nil),
 			},
-			Output: typeTree{_type: bindings.WafMapType, children: []typeTree{{_type: bindings.WafNilType}, {_type: bindings.WafNilType}, {_type: bindings.WafNilType}}},
+			Output: typeTree{_type: bindings.WAFMapType, children: []typeTree{{_type: bindings.WAFNilType}, {_type: bindings.WAFNilType}, {_type: bindings.WAFNilType}}},
 		},
 	} {
 		var pinner runtime.Pinner
@@ -792,7 +792,7 @@ func TestDecoder(t *testing.T) {
 		defer pinner.Unpin()
 
 		e := newMaxEncoder(&pinner)
-		objBuilder := func(value any) *bindings.WafObject {
+		objBuilder := func(value any) *bindings.WAFObject {
 			encoded, err := e.Encode(value)
 			require.NoError(t, err, "Encoding object failed")
 			return encoded

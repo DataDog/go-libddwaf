@@ -10,50 +10,52 @@ package bindings
 
 import (
 	"errors"
+
+	"github.com/DataDog/go-libddwaf/v4/internal/log"
 )
 
-type WafDl struct{}
+type WAFLib struct{}
 
-func NewWafDl() (*WafDl, error) {
-	return nil, errors.New("WAF is not supported on this platform")
+func NewWAFLib() (*WAFLib, error) {
+	return nil, errors.New("go-libddwaf is not supported on this platform")
 }
 
-func (waf *WafDl) WafGetVersion() string {
-	return ""
+func (*WAFLib) Close() error { return nil }
+
+func (*WAFLib) GetVersion() string { return "" }
+
+func (*WAFLib) BuilderInit(*WAFConfig) WAFBuilder { return 0 }
+
+func (*WAFLib) BuilderAddOrUpdateConfig(WAFBuilder, string, *WAFObject, *WAFObject) bool {
+	return false
 }
 
-func (waf *WafDl) WafInit(*WafObject, *WafConfig, *WafObject) WafHandle {
-	return 0
+func (*WAFLib) BuilderRemoveConfig(WAFBuilder, string) bool { return false }
+
+func (*WAFLib) BuilderBuildInstance(WAFBuilder) WAFHandle { return 0 }
+
+func (*WAFLib) BuilderGetConfigPaths(WAFBuilder, string) []string { return nil }
+
+func (*WAFLib) BuilderDestroy(WAFBuilder) {}
+
+func (*WAFLib) SetLogCb(uintptr, log.Level) {}
+
+func (*WAFLib) Destroy(WAFHandle) {}
+
+func (*WAFLib) KnownAddresses(WAFHandle) []string { return nil }
+
+func (*WAFLib) KnownActions(WAFHandle) []string { return nil }
+
+func (*WAFLib) ContextInit(WAFHandle) WAFContext { return 0 }
+
+func (*WAFLib) ContextDestroy(WAFContext) {}
+
+func (*WAFLib) ResultFree(*WAFResult) {}
+
+func (*WAFLib) ObjectFree(*WAFObject) {}
+
+func (*WAFLib) Run(WAFContext, *WAFObject, *WAFObject, *WAFResult, uint64) WAFReturnCode {
+	return WAFErrInternal
 }
 
-func (waf *WafDl) WafUpdate(WafHandle, *WafObject, *WafObject) WafHandle {
-	return 0
-}
-
-func (waf *WafDl) WafDestroy(WafHandle) {
-}
-
-func (waf *WafDl) WafKnownAddresses(WafHandle) []string {
-	return nil
-}
-
-func (waf *WafDl) WafKnownActions(WafHandle) []string {
-	return nil
-}
-
-func (waf *WafDl) WafContextInit(WafHandle) WafContext {
-	return 0
-}
-
-func (waf *WafDl) WafContextDestroy(WafContext) {
-}
-
-func (waf *WafDl) WafResultFree(*WafResult) {
-}
-
-func (waf *WafDl) WafObjectFree(*WafObject) {
-}
-
-func (waf *WafDl) WafRun(WafContext, *WafObject, *WafObject, *WafResult, uint64) WafReturnCode {
-	return WafErrInternal
-}
+func (*WAFLib) Handle() uintptr { return 0 }

@@ -18,7 +18,7 @@ import (
 // typically tied to that of a remote configuration client, as its purpose is to
 // keep an up-to-date view of the current coniguration with low overhead.
 type Builder struct {
-	handle bindings.WafBuilder
+	handle bindings.WAFBuilder
 	mu     sync.Mutex
 }
 
@@ -33,7 +33,7 @@ func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builde
 	}
 
 	var pinner runtime.Pinner
-	hdl := wafLib.WafBuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
+	hdl := wafLib.BuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
 	pinner.Unpin()
 
 	if hdl == 0 {
@@ -54,7 +54,7 @@ func (b *Builder) Close() {
 	if b.handle == 0 {
 		return
 	}
-	wafLib.WafBuilderDestroy(b.handle)
+	wafLib.BuilderDestroy(b.handle)
 	b.handle = 0
 }
 
@@ -68,6 +68,10 @@ var (
 func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, error) {
 	if b == nil {
 		return Diagnostics{}, errBuilderClosed
+	}
+
+	if path == "" {
+		return Diagnostics{}, errors.New("path cannot be blank")
 	}
 
 	b.mu.Lock()
@@ -86,14 +90,19 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 		return Diagnostics{}, fmt.Errorf("could not encode the config fragment into a WAF object; %w", err)
 	}
 
-	var diagnosticsWafObj bindings.WafObject
-	defer wafLib.WafObjectFree(&diagnosticsWafObj)
+	var diagnosticsWafObj bindings.WAFObject
+	defer wafLib.ObjectFree(&diagnosticsWafObj)
 
-	res := wafLib.WafBuilderAddOrUpdateConfig(b.handle, path, frag, &diagnosticsWafObj)
+	res := wafLib.BuilderAddOrUpdateConfig(b.handle, path, frag, &diagnosticsWafObj)
 
-	diags, err := decodeDiagnostics(&diagnosticsWafObj)
-	if err != nil {
-		return diags, fmt.Errorf("failed to decode WAF diagnostics: %w", err)
+	var diags Diagnostics
+	if !diagnosticsWafObj.IsInvalid() {
+		// The Diagnostics object will be invalid if the config was completely
+		// rejected.
+		diags, err = decodeDiagnostics(&diagnosticsWafObj)
+		if err != nil {
+			return diags, fmt.Errorf("failed to decode WAF diagnostics: %w", err)
+		}
 	}
 
 	if !res {
@@ -116,7 +125,7 @@ func (b *Builder) RemoveConfig(path string) bool {
 		return false
 	}
 
-	return wafLib.WafBuilderRemoveConfig(b.handle, path)
+	return wafLib.BuilderRemoveConfig(b.handle, path)
 }
 
 // ConfigPaths returns the list of currently loaded configuration paths.
@@ -132,7 +141,7 @@ func (b *Builder) ConfigPaths(filter string) []string {
 		return nil
 	}
 
-	return wafLib.WafBuilderGetConfigPaths(b.handle, filter)
+	return wafLib.BuilderGetConfigPaths(b.handle, filter)
 }
 
 // Build creates a new [Handle] instance that uses the current configuration.
@@ -151,7 +160,7 @@ func (b *Builder) Build() *Handle {
 		return nil
 	}
 
-	hdl := wafLib.WafBuilderBuildInstance(b.handle)
+	hdl := wafLib.BuilderBuildInstance(b.handle)
 	if hdl == 0 {
 		return nil
 	}

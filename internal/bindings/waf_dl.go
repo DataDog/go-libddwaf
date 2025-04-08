@@ -18,11 +18,11 @@ import (
 	"github.com/ebitengine/purego"
 )
 
-// WafDl is the type wrapper for all C calls to the waf
+// WAFLib is the type wrapper for all C calls to the waf
 // It uses `libwaf` to make C calls
 // All calls must go through this one-liner to be type safe
 // since purego calls are not type safe
-type WafDl struct {
+type WAFLib struct {
 	wafSymbols
 	handle uintptr
 }
@@ -48,10 +48,10 @@ type wafSymbols struct {
 	run            uintptr `sym:"ddwaf_run"`
 }
 
-// NewWafDl loads the libddwaf shared library and resolves all tge relevant symbols.
+// NewWAFLib loads the libddwaf shared library and resolves all tge relevant symbols.
 // The caller is responsible for calling wafDl.Close on the returned object once they
 // are done with it so that associated resources can be released.
-func NewWafDl() (dl *WafDl, err error) {
+func NewWAFLib() (dl *WAFLib, err error) {
 	path, closer, err := lib.DumpEmbeddedWAF()
 	if err != nil {
 		return nil, fmt.Errorf("dump embedded WAF: %w", err)
@@ -75,10 +75,10 @@ func NewWafDl() (dl *WafDl, err error) {
 		return
 	}
 
-	dl = &WafDl{symbols, handle}
+	dl = &WAFLib{symbols, handle}
 
 	// Try calling the waf to make sure everything is fine
-	if _, err = tryCall(dl.WafGetVersion); err != nil {
+	if _, err = tryCall(dl.GetVersion); err != nil {
 		if closeErr := purego.Dlclose(handle); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("error released the shared libddwaf library: %w", closeErr))
 		}
@@ -97,27 +97,27 @@ func NewWafDl() (dl *WafDl, err error) {
 	return
 }
 
-func (waf *WafDl) Close() error {
+func (waf *WAFLib) Close() error {
 	return purego.Dlclose(waf.handle)
 }
 
-// WafGetVersion returned string is a static string so we do not need to free it
-func (waf *WafDl) WafGetVersion() string {
+// GetVersion returned string is a static string so we do not need to free it
+func (waf *WAFLib) GetVersion() string {
 	return unsafe.Gostring(unsafe.Cast[byte](waf.syscall(waf.getVersion)))
 }
 
-// WafBuilderInit initializes a new WAF builder with the provided configuration,
+// BuilderInit initializes a new WAF builder with the provided configuration,
 // which may be nil. Returns nil in case of an error.
-func (waf *WafDl) WafBuilderInit(cfg *WafConfig) WafBuilder {
-	builder := WafBuilder(waf.syscall(waf.builderInit, unsafe.PtrToUintptr(cfg)))
+func (waf *WAFLib) BuilderInit(cfg *WAFConfig) WAFBuilder {
+	builder := WAFBuilder(waf.syscall(waf.builderInit, unsafe.PtrToUintptr(cfg)))
 	unsafe.KeepAlive(cfg)
 	return builder
 }
 
-// WafBuilderAddOrUpdateConfig adds or updates a configuration based on the
+// BuilderAddOrUpdateConfig adds or updates a configuration based on the
 // given path, which must be a unique identifier for the provided configuration.
 // Returns false in case of an error.
-func (waf *WafDl) WafBuilderAddOrUpdateConfig(builder WafBuilder, path string, config *WafObject, diags *WafObject) bool {
+func (waf *WAFLib) BuilderAddOrUpdateConfig(builder WAFBuilder, path string, config *WAFObject, diags *WAFObject) bool {
 	res := waf.syscall(waf.builderAddOrUpdateConfig,
 		uintptr(builder),
 		unsafe.PtrToUintptr(unsafe.Cstring(path)),
@@ -131,9 +131,9 @@ func (waf *WafDl) WafBuilderAddOrUpdateConfig(builder WafBuilder, path string, c
 	return res != 0
 }
 
-// WafBuilderRemoveConfig removes a configuration based on the provided path.
+// BuilderRemoveConfig removes a configuration based on the provided path.
 // Returns false in case of an error.
-func (waf *WafDl) WafBuilderRemoveConfig(builder WafBuilder, path string) bool {
+func (waf *WAFLib) BuilderRemoveConfig(builder WAFBuilder, path string) bool {
 	res := waf.syscall(waf.builderRemoveConfig,
 		uintptr(builder),
 		unsafe.PtrToUintptr(unsafe.Cstring(path)),
@@ -143,16 +143,16 @@ func (waf *WafDl) WafBuilderRemoveConfig(builder WafBuilder, path string) bool {
 	return res != 0
 }
 
-// WafBuilderBuildInstance builds a WAF instance based on the current set of configurations.
+// BuilderBuildInstance builds a WAF instance based on the current set of configurations.
 // Returns nil in case of an error.
-func (waf *WafDl) WafBuilderBuildInstance(builder WafBuilder) WafHandle {
-	return WafHandle(waf.syscall(waf.builderBuildInstance, uintptr(builder)))
+func (waf *WAFLib) BuilderBuildInstance(builder WAFBuilder) WAFHandle {
+	return WAFHandle(waf.syscall(waf.builderBuildInstance, uintptr(builder)))
 }
 
-// WafBuilderGetConfigPaths returns the list of currently loaded paths.
+// BuilderGetConfigPaths returns the list of currently loaded paths.
 // Returns nil in case of an error.
-func (waf *WafDl) WafBuilderGetConfigPaths(builder WafBuilder, filter string) []string {
-	var paths WafObject
+func (waf *WAFLib) BuilderGetConfigPaths(builder WAFBuilder, filter string) []string {
+	var paths WAFObject
 
 	count := waf.syscall(waf.builderGetConfigPaths,
 		uintptr(builder),
@@ -160,34 +160,42 @@ func (waf *WafDl) WafBuilderGetConfigPaths(builder WafBuilder, filter string) []
 		unsafe.PtrToUintptr(unsafe.Cstring(filter)),
 		uintptr(len(filter)),
 	)
-	defer waf.WafObjectFree(&paths)
+	defer waf.ObjectFree(&paths)
 
 	list := make([]string, 0, count)
 	for i := range uint64(count) {
-		obj := unsafe.CastWithOffset[WafObject](paths.Value, i)
+		obj := unsafe.CastWithOffset[WAFObject](paths.Value, i)
 		path := unsafe.GostringSized(unsafe.Cast[byte](obj.Value), obj.NbEntries)
 		list = append(list, path)
 	}
 	return list
 }
 
-// WafBuilderDestroy destroys a WAF builder instance.
-func (waf *WafDl) WafBuilderDestroy(builder WafBuilder) {
+// BuilderDestroy destroys a WAF builder instance.
+func (waf *WAFLib) BuilderDestroy(builder WAFBuilder) {
 	waf.syscall(waf.builderDestroy, uintptr(builder))
 }
 
-// WafSetLogCb sets the log callback function for the WAF.
-func (waf *WafDl) WafSetLogCb(cb uintptr, level log.Level) {
+// SetLogCb sets the log callback function for the WAF.
+func (waf *WAFLib) SetLogCb(cb uintptr, level log.Level) {
 	waf.syscall(waf.setLogCb, cb, uintptr(level))
 }
 
-// WafDestroy destroys a WAF instance.
-func (waf *WafDl) WafDestroy(handle WafHandle) {
+// Destroy destroys a WAF instance.
+func (waf *WAFLib) Destroy(handle WAFHandle) {
 	waf.syscall(waf.destroy, uintptr(handle))
 	unsafe.KeepAlive(handle)
 }
 
-func (waf *WafDl) wafKnownX(handle WafHandle, symbol uintptr) []string {
+func (waf *WAFLib) KnownAddresses(handle WAFHandle) []string {
+	return waf.knownX(handle, waf.knownAddresses)
+}
+
+func (waf *WAFLib) KnownActions(handle WAFHandle) []string {
+	return waf.knownX(handle, waf.knownActions)
+}
+
+func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 	var nbAddresses uint32
 
 	arrayVoidC := waf.syscall(symbol, uintptr(handle), unsafe.PtrToUintptr(&nbAddresses))
@@ -207,37 +215,29 @@ func (waf *WafDl) wafKnownX(handle WafHandle, symbol uintptr) []string {
 	return addresses
 }
 
-func (waf *WafDl) WafKnownAddresses(handle WafHandle) []string {
-	return waf.wafKnownX(handle, waf.knownAddresses)
-}
-
-func (waf *WafDl) WafKnownActions(handle WafHandle) []string {
-	return waf.wafKnownX(handle, waf.knownActions)
-}
-
-func (waf *WafDl) WafContextInit(handle WafHandle) WafContext {
-	ctx := WafContext(waf.syscall(waf.contextInit, uintptr(handle)))
+func (waf *WAFLib) ContextInit(handle WAFHandle) WAFContext {
+	ctx := WAFContext(waf.syscall(waf.contextInit, uintptr(handle)))
 	unsafe.KeepAlive(handle)
 	return ctx
 }
 
-func (waf *WafDl) WafContextDestroy(context WafContext) {
+func (waf *WAFLib) ContextDestroy(context WAFContext) {
 	waf.syscall(waf.contextDestroy, uintptr(context))
 	unsafe.KeepAlive(context)
 }
 
-func (waf *WafDl) WafResultFree(result *WafResult) {
+func (waf *WAFLib) ResultFree(result *WAFResult) {
 	waf.syscall(waf.resultFree, unsafe.PtrToUintptr(result))
 	unsafe.KeepAlive(result)
 }
 
-func (waf *WafDl) WafObjectFree(obj *WafObject) {
+func (waf *WAFLib) ObjectFree(obj *WAFObject) {
 	waf.syscall(waf.objectFree, unsafe.PtrToUintptr(obj))
 	unsafe.KeepAlive(obj)
 }
 
-func (waf *WafDl) WafRun(context WafContext, persistentData, ephemeralData *WafObject, result *WafResult, timeout uint64) WafReturnCode {
-	rc := WafReturnCode(waf.syscall(waf.run, uintptr(context), unsafe.PtrToUintptr(persistentData), unsafe.PtrToUintptr(ephemeralData), unsafe.PtrToUintptr(result), uintptr(timeout)))
+func (waf *WAFLib) Run(context WAFContext, persistentData, ephemeralData *WAFObject, result *WAFResult, timeout uint64) WAFReturnCode {
+	rc := WAFReturnCode(waf.syscall(waf.run, uintptr(context), unsafe.PtrToUintptr(persistentData), unsafe.PtrToUintptr(ephemeralData), unsafe.PtrToUintptr(result), uintptr(timeout)))
 	unsafe.KeepAlive(context)
 	unsafe.KeepAlive(persistentData)
 	unsafe.KeepAlive(ephemeralData)
@@ -246,7 +246,7 @@ func (waf *WafDl) WafRun(context WafContext, persistentData, ephemeralData *WafO
 	return rc
 }
 
-func (waf *WafDl) Handle() uintptr {
+func (waf *WAFLib) Handle() uintptr {
 	return waf.handle
 }
 
@@ -257,7 +257,7 @@ func (waf *WafDl) Handle() uintptr {
 //	1st - The return value is a pointer or a int of any type
 //	2nd - The return value is a float
 //	3rd - The value of `errno` at the end of the call
-func (waf *WafDl) syscall(fn uintptr, args ...uintptr) uintptr {
+func (waf *WAFLib) syscall(fn uintptr, args ...uintptr) uintptr {
 	ret, _, _ := purego.SyscallN(fn, args...)
 	return ret
 }

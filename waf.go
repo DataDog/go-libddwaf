@@ -17,7 +17,7 @@ import (
 // aren't supported by macOS.
 var (
 	// libddwaf's dynamic library handle and entrypoints
-	wafLib *bindings.WafDl
+	wafLib *bindings.WAFLib
 	// libddwaf's dlopen error if any
 	wafLoadErr  error
 	openWafOnce sync.Once
@@ -41,11 +41,11 @@ func Load() (bool, error) {
 	}
 
 	openWafOnce.Do(func() {
-		wafLib, wafLoadErr = bindings.NewWafDl()
+		wafLib, wafLoadErr = bindings.NewWAFLib()
 		if wafLoadErr != nil {
 			return
 		}
-		wafVersion = wafLib.WafGetVersion()
+		wafVersion = wafLib.GetVersion()
 	})
 
 	return wafLib != nil, wafLoadErr

@@ -50,10 +50,10 @@ func TestSupport(t *testing.T) {
 	}
 
 	for _, err := range errors {
-		switch err.(type) {
+		switch err := err.(type) {
 		case wafErrors.UnsupportedOSArchError:
-			require.Contains(t, *wafBuildTags, err.(wafErrors.UnsupportedOSArchError).Os, "The OS is marked as supported but a support error appeared", err)
-			require.Contains(t, *wafBuildTags, err.(wafErrors.UnsupportedOSArchError).Arch, "The architecture is marked as supported but a support error appeared", err)
+			require.Contains(t, *wafBuildTags, err.OS, "The OS is marked as supported but a support error appeared", err)
+			require.Contains(t, *wafBuildTags, err.Arch, "The architecture is marked as supported but a support error appeared", err)
 		case wafErrors.UnsupportedGoVersionError:
 			// We can't check anything here because we forced the version to be wrong we a build tag added manually instead of just having an incompatible version
 		case wafErrors.ManuallyDisabledError:

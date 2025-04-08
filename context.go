@@ -24,7 +24,7 @@ import (
 type Context struct {
 	handle *Handle // Instance of the WAF
 
-	cContext bindings.WafContext // The C ddwaf_context pointer
+	cContext bindings.WAFContext // The C ddwaf_context pointer
 
 	// timeoutCount count all calls which have timeout'ed by scope. Keys are fixed at creation time.
 	timeoutCount map[Scope]*atomic.Uint64
@@ -195,7 +195,7 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // top level object is a nil map, but this  behaviour is expected since either persistent or
 // ephemeral addresses are allowed to be null one at a time. In this case, Encode will return nil,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
-func (context *Context) encodeOneAddressType(pinner pin.Pinner, scope Scope, addressData map[string]any, timer timer.Timer) (*bindings.WafObject, error) {
+func (context *Context) encodeOneAddressType(pinner pin.Pinner, scope Scope, addressData map[string]any, timer timer.Timer) (*bindings.WAFObject, error) {
 	encoder := newLimitedEncoder(pinner, timer)
 	if addressData == nil {
 		return nil, nil
@@ -218,14 +218,14 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, scope Scope, add
 
 // run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
 // context appropriately around this call.
-func (context *Context) run(persistentData, ephemeralData *bindings.WafObject, wafDecodeTimer timer.Timer, timeBudget time.Duration) (Result, error) {
-	result := new(bindings.WafResult)
-	defer wafLib.WafResultFree(result)
+func (context *Context) run(persistentData, ephemeralData *bindings.WAFObject, wafDecodeTimer timer.Timer, timeBudget time.Duration) (Result, error) {
+	result := new(bindings.WAFResult)
+	defer wafLib.ResultFree(result)
 
 	// The value of the timeout cannot exceed 2^55
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
 	timeout := uint64(timeBudget.Microseconds()) & 0x008FFFFFFFFFFFFF
-	ret := wafLib.WafRun(context.cContext, persistentData, ephemeralData, result, timeout)
+	ret := wafLib.Run(context.cContext, persistentData, ephemeralData, result, timeout)
 
 	wafDecodeTimer.Start()
 	defer wafDecodeTimer.Stop()
@@ -233,7 +233,7 @@ func (context *Context) run(persistentData, ephemeralData *bindings.WafObject, w
 	return unwrapWafResult(ret, result)
 }
 
-func unwrapWafResult(ret bindings.WafReturnCode, result *bindings.WafResult) (res Result, err error) {
+func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFResult) (res Result, err error) {
 	if result.Timeout > 0 {
 		err = errors.ErrTimeout
 	} else {
@@ -244,11 +244,11 @@ func unwrapWafResult(ret bindings.WafReturnCode, result *bindings.WafResult) (re
 
 	res.TimeSpent = time.Duration(result.TotalRuntime) * time.Nanosecond
 
-	if ret == bindings.WafOK {
+	if ret == bindings.WAFOK {
 		return res, err
 	}
 
-	if ret != bindings.WafMatch {
+	if ret != bindings.WAFMatch {
 		return res, goRunError(ret)
 	}
 
@@ -274,7 +274,7 @@ func (context *Context) Close() {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
-	wafLib.WafContextDestroy(context.cContext)
+	wafLib.ContextDestroy(context.cContext)
 	defer context.handle.Close() // Reduce the reference counter of the Handle.
 	context.cContext = 0         // Makes it easy to spot use-after-free/double-free issues
 
