@@ -29,7 +29,7 @@ func wafTest(t *testing.T, obj *bindings.WAFObject) {
 	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
 	require.NoError(t, err)
 	defer waf.Close()
-	wafCtx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
+	wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()

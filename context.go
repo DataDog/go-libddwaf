@@ -20,7 +20,7 @@ import (
 // Context is a WAF execution context. It allows running the WAF incrementally when calling it
 // multiple times to run its rules every time new addresses become available. Each request must have
 // its own [Context]. New [Context] instances can be created by calling
-// [Handle.NewContextWithBudget].
+// [Handle.NewContext].
 type Context struct {
 	handle *Handle // Instance of the WAF
 

@@ -47,10 +47,10 @@ func wrapHandle(cHandle bindings.WAFHandle) *Handle {
 	return handle
 }
 
-// NewContextWithBudget returns a new WAF context for the given WAF handle.
-// A nil value is returned when the WAF handle was released or when the
-// WAF context couldn't be created.
-func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, error) {
+// NewContext returns a new WAF context for the given WAF handle.
+// An error is returned when the WAF handle was released or when the WAF context
+// couldn't be created.
+func (handle *Handle) NewContext(budget time.Duration) (*Context, error) {
 	// Handle has been released
 	if !handle.retain() {
 		return nil, fmt.Errorf("handle was released")
