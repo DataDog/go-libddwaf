@@ -40,7 +40,7 @@ func TestSupport(t *testing.T) {
 		errors = append(errors, support.WafManuallyDisabledError())
 	}
 
-	ok, _ := Health()
+	ok, _ := Usable()
 	require.Equal(t, *wafSupportedFlag, ok, "WAF support should match the value of the `waf-supported` flag in the CI")
 
 	if *wafSupportedFlag {
