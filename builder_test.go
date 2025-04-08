@@ -18,6 +18,8 @@ import (
 )
 
 func TestBuilder(t *testing.T) {
+	wafLib.SetLogCb(log.CallbackFunctionPointer(), log.LevelDebug)
+
 	if supported, err := Usable(); !supported || err != nil {
 		t.Skipf("target is not supported by the WAF: %v", err)
 		return

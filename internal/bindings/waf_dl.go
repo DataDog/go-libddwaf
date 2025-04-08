@@ -128,7 +128,7 @@ func (waf *WAFLib) BuilderAddOrUpdateConfig(builder WAFBuilder, path string, con
 	unsafe.KeepAlive(path)
 	unsafe.KeepAlive(config)
 	unsafe.KeepAlive(diags)
-	return res != 0
+	return byte(res) != 0
 }
 
 // BuilderRemoveConfig removes a configuration based on the provided path.
@@ -140,7 +140,7 @@ func (waf *WAFLib) BuilderRemoveConfig(builder WAFBuilder, path string) bool {
 		uintptr(len(path)),
 	)
 	unsafe.KeepAlive(path)
-	return res != 0
+	return byte(res) != 0
 }
 
 // BuilderBuildInstance builds a WAF instance based on the current set of configurations.
