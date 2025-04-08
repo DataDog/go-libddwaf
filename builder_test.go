@@ -64,7 +64,7 @@ func TestBuilder(t *testing.T) {
 		require.Equal(t, []string{"test/config"}, builder.ConfigPaths(""))
 		handle = builder.Build()
 		require.NotNil(t, handle)
-		defer handle.Release()
+		defer handle.Close()
 
 		ctx, err := handle.NewContextWithBudget(timer.UnlimitedBudget)
 		require.NoError(t, err)
@@ -146,7 +146,7 @@ func TestBuilder(t *testing.T) {
 				// ... but we can still obtain a valid handle since there is 1 valid rule...
 				waf := builder.Build()
 				require.NotNil(t, waf)
-				waf.Release()
+				waf.Close()
 			})
 		}
 	})
@@ -189,7 +189,7 @@ func TestBuilder(t *testing.T) {
 		// Check with the original, non-blocking rules
 		waf := builder.Build()
 		require.NotNil(t, waf)
-		defer waf.Release()
+		defer waf.Close()
 		ctx, err := waf.NewContextWithBudget(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
@@ -230,7 +230,7 @@ func TestBuilder(t *testing.T) {
 		// Check with the updated, blocking rules
 		waf = builder.Build()
 		require.NotNil(t, waf)
-		defer waf.Release()
+		defer waf.Close()
 		ctx, err = waf.NewContextWithBudget(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, ctx)

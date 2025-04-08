@@ -18,15 +18,15 @@ import (
 )
 
 // Handle represents an instance of the WAF for a given ruleset. It is obtained
-// from [Builder.Build]; and must be disposed of by calling [Handle.Release]
+// from [Builder.Build]; and must be disposed of by calling [Handle.Close]
 // once no longer in use.
 type Handle struct {
-	// Lock-less reference counter avoiding blocking calls to the [Handle.Release]
+	// Lock-less reference counter avoiding blocking calls to the [Handle.Close]
 	// method while WAF [Context]s are still using the WAF handle. Instead, we let
 	// the release actually happen only when the reference counter reaches 0.
 	// This can happen either from a request handler calling its WAF context's
 	// [Context.Close] method, or either from the appsec instance calling the WAF
-	// [Handle.Release] method when creating a new WAF handle with new rules.
+	// [Handle.Close] method when creating a new WAF handle with new rules.
 	// Note that this means several instances of the WAF can exist at the same
 	// time with their own set of rules. This choice was done to be able to
 	// efficiently update the security rules concurrently, without having to
@@ -58,7 +58,7 @@ func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, erro
 
 	cContext := wafLib.WafContextInit(handle.cHandle)
 	if cContext == 0 {
-		handle.Release() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
+		handle.Close() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
 		return nil, fmt.Errorf("could not get C context")
 	}
 
@@ -80,19 +80,21 @@ func (handle *Handle) NewContextWithBudget(budget time.Duration) (*Context, erro
 	}, nil
 }
 
-// Addresses returns the list of addresses the WAF has been configured to monitor based on the input ruleset
+// Addresses returns the list of addresses the WAF has been configured to monitor based on the input
+// ruleset.
 func (handle *Handle) Addresses() []string {
 	return wafLib.WafKnownAddresses(handle.cHandle)
 }
 
-// Actions returns the list of actions the WAF has been configured to monitor based on the input ruleset
+// Actions returns the list of actions the WAF has been configured to monitor based on the input
+// ruleset.
 func (handle *Handle) Actions() []string {
 	return wafLib.WafKnownActions(handle.cHandle)
 }
 
-// Release decrements the reference counter of this [Handle], possibly allowing it to be destroyed
+// Close decrements the reference counter of this [Handle], possibly allowing it to be destroyed
 // and all the resources associated with it to be released.
-func (handle *Handle) Release() {
+func (handle *Handle) Close() {
 	if handle.addRefCounter(-1) != 0 {
 		// Either the counter is still positive (this Handle is still referenced), or it had previously
 		// reached 0 and some other call has done the cleanup already.
@@ -105,17 +107,18 @@ func (handle *Handle) Release() {
 
 // retain increments the reference counter of this [Handle]. Returns true if the
 // [Handle] is still valid, false if it is no longer usable. Calls to
-// [Handle.retain] must be balanced with calls to [Handle.Release] in order to
+// [Handle.retain] must be balanced with calls to [Handle.Close] in order to
 // avoid leaking [Handle]s.
 func (handle *Handle) retain() bool {
 	return handle.addRefCounter(1) > 0
 }
 
-// addRefCounter adds x to Handle.refCounter. The return valid indicates whether the refCounter reached 0 as part of
-// this call or not, which can be used to perform "only-once" activities:
-// - result > 0    => the Handle is still usable
-// - result == 0   => the handle is no longer usable, ref counter reached 0 as part of this call
-// - result == -1  => the handle is no longer usable, ref counter was already 0 previously
+// addRefCounter adds x to Handle.refCounter. The return valid indicates whether the refCounter
+// reached 0 as part of this call or not, which can be used to perform "only-once" activities:
+//
+// * result > 0    => the Handle is still usable
+// * result == 0   => the handle is no longer usable, ref counter reached 0 as part of this call
+// * result == -1  => the handle is no longer usable, ref counter was already 0 previously
 func (handle *Handle) addRefCounter(x int32) int32 {
 	// We use a CAS loop to avoid setting the refCounter to a negative value.
 	for {
