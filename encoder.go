@@ -15,11 +15,11 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/pin"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
 
 // Encode Go values into wafObjects. Only the subset of Go types representable into wafObjects
@@ -153,14 +153,14 @@ func isValueNil(value reflect.Value) bool {
 
 func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, depth int) error {
 	if encoder.timer.Exhausted() {
-		return errors.ErrTimeout
+		return waferrors.ErrTimeout
 	}
 
 	value, kind := resolvePointer(value)
 	if (kind == reflect.Interface || kind == reflect.Pointer) && !value.IsNil() {
 		// resolvePointer failed to resolve to something that's not a pointer, it
 		// has indirected too many times...
-		return errors.ErrTooManyIndirections
+		return waferrors.ErrTooManyIndirections
 	}
 
 	// Measure-only runs for leaves
@@ -173,7 +173,7 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 	// Terminal cases (leaves of the tree)
 	//		Is invalid type: nil interfaces for example, cannot be used to run any reflect method or it's susceptible to panic
 	case !value.IsValid() || kind == reflect.Invalid:
-		return errors.ErrUnsupportedValue
+		return waferrors.ErrUnsupportedValue
 	// 		Is nullable type: nil pointers, channels, maps or functions
 	case isValueNil(value):
 		encodeNative[uintptr](0, bindings.WAFNilType, obj)
@@ -205,7 +205,7 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 	case depth <= 0:
 		// Record that there was a truncation; we will try to measure the actual depth of the object afterwards.
 		encoder.addTruncation(ObjectTooDeep, -1)
-		return errors.ErrMaxDepthExceeded
+		return waferrors.ErrMaxDepthExceeded
 
 	// 		Either an array or a slice of an array
 	case kind == reflect.Array || kind == reflect.Slice:
@@ -216,7 +216,7 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 		encoder.encodeStruct(value, obj, depth-1)
 
 	default:
-		return errors.ErrUnsupportedValue
+		return waferrors.ErrUnsupportedValue
 	}
 
 	return nil
@@ -356,13 +356,13 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WAFObjec
 	var keyStr string
 	switch {
 	case kind == reflect.Invalid:
-		return errors.ErrInvalidMapKey
+		return waferrors.ErrInvalidMapKey
 	case kind == reflect.String:
 		keyStr = value.String()
 	case value.Type() == reflect.TypeOf([]byte(nil)):
 		keyStr = string(value.Bytes())
 	default:
-		return errors.ErrInvalidMapKey
+		return waferrors.ErrInvalidMapKey
 	}
 
 	encoder.encodeMapKeyFromString(keyStr, obj)

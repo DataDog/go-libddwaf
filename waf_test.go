@@ -22,11 +22,11 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/lib"
 	"github.com/DataDog/go-libddwaf/v4/internal/log"
 	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -291,7 +291,7 @@ func TestTimeout(t *testing.T) {
 		defer context.Close()
 
 		_, err = context.Run(RunAddressData{Persistent: largeValue})
-		require.Equal(t, errors.ErrTimeout, err)
+		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Stats().Timers["waf.duration_ext"], time.Millisecond)
 		require.GreaterOrEqual(t, context.Stats().Timers["waf.encode"], time.Millisecond)
 	})
@@ -303,7 +303,7 @@ func TestTimeout(t *testing.T) {
 		defer context.Close()
 
 		_, err = context.Run(RunAddressData{Ephemeral: largeValue})
-		require.Equal(t, errors.ErrTimeout, err)
+		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Stats().Timers["waf.duration_ext"], time.Millisecond)
 		require.GreaterOrEqual(t, context.Stats().Timers["waf.encode"], time.Millisecond)
 	})
@@ -314,11 +314,11 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		for i := 0; i < 1000 && err != errors.ErrTimeout; i++ {
+		for i := 0; i < 1000 && err != waferrors.ErrTimeout; i++ {
 			_, err = context.Run(RunAddressData{Persistent: normalValue})
 		}
 
-		require.Equal(t, errors.ErrTimeout, err)
+		require.Equal(t, waferrors.ErrTimeout, err)
 	})
 
 	t.Run("rasp-simple", func(t *testing.T) {
@@ -346,7 +346,7 @@ func TestTimeout(t *testing.T) {
 		defer context.Close()
 
 		_, err = context.Run(RunAddressData{Persistent: largeValue, Scope: RASPScope})
-		require.Equal(t, errors.ErrTimeout, err)
+		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Stats().Timers["rasp.duration_ext"], time.Millisecond)
 		require.GreaterOrEqual(t, context.Stats().Timers["rasp.encode"], time.Millisecond)
 		require.EqualValues(t, 1, context.Stats().TimeoutRASPCount)
@@ -895,7 +895,7 @@ func TestConcurrency(t *testing.T) {
 				if n%2 == 0 {
 					_, err := wafCtx.Run(RunAddressData{Ephemeral: data})
 					if err != nil {
-						require.ErrorIs(t, err, errors.ErrContextClosed)
+						require.ErrorIs(t, err, waferrors.ErrContextClosed)
 					}
 				} else {
 					wafCtx.Close()
@@ -929,27 +929,27 @@ func TestRunError(t *testing.T) {
 		ExpectedString string
 	}{
 		{
-			Err:            errors.ErrInternal,
+			Err:            waferrors.ErrInternal,
 			ExpectedString: "internal waf error",
 		},
 		{
-			Err:            errors.ErrTimeout,
+			Err:            waferrors.ErrTimeout,
 			ExpectedString: "waf timeout",
 		},
 		{
-			Err:            errors.ErrInvalidObject,
+			Err:            waferrors.ErrInvalidObject,
 			ExpectedString: "invalid waf object",
 		},
 		{
-			Err:            errors.ErrInvalidArgument,
+			Err:            waferrors.ErrInvalidArgument,
 			ExpectedString: "invalid waf argument",
 		},
 		{
-			Err:            errors.ErrOutOfMemory,
+			Err:            waferrors.ErrOutOfMemory,
 			ExpectedString: "out of memory",
 		},
 		{
-			Err:            errors.RunError(33),
+			Err:            waferrors.RunError(33),
 			ExpectedString: "unknown waf error 33",
 		},
 	} {
@@ -1103,7 +1103,7 @@ func TestMetrics(t *testing.T) {
 
 		for i := uint64(1); i <= 10; i++ {
 			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
-			require.Equal(t, errors.ErrTimeout, err)
+			require.Equal(t, waferrors.ErrTimeout, err)
 			require.Equal(t, wafCtx.Stats().TimeoutCount, i)
 		}
 	})

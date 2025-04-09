@@ -6,7 +6,7 @@
 package bindings
 
 import (
-	wafErrors "github.com/DataDog/go-libddwaf/v4/errors"
+	wafErrors "github.com/DataDog/go-libddwaf/v4/waferrors"
 
 	"fmt"
 	"reflect"

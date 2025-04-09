@@ -12,9 +12,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
 
 // Handle represents an instance of the WAF for a given ruleset. It is obtained
@@ -171,11 +171,11 @@ func cString(pinner *runtime.Pinner, str string) uintptr {
 func goRunError(rc bindings.WAFReturnCode) error {
 	switch rc {
 	case bindings.WAFErrInternal:
-		return errors.ErrInternal
+		return waferrors.ErrInternal
 	case bindings.WAFErrInvalidObject:
-		return errors.ErrInvalidObject
+		return waferrors.ErrInvalidObject
 	case bindings.WAFErrInvalidArgument:
-		return errors.ErrInvalidArgument
+		return waferrors.ErrInvalidArgument
 	case bindings.WAFOK, bindings.WAFMatch:
 		// No error...
 		return nil

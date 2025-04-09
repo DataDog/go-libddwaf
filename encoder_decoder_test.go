@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 
 	"github.com/stretchr/testify/require"
 )
@@ -138,12 +138,12 @@ func TestEncodeDecode(t *testing.T) {
 		{
 			Name:        "byte-slice",
 			Input:       []byte("hello, waf"),
-			DecodeError: errors.ErrUnsupportedValue,
+			DecodeError: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:        "json-raw",
 			Input:       json.RawMessage("hello, waf"),
-			DecodeError: errors.ErrUnsupportedValue,
+			DecodeError: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:   "nil-byte-slice",
@@ -196,7 +196,7 @@ func TestEncodeDecode(t *testing.T) {
 		{
 			Name:        "invalid-interface-value",
 			Input:       nil,
-			EncodeError: errors.ErrUnsupportedValue,
+			EncodeError: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:   "nil-str-pointer-value",
@@ -217,12 +217,12 @@ func TestEncodeDecode(t *testing.T) {
 			Name:        "unsupported",
 			Input:       func() {},
 			Output:      func() {},
-			EncodeError: errors.ErrUnsupportedValue,
+			EncodeError: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:        "map-nested-unsupported",
 			Input:       map[string]any{"1": func() {}},
-			DecodeError: errors.ErrUnsupportedValue,
+			DecodeError: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:  "slice",
@@ -298,7 +298,7 @@ func TestEncodeDecode(t *testing.T) {
 				a:       "a",
 				A:       make(chan any),
 			},
-			DecodeError: errors.ErrUnsupportedValue,
+			DecodeError: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name: "struct-with-unsupported-ignored-values",
@@ -388,7 +388,7 @@ func TestEncoderLimits(t *testing.T) {
 			Name:          "array-depth",
 			MaxValueDepth: 0,
 			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
-			EncodeError:   errors.ErrMaxDepthExceeded,
+			EncodeError:   waferrors.ErrMaxDepthExceeded,
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
 		},
 		{
@@ -403,7 +403,7 @@ func TestEncoderLimits(t *testing.T) {
 			Input:         map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
 			Output:        map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": nil},
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
-			DecodeError:   errors.ErrUnsupportedValue,
+			DecodeError:   waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:          "map-depth",
@@ -415,14 +415,14 @@ func TestEncoderLimits(t *testing.T) {
 			Name:          "map-depth",
 			MaxValueDepth: 0,
 			Input:         map[string]any{},
-			EncodeError:   errors.ErrMaxDepthExceeded,
+			EncodeError:   waferrors.ErrMaxDepthExceeded,
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {1}},
 		},
 		{
 			Name:          "struct-depth",
 			MaxValueDepth: 0,
 			Input:         struct{}{},
-			EncodeError:   errors.ErrMaxDepthExceeded,
+			EncodeError:   waferrors.ErrMaxDepthExceeded,
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {1}},
 		},
 		{
@@ -437,7 +437,7 @@ func TestEncoderLimits(t *testing.T) {
 				"F1": nil,
 			},
 			Truncations: map[TruncationReason][]int{ObjectTooDeep: {2}},
-			DecodeError: errors.ErrUnsupportedValue,
+			DecodeError: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:          "struct-max-depth",
@@ -451,7 +451,7 @@ func TestEncoderLimits(t *testing.T) {
 				"F1": nil,
 			},
 			Truncations: map[TruncationReason][]int{ObjectTooDeep: {2}},
-			DecodeError: errors.ErrUnsupportedValue,
+			DecodeError: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:               "array-max-length",
@@ -520,7 +520,7 @@ func TestEncoderLimits(t *testing.T) {
 		{
 			Name:        "self-recursive-map-value",
 			Input:       map[string]any{"bomb": selfPointer},
-			DecodeError: errors.ErrUnsupportedValue,
+			DecodeError: waferrors.ErrUnsupportedValue,
 		},
 	} {
 		maxValueDepth := 99999
@@ -625,7 +625,7 @@ func TestEncoderTypeTree(t *testing.T) {
 		{
 			Name:  "unsupported type",
 			Input: make(chan struct{}),
-			Error: errors.ErrUnsupportedValue,
+			Error: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:   "nil-byte-slice",
@@ -640,7 +640,7 @@ func TestEncoderTypeTree(t *testing.T) {
 		{
 			Name:  "invalid-interface-value",
 			Input: nil,
-			Error: errors.ErrUnsupportedValue,
+			Error: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:   "nil-str-pointer-value",
@@ -655,12 +655,12 @@ func TestEncoderTypeTree(t *testing.T) {
 		{
 			Name:  "unsupported",
 			Input: func() {},
-			Error: errors.ErrUnsupportedValue,
+			Error: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:  "unsupported",
 			Input: make(chan struct{}),
-			Error: errors.ErrUnsupportedValue,
+			Error: waferrors.ErrUnsupportedValue,
 		},
 		{
 			Name:   "slice-having-unsupported-values",

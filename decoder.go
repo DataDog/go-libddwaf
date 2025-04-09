@@ -8,16 +8,16 @@ package libddwaf
 import (
 	"fmt"
 
-	"github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
 
 // decodeErrors transforms the wafObject received by the wafRulesetInfo after the call to wafDl.wafInit to a map where
 // keys are the error message and the value is a array of all the rule ids which triggered this specific error
 func decodeErrors(obj *bindings.WAFObject) (map[string][]string, error) {
 	if !obj.IsMap() {
-		return nil, fmt.Errorf("decodeErrors: %w: expected map, got %s", errors.ErrInvalidObjectType, obj.Type)
+		return nil, fmt.Errorf("decodeErrors: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type)
 	}
 
 	if obj.Value == 0 && obj.NbEntries == 0 {
@@ -25,7 +25,7 @@ func decodeErrors(obj *bindings.WAFObject) (map[string][]string, error) {
 	}
 
 	if obj.Value == 0 && obj.NbEntries > 0 {
-		return nil, errors.ErrNilObjectPtr
+		return nil, waferrors.ErrNilObjectPtr
 	}
 
 	wafErrors := map[string][]string{}
@@ -46,10 +46,10 @@ func decodeErrors(obj *bindings.WAFObject) (map[string][]string, error) {
 
 func decodeDiagnostics(obj *bindings.WAFObject) (Diagnostics, error) {
 	if !obj.IsMap() {
-		return Diagnostics{}, fmt.Errorf("decodeDiagnostics: %w: expected map, got %s", errors.ErrInvalidObjectType, obj.Type)
+		return Diagnostics{}, fmt.Errorf("decodeDiagnostics: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type)
 	}
 	if obj.Value == 0 && obj.NbEntries > 0 {
-		return Diagnostics{}, errors.ErrNilObjectPtr
+		return Diagnostics{}, waferrors.ErrNilObjectPtr
 	}
 
 	var (
@@ -93,10 +93,10 @@ func decodeDiagnostics(obj *bindings.WAFObject) (Diagnostics, error) {
 
 func decodeFeature(obj *bindings.WAFObject) (*Feature, error) {
 	if !obj.IsMap() {
-		return nil, fmt.Errorf("decodeFeature: %w: expected map, got %s", errors.ErrInvalidObjectType, obj.Type)
+		return nil, fmt.Errorf("decodeFeature: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type)
 	}
 	if obj.Value == 0 && obj.NbEntries > 0 {
-		return nil, errors.ErrNilObjectPtr
+		return nil, waferrors.ErrNilObjectPtr
 	}
 	var feature Feature
 	var err error
@@ -118,7 +118,7 @@ func decodeFeature(obj *bindings.WAFObject) (*Feature, error) {
 		case "warnings":
 			feature.Warnings, err = decodeErrors(objElem)
 		default:
-			return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedValue, key)
+			return nil, fmt.Errorf("%w: %s", waferrors.ErrUnsupportedValue, key)
 		}
 
 		if err != nil {
@@ -136,18 +136,18 @@ func decodeStringArray(obj *bindings.WAFObject) ([]string, error) {
 	}
 
 	if !obj.IsArray() {
-		return nil, fmt.Errorf("decodeStringArray: %w: expected array, got %s", errors.ErrInvalidObjectType, obj.Type)
+		return nil, fmt.Errorf("decodeStringArray: %w: expected array, got %s", waferrors.ErrInvalidObjectType, obj.Type)
 	}
 
 	if obj.Value == 0 && obj.NbEntries > 0 {
-		return nil, errors.ErrNilObjectPtr
+		return nil, waferrors.ErrNilObjectPtr
 	}
 
 	var strArr []string
 	for i := uint64(0); i < obj.NbEntries; i++ {
 		objElem := unsafe.CastWithOffset[bindings.WAFObject](obj.Value, i)
 		if objElem.Type != bindings.WAFStringType {
-			return nil, fmt.Errorf("decodeStringArray: %w: expected string, got %s", errors.ErrInvalidObjectType, objElem.Type)
+			return nil, fmt.Errorf("decodeStringArray: %w: expected string, got %s", waferrors.ErrInvalidObjectType, objElem.Type)
 		}
 
 		strArr = append(strArr, unsafe.GostringSized(unsafe.Cast[byte](objElem.Value), objElem.NbEntries))
@@ -175,7 +175,7 @@ func decodeObject(obj *bindings.WAFObject) (any, error) {
 	case bindings.WAFNilType:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("decodeObject: %w: %d", errors.ErrUnsupportedValue, obj.Type)
+		return nil, fmt.Errorf("decodeObject: %w: %d", waferrors.ErrUnsupportedValue, obj.Type)
 	}
 }
 
@@ -185,7 +185,7 @@ func decodeArray(obj *bindings.WAFObject) ([]any, error) {
 	}
 
 	if !obj.IsArray() {
-		return nil, fmt.Errorf("decodeArray: %w: expected array, got %s", errors.ErrInvalidObjectType, obj.Type)
+		return nil, fmt.Errorf("decodeArray: %w: expected array, got %s", waferrors.ErrInvalidObjectType, obj.Type)
 	}
 
 	events := make([]any, obj.NbEntries)
@@ -208,7 +208,7 @@ func decodeMap(obj *bindings.WAFObject) (map[string]any, error) {
 	}
 
 	if !obj.IsMap() {
-		return nil, fmt.Errorf("decodeMap: %w: expected map, got %s", errors.ErrInvalidObjectType, obj.Type)
+		return nil, fmt.Errorf("decodeMap: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type)
 	}
 
 	result := make(map[string]any, obj.NbEntries)

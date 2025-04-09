@@ -11,10 +11,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/pin"
 	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
 
 // Context is a WAF execution context. It allows running the WAF incrementally when calling it
@@ -73,7 +73,7 @@ func (d RunAddressData) isEmpty() bool {
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
 // Callers must check the returned [Result] object even when an error is returned, as the WAF might
 // have been able to match some rules and generate events or actions before the error was reached;
-// especially when the error is [errors.ErrTimeout].
+// especially when the error is [waferrors.ErrTimeout].
 func (context *Context) Run(addressData RunAddressData) (res Result, err error) {
 	if addressData.isEmpty() {
 		return
@@ -84,14 +84,14 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	}
 
 	defer func() {
-		if err == errors.ErrTimeout {
+		if err == waferrors.ErrTimeout {
 			context.timeoutCount[addressData.Scope].Add(1)
 		}
 	}()
 
 	// If the context has already timed out, we don't need to run the WAF again
 	if context.timer.SumExhausted() {
-		return Result{}, errors.ErrTimeout
+		return Result{}, waferrors.ErrTimeout
 	}
 
 	runTimer, err := context.timer.NewNode(wafRunTag,
@@ -139,11 +139,11 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 
 	if context.cContext == 0 {
 		// Context has been closed, returning an empty result...
-		return res, errors.ErrContextClosed
+		return res, waferrors.ErrContextClosed
 	}
 
 	if runTimer.SumExhausted() {
-		return res, errors.ErrTimeout
+		return res, waferrors.ErrTimeout
 	}
 
 	wafDecodeTimer := runTimer.MustLeaf(wafDecodeTag)
@@ -210,7 +210,7 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, scope Scope, add
 	}
 
 	if timer.Exhausted() {
-		return nil, errors.ErrTimeout
+		return nil, waferrors.ErrTimeout
 	}
 
 	return data, nil
@@ -235,7 +235,7 @@ func (context *Context) run(persistentData, ephemeralData *bindings.WAFObject, w
 
 func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFResult) (res Result, err error) {
 	if result.Timeout > 0 {
-		err = errors.ErrTimeout
+		err = waferrors.ErrTimeout
 	} else {
 		// Derivatives can be generated even if no security event gets detected, so we decode them as long as the WAF
 		// didn't timeout
