@@ -9,17 +9,18 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"sync"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 )
 
 // Builder manages an evolving WAF configuration over time. Its lifecycle is
 // typically tied to that of a remote configuration client, as its purpose is to
-// keep an up-to-date view of the current coniguration with low overhead.
+// keep an up-to-date view of the current coniguration with low overhead. This
+// type is not safe for concurrent use, and users should protect it with a mutex
+// or similar when sharing it across multiple goroutines. All methods of this
+// type are safe to call with a nil receiver.
 type Builder struct {
 	handle bindings.WAFBuilder
-	mu     sync.Mutex
 }
 
 // NewBuilder creates a new [Builder] instance. Its lifecycle is typically tied
@@ -45,13 +46,7 @@ func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builde
 
 // Close releases all resources associated with this builder.
 func (b *Builder) Close() {
-	if b == nil {
-		return
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if b.handle == 0 {
+	if b == nil || b.handle == 0 {
 		return
 	}
 	wafLib.BuilderDestroy(b.handle)
@@ -73,9 +68,6 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 	if path == "" {
 		return Diagnostics{}, errors.New("path cannot be blank")
 	}
-
-	b.mu.Lock()
-	defer b.mu.Unlock()
 
 	if b.handle == 0 {
 		return Diagnostics{}, errBuilderClosed
@@ -114,14 +106,7 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 // RemoveConfig removes the configuration associated with the given path from
 // this [Builder]. Returns true if the removal was successful.
 func (b *Builder) RemoveConfig(path string) bool {
-	if b == nil {
-		return false
-	}
-
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if b.handle == 0 {
+	if b == nil || b.handle == 0 {
 		return false
 	}
 
@@ -130,14 +115,7 @@ func (b *Builder) RemoveConfig(path string) bool {
 
 // ConfigPaths returns the list of currently loaded configuration paths.
 func (b *Builder) ConfigPaths(filter string) []string {
-	if b == nil {
-		return nil
-	}
-
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if b.handle == 0 {
+	if b == nil || b.handle == 0 {
 		return nil
 	}
 
@@ -149,14 +127,7 @@ func (b *Builder) ConfigPaths(filter string) []string {
 // responsible for calling [Handle.Close] when the handle is no longer needed.
 // This function may return nil.
 func (b *Builder) Build() *Handle {
-	if b == nil {
-		return nil
-	}
-
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if b.handle == 0 {
+	if b == nil || b.handle == 0 {
 		return nil
 	}
 
