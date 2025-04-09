@@ -6,17 +6,16 @@
 package bindings
 
 import (
-	wafErrors "github.com/DataDog/go-libddwaf/v4/waferrors"
-
 	"fmt"
 	"reflect"
 	"runtime"
 
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/pkg/errors"
 )
 
-func newPanicError(in any, err error) *wafErrors.PanicError {
-	return &wafErrors.PanicError{
+func newPanicError(in any, err error) *waferrors.PanicError {
+	return &waferrors.PanicError{
 		In:  runtime.FuncForPC(reflect.ValueOf(in).Pointer()).Name(),
 		Err: err,
 	}

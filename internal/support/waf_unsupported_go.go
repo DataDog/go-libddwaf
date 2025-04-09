@@ -8,8 +8,8 @@
 
 package support
 
-import "github.com/DataDog/go-libddwaf/v4/errors"
+import "github.com/DataDog/go-libddwaf/v4/waferrors"
 
 func init() {
-	wafSupportErrors = append(wafSupportErrors, errors.UnsupportedGoVersionError{})
+	wafSupportErrors = append(wafSupportErrors, waferrors.UnsupportedGoVersionError{})
 }

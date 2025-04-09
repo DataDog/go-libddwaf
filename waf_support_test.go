@@ -11,9 +11,8 @@ import (
 	"flag"
 	"testing"
 
-	wafErrors "github.com/DataDog/go-libddwaf/v4/errors"
 	"github.com/DataDog/go-libddwaf/v4/internal/support"
-
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,14 +50,14 @@ func TestSupport(t *testing.T) {
 
 	for _, err := range errors {
 		switch err := err.(type) {
-		case wafErrors.UnsupportedOSArchError:
+		case waferrors.UnsupportedOSArchError:
 			require.Contains(t, *wafBuildTags, err.OS, "The OS is marked as supported but a support error appeared", err)
 			require.Contains(t, *wafBuildTags, err.Arch, "The architecture is marked as supported but a support error appeared", err)
-		case wafErrors.UnsupportedGoVersionError:
+		case waferrors.UnsupportedGoVersionError:
 			// We can't check anything here because we forced the version to be wrong we a build tag added manually instead of just having an incompatible version
-		case wafErrors.ManuallyDisabledError:
+		case waferrors.ManuallyDisabledError:
 			require.Contains(t, *wafBuildTags, "datadog.no_waf", "The WAF is marked as enabled but a support error appeared", err)
-		case wafErrors.CgoDisabledError:
+		case waferrors.CgoDisabledError:
 			require.NotContainsf(t, *wafBuildTags, "cgo", "The build tags contains cgo but a support error appeared", err)
 		default:
 			require.Fail(t, "Unknown error type", err)

@@ -10,22 +10,21 @@ package support_test
 import (
 	"testing"
 
-	waf "github.com/DataDog/go-libddwaf/v4"
-	"github.com/DataDog/go-libddwaf/v4/errors"
-
+	"github.com/DataDog/go-libddwaf/v4"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/stretchr/testify/require"
 )
 
 func TestManuallyDisabled(t *testing.T) {
 	t.Run("Load", func(t *testing.T) {
-		ok, err := waf.Load()
+		ok, err := libddwaf.Load()
 		require.False(t, ok)
-		require.ErrorIs(t, err, errors.ManuallyDisabledError{})
+		require.ErrorIs(t, err, waferrors.ManuallyDisabledError{})
 	})
 
 	t.Run("Usable", func(t *testing.T) {
-		ok, err := waf.Usable()
+		ok, err := libddwaf.Usable()
 		require.False(t, ok)
-		require.ErrorIs(t, err, errors.ManuallyDisabledError{})
+		require.ErrorIs(t, err, waferrors.ManuallyDisabledError{})
 	})
 }
