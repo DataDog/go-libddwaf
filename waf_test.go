@@ -5,7 +5,7 @@
 
 //go:build (amd64 || arm64) && (linux || darwin) && !go1.25 && !datadog.no_waf && (cgo || appsec)
 
-package waf
+package libddwaf
 
 import (
 	"bytes"

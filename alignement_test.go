@@ -6,7 +6,7 @@
 // Purego only works on linux/macOS with amd64 and arm64 from now
 //go:build (linux || darwin) && (amd64 || arm64) && !go1.25 && !datadog.no_waf && (cgo || appsec)
 
-package waf
+package libddwaf
 
 import (
 	"testing"

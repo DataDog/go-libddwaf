@@ -5,7 +5,7 @@
 
 //go:build ci
 
-package waf
+package libddwaf
 
 import (
 	"flag"
