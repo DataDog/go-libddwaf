@@ -8,10 +8,12 @@
 package libddwaf
 
 import (
+	"encoding/json"
 	"maps"
+	"net/http"
+	"os"
 	"testing"
 
-	"github.com/DataDog/appsec-internal-go/appsec"
 	"github.com/DataDog/go-libddwaf/v4/internal/log"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/stretchr/testify/require"
@@ -252,13 +254,40 @@ func TestBuilder(t *testing.T) {
 		)
 	})
 
-	t.Run("appsec-internal-go/appsec", func(t *testing.T) {
-		wafLib.SetLogCb(log.CallbackFunctionPointer(), log.LevelInfo)
-		defer wafLib.SetLogCb(0, log.LevelOff)
+	t.Run("DataDog/appsec-event-rules", func(t *testing.T) {
+		token := os.Getenv("GITHUB_TOKEN")
+		if token == "" {
+			t.Skip("GITHUB_TOKEN is not set, unable to access DataDog/appsec-event-rules releases")
+		}
 
-		rules, err := appsec.DefaultRulesetMap()
+		req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/DataDog/appsec-event-rules/releases/latest", nil)
 		require.NoError(t, err)
+		req.Header.Set("Authorization", "Bearer "+token)
 
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var release struct {
+			TagName string `json:"tag_name"`
+		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&release))
+
+		req, err = http.NewRequest(http.MethodGet, "https://raw.githubusercontent.com/DataDog/appsec-event-rules/refs/tags/"+release.TagName+"/build/recommended.json", nil)
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		resp, err = http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var rules map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&rules))
+
+		// Now that we have the rules, try them out...
 		builder, err := NewBuilder("", "")
 		require.NoError(t, err)
 		defer builder.Close()

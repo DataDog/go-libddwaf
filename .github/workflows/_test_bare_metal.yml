@@ -33,3 +33,4 @@ jobs:
         run: ./.github/workflows/ci.sh
         env:
           DD_APPSEC_WAF_LOG_LEVEL: ${{ matrix.waf-log-level }}
+          GITHUB_TOKEN: ${{ secrets.ACCESS_RULES_GITHUB_TOKEN }}

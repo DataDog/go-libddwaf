@@ -3,7 +3,6 @@ module github.com/DataDog/go-libddwaf/v4
 go 1.23.0
 
 require (
-	github.com/DataDog/appsec-internal-go v1.11.2
 	github.com/ebitengine/purego v0.8.2
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.10.0

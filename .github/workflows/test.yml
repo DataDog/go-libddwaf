@@ -16,6 +16,7 @@ jobs:
   bare-metal:
     name: GitHub Runner
     uses: ./.github/workflows/_test_bare_metal.yml
+    secrets: inherit
   containerized:
     name: Containerized
     uses: ./.github/workflows/_test_containerized.yml
