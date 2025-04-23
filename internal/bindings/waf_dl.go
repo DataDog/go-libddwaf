@@ -27,27 +27,6 @@ type WAFLib struct {
 	handle uintptr
 }
 
-//go:generate go run ./resolvergen.go -type=wafSymbols
-type wafSymbols struct {
-	builderInit              uintptr `sym:"ddwaf_builder_init"`
-	builderAddOrUpdateConfig uintptr `sym:"ddwaf_builder_add_or_update_config"`
-	builderRemoveConfig      uintptr `sym:"ddwaf_builder_remove_config"`
-	builderBuildInstance     uintptr `sym:"ddwaf_builder_build_instance"`
-	builderGetConfigPaths    uintptr `sym:"ddwaf_builder_get_config_paths"`
-	builderDestroy           uintptr `sym:"ddwaf_builder_destroy"`
-
-	setLogCb       uintptr `sym:"ddwaf_set_log_cb"`
-	destroy        uintptr `sym:"ddwaf_destroy"`
-	knownAddresses uintptr `sym:"ddwaf_known_addresses"`
-	knownActions   uintptr `sym:"ddwaf_known_actions"`
-	getVersion     uintptr `sym:"ddwaf_get_version"`
-	contextInit    uintptr `sym:"ddwaf_context_init"`
-	contextDestroy uintptr `sym:"ddwaf_context_destroy"`
-	objectFree     uintptr `sym:"ddwaf_object_free"`
-	resultFree     uintptr `sym:"ddwaf_result_free"`
-	run            uintptr `sym:"ddwaf_run"`
-}
-
 // NewWAFLib loads the libddwaf shared library and resolves all tge relevant symbols.
 // The caller is responsible for calling wafDl.Close on the returned object once they
 // are done with it so that associated resources can be released.
