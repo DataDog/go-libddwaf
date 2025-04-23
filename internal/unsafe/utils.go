@@ -52,7 +52,7 @@ func GostringSized(ptr *byte, size uint64) string {
 func Cstring(name string) *byte {
 	var b = make([]byte, len(name)+1)
 	copy(b, name)
-	return &b[0]
+	return unsafe.SliceData(b)
 }
 
 // Cast is used to centralize unsafe use C of allocated pointer.

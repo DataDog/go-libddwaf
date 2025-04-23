@@ -10,9 +10,9 @@ import (
 	"runtime"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
@@ -143,6 +143,11 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 }
 
 func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscatorRegex string) *bindings.WAFConfig {
+	keyRegex := unsafe.Pointer(unsafe.Cstring(keyObfuscatorRegex))
+	pinner.Pin(keyRegex)
+	valRegex := unsafe.Pointer(unsafe.Cstring(valueObfuscatorRegex))
+	pinner.Pin(valRegex)
+
 	return &bindings.WAFConfig{
 		Limits: bindings.WAFConfigLimits{
 			MaxContainerDepth: bindings.MaxContainerDepth,
@@ -150,22 +155,12 @@ func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscato
 			MaxStringLength:   bindings.MaxStringLength,
 		},
 		Obfuscator: bindings.WAFConfigObfuscator{
-			KeyRegex:   cString(pinner, keyObfuscatorRegex),
-			ValueRegex: cString(pinner, valueObfuscatorRegex),
+			KeyRegex:   uintptr(keyRegex),
+			ValueRegex: uintptr(valRegex),
 		},
 		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
 		FreeFn: 0,
 	}
-}
-
-// cString allocates a C-string with the contents of str and pins it using the
-// provided [*runtime.Pinner].
-func cString(pinner *runtime.Pinner, str string) uintptr {
-	cstr := make([]byte, len(str)+1)
-	copy(cstr, []byte(str))
-	data := unsafe.Pointer(unsafe.SliceData(cstr))
-	pinner.Pin(data)
-	return uintptr(data)
 }
 
 func goRunError(rc bindings.WAFReturnCode) error {
