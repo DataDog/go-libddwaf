@@ -24,7 +24,6 @@ func TestBuilder(t *testing.T) {
 
 	if supported, err := Usable(); !supported || err != nil {
 		t.Skipf("target is not supported by the WAF: %v", err)
-		return
 	}
 
 	validRule := map[string]any{
