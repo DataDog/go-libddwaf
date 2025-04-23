@@ -8,9 +8,9 @@ package bindings
 import (
 	"fmt"
 	"structs"
-	"unsafe"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/pin"
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 )
 
 const (
@@ -126,27 +126,29 @@ func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint64) []WAFObject {
 // SetMapKey sets the receiving [WAFObject] to a new map key with the given
 // string.
 func (w *WAFObject) SetMapKey(pinner pin.Pinner, key string) {
-	w.ParameterNameLength = uint64(len(key))
+	header := unsafe.NativeStringUnwrap(key)
+
+	w.ParameterNameLength = uint64(header.Len)
 	if w.ParameterNameLength == 0 {
 		w.ParameterName = 0
 		return
 	}
-	data := unsafe.Pointer(unsafe.StringData(key))
-	pinner.Pin(data)
-	w.ParameterName = uintptr(data)
+	pinner.Pin(unsafe.Pointer(header.Data))
+	w.ParameterName = uintptr(unsafe.Pointer(header.Data))
 }
 
 // SetString sets the receiving [WAFObject] value to the given string.
 func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
+	header := unsafe.NativeStringUnwrap(str)
+
 	w.Type = WAFStringType
-	w.NbEntries = uint64(len(str))
+	w.NbEntries = uint64(header.Len)
 	if w.NbEntries == 0 {
 		w.Value = 0
 		return
 	}
-	data := unsafe.Pointer(unsafe.StringData(str))
-	pinner.Pin(data)
-	w.Value = uintptr(data)
+	pinner.Pin(unsafe.Pointer(header.Data))
+	w.Value = uintptr(unsafe.Pointer(header.Data))
 }
 
 func (w *WAFObject) setArrayTyped(pinner pin.Pinner, capacity uint64, t WAFObjectType) []WAFObject {
