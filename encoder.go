@@ -108,17 +108,17 @@ func newMaxEncoder(pinner *runtime.Pinner) encoder {
 // The returned wafObject is the root of the tree of nested wafObjects representing the Go value.
 // The only error case is if the top-level object is "Unusable" which means that the data is nil or a non-data type
 // like a function or a channel.
-func (encoder *encoder) Encode(data any) (wo *bindings.WAFObject, err error) {
+func (encoder *encoder) Encode(data any) (*bindings.WAFObject, error) {
 	value := reflect.ValueOf(data)
-	wo = &bindings.WAFObject{}
+	wo := &bindings.WAFObject{}
 
-	err = encoder.encode(value, wo, encoder.objectMaxDepth)
+	err := encoder.encode(value, wo, encoder.objectMaxDepth)
 
 	if len(encoder.truncations[ObjectTooDeep]) != 0 && !encoder.timer.Exhausted() {
 		encoder.measureObjectDepth(value, encoder.timer.Remaining())
 	}
 
-	return
+	return wo, err
 }
 
 // Truncations returns all truncations that happened since the last call to `Truncations()`, and clears the internal
