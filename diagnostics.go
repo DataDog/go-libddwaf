@@ -37,32 +37,22 @@ type Diagnostics struct {
 
 // EachFeature calls the provided callback for each (non-nil) feature in this diagnostics object.
 func (d *Diagnostics) EachFeature(cb func(string, *Feature)) {
-	if d.Rules != nil {
-		cb("rules", d.Rules)
+	byName := map[string]*Feature{
+		"rules":           d.Rules,
+		"custom_rules":    d.CustomRules,
+		"actions":         d.Actions,
+		"exclusions":      d.Exclusions,
+		"rules_overrides": d.RulesOverrides,
+		"rules_data":      d.RulesData,
+		"exclusion_data":  d.ExclusionData,
+		"processors":      d.Processors,
+		"scanners":        d.Scanners,
 	}
-	if d.CustomRules != nil {
-		cb("custom_rules", d.CustomRules)
-	}
-	if d.Actions != nil {
-		cb("actions", d.Actions)
-	}
-	if d.Exclusions != nil {
-		cb("exclusions", d.Exclusions)
-	}
-	if d.RulesOverrides != nil {
-		cb("rules_overrides", d.RulesOverrides)
-	}
-	if d.RulesData != nil {
-		cb("rules_data", d.RulesData)
-	}
-	if d.ExclusionData != nil {
-		cb("exclusion_data", d.ExclusionData)
-	}
-	if d.Processors != nil {
-		cb("processors", d.Processors)
-	}
-	if d.Scanners != nil {
-		cb("scanners", d.Scanners)
+
+	for name, feat := range byName {
+		if feat != nil {
+			cb(name, feat)
+		}
 	}
 }
 
