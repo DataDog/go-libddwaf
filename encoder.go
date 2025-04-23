@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"runtime"
 	"strings"
 	"time"
 	"unicode"
@@ -93,7 +92,7 @@ func newLimitedEncoder(pinner pin.Pinner, timer timer.Timer) encoder {
 	}
 }
 
-func newMaxEncoder(pinner *runtime.Pinner) encoder {
+func newMaxEncoder(pinner pin.Pinner) encoder {
 	timer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
 	return encoder{
 		pinner:           pinner,
