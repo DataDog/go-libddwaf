@@ -34,8 +34,8 @@ func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builde
 	}
 
 	var pinner runtime.Pinner
+	defer pinner.Unpin()
 	hdl := wafLib.BuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
-	pinner.Unpin()
 
 	if hdl == 0 {
 		return nil, errors.New("failed to initialize the WAF builder")
