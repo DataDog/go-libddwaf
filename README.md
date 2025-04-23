@@ -6,7 +6,7 @@ It consists of 2 separate entities: the bindings for the calls to libddwaf, and 
 An example usage would be:
 
 ```go
-import waf "github.com/DataDog/go-libddwaf/v3"
+import waf "github.com/DataDog/go-libddwaf/v4"
 
 //go:embed
 var ruleset []byte
@@ -18,11 +18,19 @@ func main() {
         panic(err)
     }
 
-    wafHandle, err := waf.NewHandle(parsedRuleset, "", "")
+    builder, err := waf.NewBuilder("", "")
+    if err != nil {
+        panic(err)
+    }
+    _, err := builder.AddOrUpdateConfig(parsedRuleset)
     if err != nil {
         panic(err)
     }
 
+    wafHandle := builder.Build()
+    if wafHandle == nil {
+        panic("WAF handle is nil")
+    }
     defer wafHandle.Close()
 
     wafCtx := wafHandle.NewContext()
@@ -36,7 +44,7 @@ func main() {
 }
 ```
 
-The API documentation details can be found on [pkg.go.dev](https://pkg.go.dev/github.com/DataDog/go-libddwaf/v3).
+The API documentation details can be found on [pkg.go.dev](https://pkg.go.dev/github.com/DataDog/go-libddwaf/v4).
 
 Originally this project was only here to provide CGO Wrappers to the calls to libddwaf.
 But with the appearance of `ddwaf_object` tree like structure,
@@ -65,17 +73,18 @@ Note that:
 
 The WAF bindings have multiple moving parts that are necessary to understand:
 
-- Handle: a object wrapper over the pointer to the C WAF Handle
-- Context: a object wrapper over a pointer to the C WAF Context
+- `Builder`: an object wrapper over the pointer to the C WAF Builder
+- `Handle`: an object wrapper over the pointer to the C WAF Handle
+- `Context`: an object wrapper over a pointer to the C WAF Context
 - Encoder: its goal is to construct a tree of Waf Objects to send to the WAF
-- CGORefPool: Does all allocation operations for the construction of Waf Objects and keeps track of the equivalent go pointers
 - Decoder: Transforms Waf Objects returned from the WAF to usual go objects (e.g. maps, arrays, ...)
 - Library: The low-level go bindings to the C library, providing improved typing
 
 ```mermaid
 flowchart LR
+    START:::hidden -->|NewBuilder| Builder -->|Build| Handle
 
-    START:::hidden -->|NewHandle| Handle -->|NewContext| Context
+    Handle -->|NewContext| Context
 
     Context -->|Encode Inputs| Encoder
 
@@ -86,38 +95,23 @@ flowchart LR
     Handle -->|Decode Init Errors| Decoder
 
     Context -->|Run| Library
-    Context -->|Store Go References| CGORefPool
-
-    Encoder -->|Allocate Waf Objects| TempCGORefPool
-
-    TempCGORefPool -->|Copy after each encoding| CGORefPool
+    Encoder -->|Allocate Waf Objects| runtime.Pinner
 
     Library -->|Call C code| libddwaf
 
     classDef hidden display: none;
 ```
 
-### CGO Reference Pool
+### `runtime.Pinner`
 
-The cgoRefPool type is a pure Go pointer pool of `ddwaf_object` C values on the Go memory heap.
-the `cgoRefPool` go type is a way to make sure we can safely send Go allocated data to the C side of the WAF
-The main issue is the following: the `WafObject` uses a C union to store the tree structure of the full object,
-union equivalent in go are interfaces and they are not compatible with C unions. The only way to be 100% sure
-that the Go `WafObject` struct has the same layout as the C one is to only use primitive types. So the only way to
-store a raw pointer is to use the `uintptr` type. But since `uintptr` do not have pointer semantics (and are just
-basically integers), we need another method to store the value as Go pointer because the GC will delete our data if it
-is not referenced by Go pointers.
-
-That's where the `cgoRefPool` object comes into play: all new `WafObject` elements are created via this API which is especially
-built to make sure there is no gap for the Garbage Collector to exploit. From there, since underlying values of the
-`wafObject` are either arrays of WafObjects (for maps, structs and arrays) or string (for all ints, booleans and strings),
-we can store 2 slices of arrays and use `unsafe.KeepAlive` in each code path to protect them from the GC.
-
-All these objects stored in the reference pool need to live throughout the use of the associated Waf Context.
+When passing Go values to the WAF, it is necessary to make sure that memory remains valid and does
+not move until the WAF no longer has any pointers to it. We do this by using a `runtime.Pinner`.
+Persistent address data is added to a `Context`-associated `runtime.Pinner`; while ephemeral address
+data is managed by a transient `runtime.Pinner` that only exists for the duration of the call.
 
 ### Typical call to Run()
 
-Here is an example of the flow of operations on a simple call to Run():
+Here is an example of the flow of operations on a simple call to `Run()`:
 
 - Encode input data into WAF Objects and store references in the temporary pool
 - Lock the context mutex until the end of the call

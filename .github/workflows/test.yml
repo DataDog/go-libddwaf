@@ -16,6 +16,9 @@ jobs:
   bare-metal:
     name: GitHub Runner
     uses: ./.github/workflows/_test_bare_metal.yml
+    # Needs secret access so it can access a GITHUB_TOKEN to verify the builder works with the
+    # latest AppSec rules package.
+    secrets: inherit
   containerized:
     name: Containerized
     uses: ./.github/workflows/_test_containerized.yml

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 )
 
 func BenchmarkMostUsedFunctions(b *testing.B) {

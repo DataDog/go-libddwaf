@@ -5,7 +5,7 @@
 
 //go:build (amd64 || arm64) && (linux || darwin) && !go1.25 && !datadog.no_waf && (cgo || appsec)
 
-package waf
+package libddwaf
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,11 +22,11 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v3/errors"
-	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v3/internal/lib"
-	"github.com/DataDog/go-libddwaf/v3/timer"
-
+	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/internal/lib"
+	"github.com/DataDog/go-libddwaf/v4/internal/log"
+	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,14 +46,8 @@ func TestLoad(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestSupportsTarget(t *testing.T) {
-	supported, err := SupportsTarget()
-	require.True(t, supported)
-	require.NoError(t, err)
-}
-
-func TestHealth(t *testing.T) {
-	supported, err := Health()
+func TestUsable(t *testing.T) {
+	supported, err := Usable()
 	require.True(t, supported)
 	require.NoError(t, err)
 }
@@ -163,34 +158,6 @@ var testArachniRulePairTmpl = template.Must(template.New("").Parse(`
 }
 `))
 
-// Test with a valid JSON but invalid rule format (field "events" should be an array)
-const malformedRule = `
-{
-  "version": "2.1",
-  "events": [
-	{
-	  "id": "ua0-600-12x",
-	  "name": "Arachni",
-	  "tags": {
-		"type": "security_scanner"
-	  },
-	  "conditions": [
-		{
-		  "operation": "match_regex",
-		  "parameters": {
-			"inputs": [
-			  { "address": "server.request.headers.no_cookies" }
-			],
-			"regex": "^Arachni"
-		  }
-		}
-	  ],
-	  "transformers": []
-	}
-  ]
-}
-`
-
 type ruleInput struct {
 	Address string
 	KeyPath []string
@@ -231,106 +198,23 @@ func newArachniTestRulePair(input1, input2 ruleInput) map[string]any {
 	return parsed
 }
 
-func newDefaultHandle(rule any) (*Handle, error) {
-	return NewHandle(rule, "", "")
-}
+func newDefaultHandle(rule any) (*Handle, *Diagnostics, error) {
+	builder, err := NewBuilder("", "")
+	if err != nil {
+		return nil, nil, err
+	}
 
-func TestNewWAF(t *testing.T) {
-	t.Run("valid-rule", func(t *testing.T) {
-		waf, err := newDefaultHandle(testArachniRule)
-		require.NoError(t, err)
-		require.NotNil(t, waf)
-		defer waf.Close()
-	})
+	diag, err := builder.AddOrUpdateConfig("/default", rule)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	t.Run("invalid-rule", func(t *testing.T) {
-		var parsed any
-
-		require.NoError(t, json.Unmarshal([]byte(malformedRule), &parsed))
-
-		waf, err := newDefaultHandle(parsed)
-		require.Error(t, err)
-		require.Nil(t, waf)
-	})
-}
-
-func TestUpdateWAF(t *testing.T) {
-
-	t.Run("valid-rule", func(t *testing.T) {
-		waf, err := newDefaultHandle(testArachniRule)
-		require.NoError(t, err)
-		require.NotNil(t, waf)
-		defer waf.Close()
-
-		waf2, err := waf.Update(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
-		require.NoError(t, err)
-		require.NotNil(t, waf2)
-		defer waf2.Close()
-	})
-
-	t.Run("changes", func(t *testing.T) {
-		waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
-		require.NoError(t, err)
-		require.NotNil(t, waf)
-		defer waf.Close()
-
-		wafCtx, err := waf.NewContext()
-		require.NoError(t, err)
-		defer wafCtx.Close()
-
-		// Matches
-		values := map[string]interface{}{
-			"my.input": "Arachni",
-		}
-		ephemeral := map[string]interface{}{
-			"my.other.input": map[string]bool{"safe": true},
-		}
-		res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
-		require.NoError(t, err)
-		require.NotEmpty(t, res.Events)
-		require.Nil(t, res.Actions)
-
-		// Update
-		waf2, err := waf.Update(newArachniTestRule([]ruleInput{{Address: "my.input"}}, []string{"block"}))
-		require.NoError(t, err)
-		require.NotNil(t, waf2)
-		defer waf2.Close()
-
-		wafCtx2, err := waf2.NewContext()
-		require.NoError(t, err)
-		defer wafCtx2.Close()
-
-		// Matches & Block
-		values = map[string]interface{}{
-			"my.input": "Arachni",
-		}
-		res, err = wafCtx2.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
-		require.NoError(t, err)
-		require.NotEmpty(t, res.Events)
-		require.NotEmpty(t, res.Actions)
-
-	})
-
-	t.Run("invalid-rule", func(t *testing.T) {
-
-		waf, err := newDefaultHandle(testArachniRule)
-		require.NoError(t, err)
-		require.NotNil(t, waf)
-		defer waf.Close()
-
-		var parsed any
-
-		require.NoError(t, json.Unmarshal([]byte(malformedRule), &parsed))
-
-		waf2, err := waf.Update(parsed)
-		require.Error(t, err)
-		require.Nil(t, waf2)
-	})
+	return builder.Build(), &diag, nil
 }
 
 func maxWafValueEncoder(encoder encoder) map[string]any {
 	rnd := rand.New(rand.NewSource(33))
-	buf := make([]byte, bindings.WafMaxStringLength)
+	buf := make([]byte, bindings.MaxStringLength)
 	rnd.Read(buf)
 	fullstr := string(buf)
 
@@ -354,7 +238,7 @@ func maxWafValueRec(encoder encoder, str string, depth int) map[string]any {
 }
 
 func TestTimeout(t *testing.T) {
-	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 
@@ -366,12 +250,12 @@ func TestTimeout(t *testing.T) {
 		}),
 	}
 
-	normalValue := map[string]interface{}{
+	normalValue := map[string]any{
 		"my.input": "Arachni",
 	}
 
 	t.Run("not-empty-metrics-match", func(t *testing.T) {
-		context, err := waf.NewContextWithBudget(time.Hour)
+		context, err := waf.NewContext(time.Hour)
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
@@ -386,7 +270,7 @@ func TestTimeout(t *testing.T) {
 	})
 
 	t.Run("not-empty-metrics-no-match", func(t *testing.T) {
-		context, err := waf.NewContextWithBudget(time.Hour)
+		context, err := waf.NewContext(time.Hour)
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
@@ -401,48 +285,48 @@ func TestTimeout(t *testing.T) {
 	})
 
 	t.Run("timeout-persistent-encoder", func(t *testing.T) {
-		context, err := waf.NewContextWithBudget(time.Millisecond)
+		context, err := waf.NewContext(time.Millisecond)
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
 		_, err = context.Run(RunAddressData{Persistent: largeValue})
-		require.Equal(t, errors.ErrTimeout, err)
+		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Stats().Timers["waf.duration_ext"], time.Millisecond)
 		require.GreaterOrEqual(t, context.Stats().Timers["waf.encode"], time.Millisecond)
 	})
 
 	t.Run("timeout-ephemeral-encoder", func(t *testing.T) {
-		context, err := waf.NewContextWithBudget(time.Millisecond)
+		context, err := waf.NewContext(time.Millisecond)
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
 		_, err = context.Run(RunAddressData{Ephemeral: largeValue})
-		require.Equal(t, errors.ErrTimeout, err)
+		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Stats().Timers["waf.duration_ext"], time.Millisecond)
 		require.GreaterOrEqual(t, context.Stats().Timers["waf.encode"], time.Millisecond)
 	})
 
 	t.Run("many-runs", func(t *testing.T) {
-		context, err := waf.NewContextWithBudget(time.Millisecond)
+		context, err := waf.NewContext(time.Millisecond)
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
-		for i := 0; i < 1000 && err != errors.ErrTimeout; i++ {
+		for i := 0; i < 1000 && err != waferrors.ErrTimeout; i++ {
 			_, err = context.Run(RunAddressData{Persistent: normalValue})
 		}
 
-		require.Equal(t, errors.ErrTimeout, err)
+		require.Equal(t, waferrors.ErrTimeout, err)
 	})
 
 	t.Run("rasp-simple", func(t *testing.T) {
-		waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+		waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 		require.NoError(t, err)
 		require.NotNil(t, waf)
 
-		context, err := waf.NewContext()
+		context, err := waf.NewContext(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
@@ -456,13 +340,13 @@ func TestTimeout(t *testing.T) {
 	})
 
 	t.Run("rasp-timeout", func(t *testing.T) {
-		context, err := waf.NewContextWithBudget(time.Millisecond)
+		context, err := waf.NewContext(time.Millisecond)
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
 		_, err = context.Run(RunAddressData{Persistent: largeValue, Scope: RASPScope})
-		require.Equal(t, errors.ErrTimeout, err)
+		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Stats().Timers["rasp.duration_ext"], time.Millisecond)
 		require.GreaterOrEqual(t, context.Stats().Timers["rasp.encode"], time.Millisecond)
 		require.EqualValues(t, 1, context.Stats().TimeoutRASPCount)
@@ -471,21 +355,21 @@ func TestTimeout(t *testing.T) {
 
 func TestMatching(t *testing.T) {
 
-	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 
 	require.Equal(t, []string{"my.input"}, waf.Addresses())
 
-	wafCtx, err := waf.NewContext()
+	wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
-	values := map[string]interface{}{
+	values := map[string]any{
 		"my.input": "go client",
 	}
-	ephemeral := map[string]interface{}{
+	ephemeral := map[string]any{
 		"my.other.input": map[string]bool{"safe": true},
 	}
 	res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
@@ -494,7 +378,7 @@ func TestMatching(t *testing.T) {
 	require.Nil(t, res.Actions)
 
 	// Not matching because the address is not used by the rule
-	values = map[string]interface{}{
+	values = map[string]any{
 		"server.request.uri.raw": "something",
 	}
 	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
@@ -504,7 +388,7 @@ func TestMatching(t *testing.T) {
 
 	// Matching
 	// Note a WAF rule can only match once. This is why we test the matching case at the end.
-	values = map[string]interface{}{
+	values = map[string]any{
 		"my.input": "Arachni",
 	}
 	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
@@ -525,7 +409,7 @@ func TestMatching(t *testing.T) {
 	require.Nil(t, res.Actions)
 
 	// Empty values
-	res, err = wafCtx.Run(RunAddressData{Persistent: map[string]interface{}{}, Ephemeral: ephemeral})
+	res, err = wafCtx.Run(RunAddressData{Persistent: map[string]any{}, Ephemeral: ephemeral})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -533,18 +417,18 @@ func TestMatching(t *testing.T) {
 	wafCtx.Close()
 	waf.Close()
 	// Using the WAF instance after it was closed leads to a nil WAF context
-	ctx, err := waf.NewContext()
+	ctx, err := waf.NewContext(timer.UnlimitedBudget)
 	require.Nil(t, ctx)
 	require.Error(t, err)
 }
 
 func TestMatchingEphemeralAndPersistent(t *testing.T) {
 	// This test validates the WAF behavior when a given address is provided both as ephemeral and persistent.
-	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	defer waf.Close()
 
-	wafCtx, err := waf.NewContext()
+	wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()
@@ -589,7 +473,7 @@ func TestMatchingEphemeral(t *testing.T) {
 		input2 = "my.input.2"
 	)
 
-	waf, err := newDefaultHandle(newArachniTestRulePair(ruleInput{Address: input1}, ruleInput{Address: input2}))
+	waf, _, err := newDefaultHandle(newArachniTestRulePair(ruleInput{Address: input1}, ruleInput{Address: input2}))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 
@@ -597,16 +481,16 @@ func TestMatchingEphemeral(t *testing.T) {
 	sort.Strings(addrs)
 	require.Equal(t, []string{input1, input2}, addrs)
 
-	wafCtx, err := waf.NewContext()
+	wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
 	runAddresses := RunAddressData{
-		Ephemeral: map[string]interface{}{
+		Ephemeral: map[string]any{
 			input1: "go client",
 		},
-		Persistent: map[string]interface{}{
+		Persistent: map[string]any{
 			input2: "go client",
 		},
 	}
@@ -617,10 +501,10 @@ func TestMatchingEphemeral(t *testing.T) {
 
 	// Not matching because the address is not used by the rule
 	runAddresses = RunAddressData{
-		Ephemeral: map[string]interface{}{
+		Ephemeral: map[string]any{
 			"server.request.uri.raw": "something",
 		},
-		Persistent: map[string]interface{}{
+		Persistent: map[string]any{
 			"server.request.body.raw": "something",
 		},
 	}
@@ -631,10 +515,10 @@ func TestMatchingEphemeral(t *testing.T) {
 
 	// Not matching due to a timeout
 	runAddresses = RunAddressData{
-		Ephemeral: map[string]interface{}{
+		Ephemeral: map[string]any{
 			input1: "Arachni-1",
 		},
-		Persistent: map[string]interface{}{
+		Persistent: map[string]any{
 			input2: "Arachni-2",
 		},
 	}
@@ -655,7 +539,7 @@ func TestMatchingEphemeral(t *testing.T) {
 	wafCtx.Close()
 	waf.Close()
 	// Using the WAF instance after it was closed leads to a nil WAF context
-	ctx, err := waf.NewContext()
+	ctx, err := waf.NewContext(timer.UnlimitedBudget)
 	require.Nil(t, ctx)
 	require.Error(t, err)
 }
@@ -666,7 +550,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 		input2 = "my.input.2"
 	)
 
-	waf, err := newDefaultHandle(newArachniTestRulePair(ruleInput{Address: input1}, ruleInput{Address: input2}))
+	waf, _, err := newDefaultHandle(newArachniTestRulePair(ruleInput{Address: input1}, ruleInput{Address: input2}))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 
@@ -674,13 +558,13 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	sort.Strings(addrs)
 	require.Equal(t, []string{input1, input2}, addrs)
 
-	wafCtx, err := waf.NewContext()
+	wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 
 	// Not matching because the address value doesn't match the rule
 	runAddresses := RunAddressData{
-		Ephemeral: map[string]interface{}{
+		Ephemeral: map[string]any{
 			input1: "go client",
 		},
 	}
@@ -691,7 +575,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 
 	// Not matching because the address is not used by the rule
 	runAddresses = RunAddressData{
-		Ephemeral: map[string]interface{}{
+		Ephemeral: map[string]any{
 			"server.request.uri.raw": "something",
 		},
 	}
@@ -702,7 +586,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 
 	// Not matching due to a timeout
 	runAddresses = RunAddressData{
-		Ephemeral: map[string]interface{}{
+		Ephemeral: map[string]any{
 			input1: "Arachni-1",
 		},
 	}
@@ -716,7 +600,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	wafCtx.Close()
 	waf.Close()
 	// Using the WAF instance after it was closed leads to a nil WAF context
-	ctx, err := waf.NewContext()
+	ctx, err := waf.NewContext(timer.UnlimitedBudget)
 	require.Nil(t, ctx)
 	require.Error(t, err)
 }
@@ -725,21 +609,21 @@ func TestActions(t *testing.T) {
 	testActions := func(expectedActions []string, expectedActionsTypes []string) func(t *testing.T) {
 		return func(t *testing.T) {
 
-			waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, expectedActions))
+			waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, expectedActions))
 			require.NoError(t, err)
 			require.NotNil(t, waf)
 			defer waf.Close()
 
-			wafCtx, err := waf.NewContext()
+			wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 			require.NoError(t, err)
 			require.NotNil(t, wafCtx)
 			defer wafCtx.Close()
 
 			// Not matching because the address value doesn't match the rule
-			values := map[string]interface{}{
+			values := map[string]any{
 				"my.input": "Arachni",
 			}
-			ephemeral := map[string]interface{}{
+			ephemeral := map[string]any{
 				"my.other.input": map[string]bool{"safe": true},
 			}
 			res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
@@ -758,14 +642,14 @@ func TestActions(t *testing.T) {
 func TestAddresses(t *testing.T) {
 	expectedAddresses := []string{"my.indexed.input", "my.third.input", "my.second.input", "my.first.input"}
 	addresses := []ruleInput{{Address: "my.first.input"}, {Address: "my.second.input"}, {Address: "my.third.input"}, {Address: "my.indexed.input", KeyPath: []string{"indexed"}}}
-	waf, err := newDefaultHandle(newArachniTestRule(addresses, nil))
+	waf, _, err := newDefaultHandle(newArachniTestRule(addresses, nil))
 	require.NoError(t, err)
 	defer waf.Close()
 	require.Equal(t, expectedAddresses, waf.Addresses())
 }
 
 func TestKnownActions(t *testing.T) {
-	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.first.input"}}, []string{"block"}))
+	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.first.input"}}, []string{"block"}))
 	require.NoError(t, err)
 	defer waf.Close()
 	require.Equal(t, []string{"block_request"}, waf.Actions())
@@ -777,11 +661,11 @@ func TestConcurrency(t *testing.T) {
 	nbRun := 500
 
 	t.Run("concurrent-waf-context-usage", func(t *testing.T) {
-		waf, err := newDefaultHandle(testArachniRule)
+		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 		defer waf.Close()
 
-		wafCtx, err := waf.NewContext()
+		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		defer wafCtx.Close()
 
@@ -803,19 +687,19 @@ func TestConcurrency(t *testing.T) {
 		// Create a stopBarrier to signal when all user goroutines are done.
 		stopBarrier.Add(nbUsers)
 
-		for n := 0; n < nbUsers; n++ {
+		for range nbUsers {
 			go func() {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				for c := 0; c < nbRun; c++ {
+				for c := range nbRun {
 					i := c % length
-					data := map[string]interface{}{
+					data := map[string]any{
 						"server.request.headers.no_cookies": map[string]string{
 							"user-agent": userAgents[i],
 						},
 					}
-					ephemeralData := map[string]interface{}{
+					ephemeralData := map[string]any{
 						"server.request.body": bodies[i],
 					}
 					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeralData})
@@ -835,12 +719,12 @@ func TestConcurrency(t *testing.T) {
 		stopBarrier.Wait()  // Wait for the user goroutines to be done
 
 		// Test the rule matches Arachni in the end
-		data := map[string]interface{}{
+		data := map[string]any{
 			"server.request.headers.no_cookies": map[string]string{
 				"user-agent": "Arachni",
 			},
 		}
-		ephemeral := map[string]interface{}{
+		ephemeral := map[string]any{
 			"server.request.body": map[string]bool{"safe": true},
 		}
 		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
@@ -849,7 +733,7 @@ func TestConcurrency(t *testing.T) {
 	})
 
 	t.Run("concurrent-waf-instance-usage", func(t *testing.T) {
-		waf, err := newDefaultHandle(testArachniRule)
+		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 		defer waf.Close()
 
@@ -871,23 +755,23 @@ func TestConcurrency(t *testing.T) {
 		// Create a stopBarrier to signal when all user goroutines are done.
 		stopBarrier.Add(nbUsers)
 
-		for n := 0; n < nbUsers; n++ {
+		for range nbUsers {
 			go func() {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				wafCtx, err := waf.NewContext()
+				wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 				require.NoError(t, err)
 				defer wafCtx.Close()
 
-				for c := 0; c < nbRun; c++ {
+				for c := range nbRun {
 					i := c % length
-					data := map[string]interface{}{
+					data := map[string]any{
 						"server.request.headers.no_cookies": map[string]string{
 							"user-agent": userAgents[i],
 						},
 					}
-					ephemeral := map[string]interface{}{"server.request.body": bodies[i]}
+					ephemeral := map[string]any{"server.request.body": bodies[i]}
 
 					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
 
@@ -900,12 +784,12 @@ func TestConcurrency(t *testing.T) {
 				}
 
 				// Test the rule matches Arachni in the end
-				data := map[string]interface{}{
+				data := map[string]any{
 					"server.request.headers.no_cookies": map[string]string{
 						"user-agent": "Arachni",
 					},
 				}
-				ephemeral := map[string]interface{}{
+				ephemeral := map[string]any{
 					"server.request.body": map[string]bool{"safe": true},
 				}
 				res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
@@ -929,7 +813,7 @@ func TestConcurrency(t *testing.T) {
 		// maximize the chances to highlight ref-counter problems, in particular
 		// the special ref-counter case where the WAF handle gets completely
 		// released when it reaches 0.
-		waf, err := newDefaultHandle(testArachniRule)
+		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 
 		var startBarrier, stopBarrier sync.WaitGroup
@@ -941,12 +825,12 @@ func TestConcurrency(t *testing.T) {
 
 		// Goroutines concurrently creating and destroying WAF contexts so that
 		// the WAF handle ref-counter gets stressed out.
-		for n := 0; n < nbUsers; n++ {
+		for range nbUsers {
 			go func() {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				wafCtx, err := waf.NewContext()
+				wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 				if wafCtx == nil || err != nil {
 					return
 				}
@@ -976,10 +860,13 @@ func TestConcurrency(t *testing.T) {
 		// threads, with mixed calls to `ddwaf_run` and `ddwaf_context_destroy`,
 		// which are not thread-safe.
 
-		waf, err := newDefaultHandle(testArachniRule)
+		wafLib.SetLogCb(log.CallbackFunctionPointer(), log.LevelDebug)
+		t.Cleanup(func() { wafLib.SetLogCb(0, log.LevelOff) })
+
+		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 
-		wafCtx, err := waf.NewContext()
+		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 
@@ -993,8 +880,7 @@ func TestConcurrency(t *testing.T) {
 			},
 		}
 
-		for n := 0; n < nbUsers; n++ {
-			n := n
+		for n := range nbUsers {
 			go func() {
 				startBarrier.Wait()
 				defer stopBarrier.Done()
@@ -1007,7 +893,10 @@ func TestConcurrency(t *testing.T) {
 				// effectively releases the WAF context, and between 0 and N calls to wafCtx.Run(...) are
 				// done (those that land after `wafCtx.Close()` happened will be silent no-ops).
 				if n%2 == 0 {
-					wafCtx.Run(RunAddressData{Ephemeral: data})
+					_, err := wafCtx.Run(RunAddressData{Ephemeral: data})
+					if err != nil {
+						require.ErrorIs(t, err, waferrors.ErrContextClosed)
+					}
 				} else {
 					wafCtx.Close()
 				}
@@ -1040,27 +929,27 @@ func TestRunError(t *testing.T) {
 		ExpectedString string
 	}{
 		{
-			Err:            errors.ErrInternal,
+			Err:            waferrors.ErrInternal,
 			ExpectedString: "internal waf error",
 		},
 		{
-			Err:            errors.ErrTimeout,
+			Err:            waferrors.ErrTimeout,
 			ExpectedString: "waf timeout",
 		},
 		{
-			Err:            errors.ErrInvalidObject,
+			Err:            waferrors.ErrInvalidObject,
 			ExpectedString: "invalid waf object",
 		},
 		{
-			Err:            errors.ErrInvalidArgument,
+			Err:            waferrors.ErrInvalidArgument,
 			ExpectedString: "invalid waf argument",
 		},
 		{
-			Err:            errors.ErrOutOfMemory,
+			Err:            waferrors.ErrOutOfMemory,
 			ExpectedString: "out of memory",
 		},
 		{
-			Err:            errors.RunError(33),
+			Err:            waferrors.RunError(33),
 			ExpectedString: "unknown waf error 33",
 		},
 	} {
@@ -1149,38 +1038,38 @@ func TestMetrics(t *testing.T) {
 
 	require.NoError(t, json.Unmarshal([]byte(rules), &parsed))
 
-	waf, err := newDefaultHandle(parsed)
+	waf, diags, err := newDefaultHandle(parsed)
 	require.NoError(t, err)
 	defer waf.Close()
 	t.Run("Diagnostics", func(t *testing.T) {
-		require.NotNil(t, waf.diagnostics.Rules)
-		require.Len(t, waf.diagnostics.Rules.Failed, 3)
+		require.NotNil(t, diags.Rules)
+		require.Len(t, diags.Rules.Failed, 3)
 		for _, id := range []string{"missing-tags-1", "missing-tags-2", "missing-name"} {
-			require.Contains(t, waf.diagnostics.Rules.Failed, id)
+			require.Contains(t, diags.Rules.Failed, id)
 		}
-		require.Len(t, waf.diagnostics.Rules.Loaded, 1)
-		require.Contains(t, waf.diagnostics.Rules.Loaded, "valid-rule")
-		require.Equal(t, waf.diagnostics.Version, "1.2.7")
-		require.Len(t, waf.diagnostics.Rules.Errors, 1)
+		require.Len(t, diags.Rules.Loaded, 1)
+		require.Contains(t, diags.Rules.Loaded, "valid-rule")
+		require.Equal(t, diags.Version, "1.2.7")
+		require.Len(t, diags.Rules.Errors, 1)
 
 		// Action diagnostics
-		require.Len(t, waf.diagnostics.Actions.Loaded, 2)
-		require.Len(t, waf.diagnostics.Actions.Failed, 1)
-		require.Contains(t, waf.diagnostics.Actions.Loaded, "block")
-		require.Contains(t, waf.diagnostics.Actions.Loaded, "redirect")
-		require.Contains(t, waf.diagnostics.Actions.Failed, "block2")
+		require.Len(t, diags.Actions.Loaded, 2)
+		require.Len(t, diags.Actions.Failed, 1)
+		require.Contains(t, diags.Actions.Loaded, "block")
+		require.Contains(t, diags.Actions.Loaded, "redirect")
+		require.Contains(t, diags.Actions.Failed, "block2")
 	})
 
 	t.Run("RunDuration", func(t *testing.T) {
-		wafCtx, err := waf.NewContext()
+		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		// Craft matching data to force work on the WAF
-		data := map[string]interface{}{
+		data := map[string]any{
 			"server.request.uri.raw": "\\%uff00",
 		}
-		ephemeral := map[string]interface{}{
+		ephemeral := map[string]any{
 			"server.request.body": map[string]bool{"safe": true},
 		}
 		start := time.Now()
@@ -1191,30 +1080,31 @@ func TestMetrics(t *testing.T) {
 		require.Nil(t, res.Actions)
 
 		// Make sure that WAF runtime was set
-		overall, internal := wafCtx.TotalRuntime()
-		require.Greater(t, overall, uint64(0))
-		require.Greater(t, internal, uint64(0))
+		timers := wafCtx.Stats().Timers
+		overall, internal := timers["waf.duration_ext"], timers["waf.duration"]
+		require.Greater(t, overall, time.Duration(0))
+		require.Greater(t, internal, time.Duration(0))
 		require.Greater(t, overall, internal)
-		require.LessOrEqual(t, overall, uint64(elapsedNS))
+		require.LessOrEqual(t, overall, time.Duration(elapsedNS))
 	})
 
 	t.Run("Timeouts", func(t *testing.T) {
-		wafCtx, err := waf.NewContextWithBudget(time.Nanosecond)
+		wafCtx, err := waf.NewContext(time.Nanosecond)
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
 		// Craft matching data to force work on the WAF
-		data := map[string]interface{}{
+		data := map[string]any{
 			"server.request.uri.raw": "\\%uff00",
 		}
-		ephemeral := map[string]interface{}{
+		ephemeral := map[string]any{
 			"server.request.body": map[string]bool{"safe": true},
 		}
 
 		for i := uint64(1); i <= 10; i++ {
 			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
-			require.Equal(t, errors.ErrTimeout, err)
-			require.Equal(t, wafCtx.TotalTimeouts(), i)
+			require.Equal(t, waferrors.ErrTimeout, err)
+			require.Equal(t, wafCtx.Stats().TimeoutCount, i)
 		}
 	})
 }
@@ -1222,17 +1112,17 @@ func TestMetrics(t *testing.T) {
 func TestObfuscatorConfig(t *testing.T) {
 	rule := newArachniTestRule([]ruleInput{{Address: "my.addr", KeyPath: []string{"key"}}}, nil)
 	t.Run("key", func(t *testing.T) {
-		waf, err := NewHandle(rule, "key", "")
+		waf, _, err := newDefaultHandle(rule)
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx, err := waf.NewContext()
+		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
-		data := map[string]interface{}{
-			"my.addr": map[string]interface{}{"key": "Arachni-sensitive-Arachni"},
+		data := map[string]any{
+			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
 		}
-		ephemeral := map[string]interface{}{
+		ephemeral := map[string]any{
 			"server.request.body": map[string]bool{"safe": true},
 		}
 		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
@@ -1245,17 +1135,17 @@ func TestObfuscatorConfig(t *testing.T) {
 	})
 
 	t.Run("val", func(t *testing.T) {
-		waf, err := NewHandle(rule, "", "sensitive")
+		waf, _, err := newDefaultHandle(rule)
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx, err := waf.NewContext()
+		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
-		data := map[string]interface{}{
-			"my.addr": map[string]interface{}{"key": "Arachni-sensitive-Arachni"},
+		data := map[string]any{
+			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
 		}
-		ephemeral := map[string]interface{}{
+		ephemeral := map[string]any{
 			"server.request.body": map[string]bool{"safe": true},
 		}
 		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
@@ -1268,17 +1158,17 @@ func TestObfuscatorConfig(t *testing.T) {
 	})
 
 	t.Run("off", func(t *testing.T) {
-		waf, err := NewHandle(rule, "", "")
+		waf, _, err := newDefaultHandle(rule)
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx, err := waf.NewContext()
+		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
-		data := map[string]interface{}{
-			"my.addr": map[string]interface{}{"key": "Arachni-sensitive-Arachni"},
+		data := map[string]any{
+			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
 		}
-		ephemeral := map[string]interface{}{
+		ephemeral := map[string]any{
 			"server.request.body": map[string]bool{"safe": true},
 		}
 		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
@@ -1292,11 +1182,11 @@ func TestObfuscatorConfig(t *testing.T) {
 }
 
 func TestTruncationInformation(t *testing.T) {
-	waf, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	defer waf.Close()
 
-	ctx, err := waf.NewContext()
+	ctx, err := waf.NewContext(timer.UnlimitedBudget)
 	require.NoError(t, err)
 	defer ctx.Close()
 
@@ -1305,21 +1195,21 @@ func TestTruncationInformation(t *testing.T) {
 	_, err = ctx.Run(RunAddressData{
 		Ephemeral: map[string]any{
 			"my.input": map[string]any{
-				"string_too_long":     strings.Repeat("Z", bindings.WafMaxStringLength+extra),
-				"container_too_large": make([]bool, bindings.WafMaxContainerSize+extra),
+				"string_too_long":     strings.Repeat("Z", bindings.MaxStringLength+extra),
+				"container_too_large": make([]bool, bindings.MaxContainerSize+extra),
 			},
 		},
 		Persistent: map[string]any{
 			"my.input.2": map[string]any{
-				"string_too_long":     strings.Repeat("Z", bindings.WafMaxStringLength+extra+2),
-				"container_too_large": make([]bool, bindings.WafMaxContainerSize+extra+2),
+				"string_too_long":     strings.Repeat("Z", bindings.MaxStringLength+extra+2),
+				"container_too_large": make([]bool, bindings.MaxContainerSize+extra+2),
 			},
 		},
 	})
 	require.NoError(t, err)
 	require.Equal(t, map[TruncationReason][]int{
-		StringTooLong:     {bindings.WafMaxStringLength + extra + 2, bindings.WafMaxStringLength + extra},
-		ContainerTooLarge: {bindings.WafMaxContainerSize + extra + 2, bindings.WafMaxContainerSize + extra},
+		StringTooLong:     {bindings.MaxStringLength + extra + 2, bindings.MaxStringLength + extra},
+		ContainerTooLarge: {bindings.MaxContainerSize + extra + 2, bindings.MaxContainerSize + extra},
 	}, ctx.truncations[DefaultScope])
 }
 
@@ -1329,8 +1219,12 @@ func BenchmarkEncoder(b *testing.B) {
 	n, err := rnd.Read(buf)
 	fullstr := string(buf)
 	encodeTimer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
 	for _, l := range []int{1024, 4096, 8192, 16384} {
 		encoder := encoder{
+			pinner:           &pinner,
 			objectMaxDepth:   10,
 			stringMaxSize:    1 * 1024 * 1024,
 			containerMaxSize: 100,
@@ -1340,7 +1234,7 @@ func BenchmarkEncoder(b *testing.B) {
 			b.ReportAllocs()
 			str := fullstr[:l]
 			slice := []string{str, str, str, str, str, str, str, str, str, str}
-			data := map[string]interface{}{
+			data := map[string]any{
 				"k0": slice,
 				"k1": slice,
 				"k2": slice,

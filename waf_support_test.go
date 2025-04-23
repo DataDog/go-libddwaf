@@ -5,15 +5,14 @@
 
 //go:build ci
 
-package waf
+package libddwaf
 
 import (
 	"flag"
 	"testing"
 
-	wafErrors "github.com/DataDog/go-libddwaf/v3/errors"
-	"github.com/DataDog/go-libddwaf/v3/internal/support"
-
+	"github.com/DataDog/go-libddwaf/v4/internal/support"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,7 +39,7 @@ func TestSupport(t *testing.T) {
 		errors = append(errors, support.WafManuallyDisabledError())
 	}
 
-	ok, _ := Health()
+	ok, _ := Usable()
 	require.Equal(t, *wafSupportedFlag, ok, "WAF support should match the value of the `waf-supported` flag in the CI")
 
 	if *wafSupportedFlag {
@@ -50,15 +49,15 @@ func TestSupport(t *testing.T) {
 	}
 
 	for _, err := range errors {
-		switch err.(type) {
-		case wafErrors.UnsupportedOSArchError:
-			require.Contains(t, *wafBuildTags, err.(wafErrors.UnsupportedOSArchError).Os, "The OS is marked as supported but a support error appeared", err)
-			require.Contains(t, *wafBuildTags, err.(wafErrors.UnsupportedOSArchError).Arch, "The architecture is marked as supported but a support error appeared", err)
-		case wafErrors.UnsupportedGoVersionError:
+		switch err := err.(type) {
+		case waferrors.UnsupportedOSArchError:
+			require.Contains(t, *wafBuildTags, err.OS, "The OS is marked as supported but a support error appeared", err)
+			require.Contains(t, *wafBuildTags, err.Arch, "The architecture is marked as supported but a support error appeared", err)
+		case waferrors.UnsupportedGoVersionError:
 			// We can't check anything here because we forced the version to be wrong we a build tag added manually instead of just having an incompatible version
-		case wafErrors.ManuallyDisabledError:
+		case waferrors.ManuallyDisabledError:
 			require.Contains(t, *wafBuildTags, "datadog.no_waf", "The WAF is marked as enabled but a support error appeared", err)
-		case wafErrors.CgoDisabledError:
+		case waferrors.CgoDisabledError:
 			require.NotContainsf(t, *wafBuildTags, "cgo", "The build tags contains cgo but a support error appeared", err)
 		default:
 			require.Fail(t, "Unknown error type", err)

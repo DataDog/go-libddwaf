@@ -6,9 +6,14 @@
 package unsafe
 
 import (
-	"reflect"
-	stdUnsafe "unsafe"
+	"unsafe"
 )
+
+type Pointer = unsafe.Pointer
+
+func SliceData[E any, T ~[]E](slice T) *E {
+	return unsafe.SliceData(slice)
+}
 
 // Gostring copies a char* to a Go string.
 func Gostring(ptr *byte) string {
@@ -16,39 +21,44 @@ func Gostring(ptr *byte) string {
 		return ""
 	}
 	var length int
-	for {
-		if *(*byte)(stdUnsafe.Add(stdUnsafe.Pointer(ptr), uintptr(length))) == '\x00' {
-			break
-		}
+	for *(*byte)(unsafe.Add(unsafe.Pointer(ptr), uintptr(length))) != '\x00' {
 		length++
 	}
 	//string builtin copies the slice
-	return string(stdUnsafe.Slice(ptr, length))
+	return string(unsafe.Slice(ptr, length))
 }
 
-// NativeStringUnwrap cast a native string type into it's runtime value. Exported as the struct reflect.StringHeader
-func NativeStringUnwrap(str string) reflect.StringHeader {
-	return *(*reflect.StringHeader)(stdUnsafe.Pointer(&str))
+type StringHeader struct {
+	Len  int
+	Data *byte
+}
+
+// NativeStringUnwrap cast a native string type into it's runtime value.
+func NativeStringUnwrap(str string) StringHeader {
+	return StringHeader{
+		Data: unsafe.StringData(str),
+		Len:  len(str),
+	}
 }
 
 func GostringSized(ptr *byte, size uint64) string {
 	if ptr == nil {
 		return ""
 	}
-	return string(stdUnsafe.Slice(ptr, size))
+	return string(unsafe.Slice(ptr, size))
 }
 
 // Cstring converts a go string to *byte that can be passed to C code.
 func Cstring(name string) *byte {
 	var b = make([]byte, len(name)+1)
 	copy(b, name)
-	return &b[0]
+	return unsafe.SliceData(b)
 }
 
 // Cast is used to centralize unsafe use C of allocated pointer.
 // We take the address and then dereference it to trick go vet from creating a possible misuse of unsafe.Pointer
 func Cast[T any](ptr uintptr) *T {
-	return (*T)(*(*stdUnsafe.Pointer)(stdUnsafe.Pointer(&ptr)))
+	return (*T)(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)))
 }
 
 type Native interface {
@@ -56,35 +66,35 @@ type Native interface {
 }
 
 func CastNative[N Native, T Native](ptr *N) *T {
-	return (*T)(*(*stdUnsafe.Pointer)(stdUnsafe.Pointer(&ptr)))
+	return (*T)(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)))
 }
 
 // NativeToUintptr is a helper used by populate WafObject values
 // with Go values
 func NativeToUintptr[T any](x T) uintptr {
-	return *(*uintptr)(stdUnsafe.Pointer(&x))
+	return *(*uintptr)(unsafe.Pointer(&x))
 }
 
 // UintToNative is a helper used retrieve Go values from an uintptr encoded
 // value from a WafObject
 func UintptrToNative[T any](x uintptr) T {
-	return *(*T)(stdUnsafe.Pointer(&x))
+	return *(*T)(unsafe.Pointer(&x))
 }
 
 // CastWithOffset is the same as cast but adding an offset to the pointer by a multiple of the size
 // of the type pointed.
 func CastWithOffset[T any](ptr uintptr, offset uint64) *T {
-	return (*T)(stdUnsafe.Add(*(*stdUnsafe.Pointer)(stdUnsafe.Pointer(&ptr)), offset*uint64(stdUnsafe.Sizeof(*new(T)))))
+	return (*T)(unsafe.Add(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)), offset*uint64(unsafe.Sizeof(*new(T)))))
 }
 
 // PtrToUintptr is a helper to centralize of usage of unsafe.Pointer
 // do not use this function to cast interfaces
 func PtrToUintptr[T any](arg *T) uintptr {
-	return uintptr(stdUnsafe.Pointer(arg))
+	return uintptr(unsafe.Pointer(arg))
 }
 
 func SliceToUintptr[T any](arg []T) uintptr {
-	return (*reflect.SliceHeader)(stdUnsafe.Pointer(&arg)).Data
+	return uintptr(unsafe.Pointer(unsafe.SliceData(arg)))
 }
 
 // KeepAlive() globals

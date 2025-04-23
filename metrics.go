@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-package waf
+package libddwaf
 
 import (
 	"strings"
@@ -66,7 +66,16 @@ func dot(parts ...string) string {
 }
 
 // Metrics transform the stats returned by the WAF into a map of key value metrics with values in microseconds.
-// ex. {"waf.encode": 100, "waf.duration_ext": 300, "waf.duration": 200, "rasp.encode": 100, "rasp.duration_ext": 300, "rasp.duration": 200}
+// For example:
+//
+//	{
+//		"waf.encode": 100,
+//		"waf.duration_ext": 300,
+//		"waf.duration": 200,
+//		"rasp.encode": 100,
+//		"rasp.duration_ext": 300,
+//		"rasp.duration": 200,
+//	}
 func (stats Stats) Metrics() map[string]any {
 	tags := make(map[string]any, len(stats.Timers)+len(stats.Truncations)+1)
 	for k, v := range stats.Timers {
@@ -100,12 +109,6 @@ func (metrics *metricsStore) add(scope Scope, component string, duration time.Du
 	}
 
 	metrics.data[metricKey{scope, component}] += duration
-}
-
-func (metrics *metricsStore) get(scope Scope, component string) time.Duration {
-	metrics.mutex.RLock()
-	defer metrics.mutex.RUnlock()
-	return metrics.data[metricKey{scope, component}]
 }
 
 func (metrics *metricsStore) timers() map[string]time.Duration {

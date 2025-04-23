@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-package waf
+package libddwaf
 
 import (
 	"context"
@@ -14,10 +14,11 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/DataDog/go-libddwaf/v3/errors"
-	"github.com/DataDog/go-libddwaf/v3/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v3/timer"
+	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/internal/pin"
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
 
 // Encode Go values into wafObjects. Only the subset of Go types representable into wafObjects
@@ -28,13 +29,15 @@ import (
 // reference now or in the future, are stored and referenced in the `cgoRefs` field. The user MUST leverage
 // `keepAlive()` with it according to its ddwaf use-case.
 type encoder struct {
+	// pinner is used to pin the data referenced by the encoded wafObjects.
+	pinner pin.Pinner
+
 	// timer makes sure the encoder doesn't spend too much time doing its job.
 	timer timer.Timer
 
 	// For each TruncationReason, holds the size that is required to avoid truncation for each truncation that happened.
 	truncations map[TruncationReason][]int
 
-	cgoRefs          cgoRefPool
 	containerMaxSize int
 	stringMaxSize    int
 	objectMaxDepth   int
@@ -79,18 +82,20 @@ type native interface {
 	int64 | uint64 | uintptr
 }
 
-func newLimitedEncoder(timer timer.Timer) encoder {
+func newLimitedEncoder(pinner pin.Pinner, timer timer.Timer) encoder {
 	return encoder{
+		pinner:           pinner,
 		timer:            timer,
-		containerMaxSize: bindings.WafMaxContainerSize,
-		stringMaxSize:    bindings.WafMaxStringLength,
-		objectMaxDepth:   bindings.WafMaxContainerDepth,
+		containerMaxSize: bindings.MaxContainerSize,
+		stringMaxSize:    bindings.MaxStringLength,
+		objectMaxDepth:   bindings.MaxContainerDepth,
 	}
 }
 
-func newMaxEncoder() encoder {
+func newMaxEncoder(pinner pin.Pinner) encoder {
 	timer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
 	return encoder{
+		pinner:           pinner,
 		timer:            timer,
 		containerMaxSize: math.MaxInt,
 		stringMaxSize:    math.MaxInt,
@@ -102,17 +107,17 @@ func newMaxEncoder() encoder {
 // The returned wafObject is the root of the tree of nested wafObjects representing the Go value.
 // The only error case is if the top-level object is "Unusable" which means that the data is nil or a non-data type
 // like a function or a channel.
-func (encoder *encoder) Encode(data any) (wo *bindings.WafObject, err error) {
+func (encoder *encoder) Encode(data any) (*bindings.WAFObject, error) {
 	value := reflect.ValueOf(data)
-	wo = &bindings.WafObject{}
+	wo := &bindings.WAFObject{}
 
-	err = encoder.encode(value, wo, encoder.objectMaxDepth)
+	err := encoder.encode(value, wo, encoder.objectMaxDepth)
 
 	if len(encoder.truncations[ObjectTooDeep]) != 0 && !encoder.timer.Exhausted() {
 		encoder.measureObjectDepth(value, encoder.timer.Remaining())
 	}
 
-	return
+	return wo, err
 }
 
 // Truncations returns all truncations that happened since the last call to `Truncations()`, and clears the internal
@@ -123,7 +128,7 @@ func (encoder *encoder) Truncations() map[TruncationReason][]int {
 	return result
 }
 
-func encodeNative[T native](val T, t bindings.WafObjectType, obj *bindings.WafObject) {
+func encodeNative[T native](val T, t bindings.WAFObjectType, obj *bindings.WAFObject) {
 	obj.Type = t
 	obj.Value = (uintptr)(val)
 }
@@ -145,16 +150,16 @@ func isValueNil(value reflect.Value) bool {
 	return nullable && value.IsNil()
 }
 
-func (encoder *encoder) encode(value reflect.Value, obj *bindings.WafObject, depth int) error {
+func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, depth int) error {
 	if encoder.timer.Exhausted() {
-		return errors.ErrTimeout
+		return waferrors.ErrTimeout
 	}
 
 	value, kind := resolvePointer(value)
 	if (kind == reflect.Interface || kind == reflect.Pointer) && !value.IsNil() {
 		// resolvePointer failed to resolve to something that's not a pointer, it
 		// has indirected too many times...
-		return errors.ErrTooManyIndirections
+		return waferrors.ErrTooManyIndirections
 	}
 
 	// Measure-only runs for leaves
@@ -167,22 +172,22 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WafObject, dep
 	// Terminal cases (leaves of the tree)
 	//		Is invalid type: nil interfaces for example, cannot be used to run any reflect method or it's susceptible to panic
 	case !value.IsValid() || kind == reflect.Invalid:
-		return errors.ErrUnsupportedValue
+		return waferrors.ErrUnsupportedValue
 	// 		Is nullable type: nil pointers, channels, maps or functions
 	case isValueNil(value):
-		encodeNative[uintptr](0, bindings.WafNilType, obj)
+		encodeNative[uintptr](0, bindings.WAFNilType, obj)
 
 	// 		Booleans
 	case kind == reflect.Bool:
-		encodeNative(unsafe.NativeToUintptr(value.Bool()), bindings.WafBoolType, obj)
+		encodeNative(unsafe.NativeToUintptr(value.Bool()), bindings.WAFBoolType, obj)
 
 	// 		Numbers
 	case value.CanInt(): // any int type or alias
-		encodeNative(value.Int(), bindings.WafIntType, obj)
+		encodeNative(value.Int(), bindings.WAFIntType, obj)
 	case value.CanUint(): // any Uint type or alias
-		encodeNative(value.Uint(), bindings.WafUintType, obj)
+		encodeNative(value.Uint(), bindings.WAFUintType, obj)
 	case value.CanFloat(): // any float type or alias
-		encodeNative(unsafe.NativeToUintptr(value.Float()), bindings.WafFloatType, obj)
+		encodeNative(unsafe.NativeToUintptr(value.Float()), bindings.WAFFloatType, obj)
 
 	//		Strings
 	case kind == reflect.String: // string type
@@ -199,7 +204,7 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WafObject, dep
 	case depth <= 0:
 		// Record that there was a truncation; we will try to measure the actual depth of the object afterwards.
 		encoder.addTruncation(ObjectTooDeep, -1)
-		return errors.ErrMaxDepthExceeded
+		return waferrors.ErrMaxDepthExceeded
 
 	// 		Either an array or a slice of an array
 	case kind == reflect.Array || kind == reflect.Slice:
@@ -210,19 +215,19 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WafObject, dep
 		encoder.encodeStruct(value, obj, depth-1)
 
 	default:
-		return errors.ErrUnsupportedValue
+		return waferrors.ErrUnsupportedValue
 	}
 
 	return nil
 }
 
-func (encoder *encoder) encodeString(str string, obj *bindings.WafObject) {
+func (encoder *encoder) encodeString(str string, obj *bindings.WAFObject) {
 	size := len(str)
 	if size > encoder.stringMaxSize {
 		str = str[:encoder.stringMaxSize]
 		encoder.addTruncation(StringTooLong, size)
 	}
-	encoder.cgoRefs.AllocWafString(obj, str)
+	obj.SetString(encoder.pinner, str)
 }
 
 func getFieldNameFromType(field reflect.StructField) (string, bool) {
@@ -252,7 +257,7 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 // - If the field has a json tag it will become the field name
 // - Private fields and also values producing an error at encoding will be skipped
 // - Even if the element values are invalid or null we still keep them to report the field name
-func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WafObject, depth int) {
+func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	if encoder.timer.Exhausted() {
 		return
 	}
@@ -266,7 +271,7 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WafObjec
 		capacity = encoder.containerMaxSize
 	}
 
-	objArray := encoder.cgoRefs.AllocWafArray(obj, bindings.WafMapType, uint64(capacity))
+	objArray := obj.SetMap(encoder.pinner, uint64(capacity))
 	for i := 0; i < nbFields; i++ {
 		if encoder.timer.Exhausted() {
 			return
@@ -291,7 +296,7 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WafObjec
 
 		if err := encoder.encode(value.Field(i), objElem, depth); err != nil {
 			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
-			encodeNative[uintptr](0, bindings.WafInvalidType, objElem)
+			encodeNative[uintptr](0, bindings.WAFInvalidType, objElem)
 		}
 
 		length++
@@ -305,13 +310,13 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WafObjec
 // a wafObject map of type wafMapType. The specificities are the following:
 // - It will only take the first encoder.containerMaxSize elements of the map
 // - Even if the element values are invalid or null we still keep them to report the map key
-func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WafObject, depth int) {
+func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	capacity := value.Len()
 	if capacity > encoder.containerMaxSize {
 		capacity = encoder.containerMaxSize
 	}
 
-	objArray := encoder.cgoRefs.AllocWafArray(obj, bindings.WafMapType, uint64(capacity))
+	objArray := obj.SetMap(encoder.pinner, uint64(capacity))
 
 	length := 0
 	for iter := value.MapRange(); iter.Next(); {
@@ -331,7 +336,7 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WafObject, 
 
 		if err := encoder.encode(iter.Value(), objElem, depth); err != nil {
 			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
-			encodeNative[uintptr](0, bindings.WafInvalidType, objElem)
+			encodeNative[uintptr](0, bindings.WAFInvalidType, objElem)
 		}
 
 		length++
@@ -344,19 +349,19 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WafObject, 
 // encodeMapKey takes a reflect.Value and a wafObject and returns a wafObject ready to be considered a map entry. We use
 // the function cgoRefPool.AllocWafMapKey to store the key in the wafObject. But first we need to grab the real
 // underlying value by recursing through the pointer and interface values.
-func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WafObject) error {
+func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WAFObject) error {
 	value, kind := resolvePointer(value)
 
 	var keyStr string
 	switch {
 	case kind == reflect.Invalid:
-		return errors.ErrInvalidMapKey
+		return waferrors.ErrInvalidMapKey
 	case kind == reflect.String:
 		keyStr = value.String()
 	case value.Type() == reflect.TypeOf([]byte(nil)):
 		keyStr = string(value.Bytes())
 	default:
-		return errors.ErrInvalidMapKey
+		return waferrors.ErrInvalidMapKey
 	}
 
 	encoder.encodeMapKeyFromString(keyStr, obj)
@@ -365,21 +370,21 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WafObjec
 
 // encodeMapKeyFromString takes a string and a wafObject and sets the map key attribute on the wafObject to the supplied
 // string. The key may be truncated if it exceeds the maximum string size allowed by the encoder.
-func (encoder *encoder) encodeMapKeyFromString(keyStr string, obj *bindings.WafObject) {
+func (encoder *encoder) encodeMapKeyFromString(keyStr string, obj *bindings.WAFObject) {
 	size := len(keyStr)
 	if size > encoder.stringMaxSize {
 		keyStr = keyStr[:encoder.stringMaxSize]
 		encoder.addTruncation(StringTooLong, size)
 	}
 
-	encoder.cgoRefs.AllocWafMapKey(obj, keyStr)
+	obj.SetMapKey(encoder.pinner, keyStr)
 }
 
 // encodeArray takes a reflect.Value and a wafObject pointer and iterates on the elements and returns
 // a wafObject array of type wafArrayType. The specificities are the following:
 // - It will only take the first encoder.containerMaxSize elements of the array
 // - Elements producing an error at encoding or null values will be skipped
-func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WafObject, depth int) {
+func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	length := value.Len()
 
 	capacity := length
@@ -389,7 +394,7 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WafObject
 
 	currIndex := 0
 
-	objArray := encoder.cgoRefs.AllocWafArray(obj, bindings.WafArrayType, uint64(capacity))
+	objArray := obj.SetArray(encoder.pinner, uint64(capacity))
 
 	for i := 0; i < length; i++ {
 		if encoder.timer.Exhausted() {
@@ -407,7 +412,7 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WafObject
 
 		// If the element is null or invalid it has no impact on the waf execution, therefore we can skip its
 		// encoding. In this specific case we just overwrite it at the next loop iteration.
-		if objElem == nil || objElem.IsUnusable() {
+		if objElem.IsUnusable() {
 			continue
 		}
 

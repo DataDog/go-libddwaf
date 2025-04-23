@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v3/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v3/timer"
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/timer"
 
 	"github.com/stretchr/testify/require"
 )
@@ -227,7 +227,7 @@ func TestInheritBudget(t *testing.T) {
 func TestTree(t *testing.T) {
 	t.Run("100-leafs", func(t *testing.T) {
 		components := make([]string, 100)
-		for i, _ := range components {
+		for i := range components {
 			components[i] = strconv.Itoa(i)
 		}
 
@@ -252,7 +252,7 @@ func TestTree(t *testing.T) {
 
 	t.Run("100-nodes-1-leaf", func(t *testing.T) {
 		components := make([]string, 100)
-		for i, _ := range components {
+		for i := range components {
 			components[i] = strconv.Itoa(i)
 		}
 
@@ -267,7 +267,7 @@ func TestTree(t *testing.T) {
 			require.NoError(t, err)
 
 			leafTimer := nodeTimer.MustLeaf("a")
-			leafTimer.Timed(func(timer timer.Timer) {})
+			_ = leafTimer.Timed(func(timer timer.Timer) {})
 
 			sum += leafTimer.Spent()
 			require.Equal(t, nodeTimer.SumSpent(), leafTimer.Spent())
@@ -280,7 +280,7 @@ func TestTree(t *testing.T) {
 
 	t.Run("100-nodes-100-leaf", func(t *testing.T) {
 		components := make([]string, 100)
-		for i, _ := range components {
+		for i := range components {
 			components[i] = strconv.Itoa(i)
 		}
 
@@ -299,7 +299,7 @@ func TestTree(t *testing.T) {
 			var subSum time.Duration
 			for _, component := range components {
 				leafTimer := nodeTimer.MustLeaf(component)
-				leafTimer.Timed(func(timer timer.Timer) {})
+				_ = leafTimer.Timed(func(timer timer.Timer) {})
 
 				subSum += leafTimer.Spent()
 				require.Equal(t, subSum, nodeTimer.SumSpent())

@@ -12,9 +12,9 @@ package support
 import (
 	"runtime"
 
-	"github.com/DataDog/go-libddwaf/v3/errors"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
 
 func init() {
-	wafSupportErrors = append(wafSupportErrors, errors.UnsupportedOSArchError{runtime.GOOS, runtime.GOARCH})
+	wafSupportErrors = append(wafSupportErrors, waferrors.UnsupportedOSArchError{OS: runtime.GOOS, Arch: runtime.GOARCH})
 }
