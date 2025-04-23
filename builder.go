@@ -61,16 +61,12 @@ var (
 // AddOrUpdateConfig adds or updates a configuration fragment to this [Builder].
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, error) {
-	if b == nil {
+	if b == nil || b.handle == 0 {
 		return Diagnostics{}, errBuilderClosed
 	}
 
 	if path == "" {
 		return Diagnostics{}, errors.New("path cannot be blank")
-	}
-
-	if b.handle == 0 {
-		return Diagnostics{}, errBuilderClosed
 	}
 
 	var pinner runtime.Pinner
