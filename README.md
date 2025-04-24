@@ -146,5 +146,9 @@ Another requirement of `libddwaf` is to have a FHS filesystem on your machine an
 
 ## Debugging
 
-Debug-logging can be enabled for underlying C/C++ library by building (or testing) with the `libddwaf.debug` build tag.
-Using this is production is generally not recommended as this produces extremely verbose logging.
+Debug-logging can be enabled for underlying C/C++ library by building (or testing) by setting the
+`DD_APPSEC_WAF_LOG_LEVEL` environment variable to one of: `trace`, `debug`, `info`, `warn` (or
+`warning`), `error`, `off` (which is the default behavior and logs nothing).
+
+The `DD_APPSEC_WAF_LOG_FILTER` environment variable can be set to a valid (per the `regexp` package)
+regular expression to limit logging to only messages that match the regular expression.
