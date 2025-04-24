@@ -192,21 +192,12 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 	case value.CanFloat(): // any float type or alias
 		encodeNative(unsafe.NativeToUintptr(value.Float()), bindings.WAFFloatType, obj)
 
+	// 		json.Number -- string-represented arbitrary precision numbers
+	case value.Type() == jsonNumberType:
+		encoder.encodeJSONNumber(value.Interface().(json.Number), obj)
+
 	//		Strings
 	case kind == reflect.String: // string type
-		if value.Type() == jsonNumberType {
-			// Special-case for json.Number, which is string-like, but represents numbers...
-			num, _ := value.Interface().(json.Number)
-			if i, err := num.Int64(); err == nil {
-				encodeNative(unsafe.NativeToUintptr(i), bindings.WAFIntType, obj)
-				return nil
-			}
-			if f, err := num.Float64(); err == nil {
-				encodeNative(unsafe.NativeToUintptr(f), bindings.WAFFloatType, obj)
-				return nil
-			}
-			// Can't be "cleanly" encoded as an int nor float, so fall through to string...
-		}
 		encoder.encodeString(value.String(), obj)
 
 	case (kind == reflect.Array || kind == reflect.Slice) && value.Type().Elem().Kind() == reflect.Uint8:
@@ -235,6 +226,23 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 	}
 
 	return nil
+}
+
+func (encoder *encoder) encodeJSONNumber(num json.Number, obj *bindings.WAFObject) {
+	// Important to attempt int64 first, as this is lossless. Values that are either too small or too
+	// large to be represented as int64 can be represented as float64, but this can be lossy.
+	if i, err := num.Int64(); err == nil {
+		encodeNative(uintptr(i), bindings.WAFIntType, obj)
+		return
+	}
+
+	if f, err := num.Float64(); err == nil {
+		encodeNative(unsafe.NativeToUintptr(f), bindings.WAFFloatType, obj)
+		return
+	}
+
+	// Could not store as int64 nor float, so we'll store it as a string...
+	encoder.encodeString(num.String(), obj)
 }
 
 func (encoder *encoder) encodeString(str string, obj *bindings.WAFObject) {

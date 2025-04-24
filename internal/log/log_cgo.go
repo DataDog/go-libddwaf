@@ -8,7 +8,7 @@
 package log
 
 // #include "./ddwaf.h"
-// extern void ddwafLogCallbackFnv3(
+// extern void ddwafLogCallbackFnV4(
 //   DDWAF_LOG_LEVEL level,
 //   char* function,
 //   char* file,
