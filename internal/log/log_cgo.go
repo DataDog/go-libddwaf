@@ -8,7 +8,7 @@
 package log
 
 // #include "./ddwaf.h"
-// extern void ddwafLogCallbackFnv3(
+// extern void ddwafLogCallbackFnV4(
 //   DDWAF_LOG_LEVEL level,
 //   char* function,
 //   char* file,
@@ -22,11 +22,11 @@ import "github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 // CallbackFunctionPointer returns a pointer to the log callback function which
 // can be used with libddwaf.
 func CallbackFunctionPointer() uintptr {
-	return uintptr(C.ddwafLogCallbackFnv3)
+	return uintptr(C.ddwafLogCallbackFnV4)
 }
 
-//export ddwafLogCallbackFnv3
-func ddwafLogCallbackFnv3(level C.DDWAF_LOG_LEVEL, fnPtr, filePtr *C.char, line C.unsigned, msgPtr *C.char, _ C.uint64_t) {
+//export ddwafLogCallbackFnV4
+func ddwafLogCallbackFnV4(level C.DDWAF_LOG_LEVEL, fnPtr, filePtr *C.char, line C.unsigned, msgPtr *C.char, _ C.uint64_t) {
 	function := unsafe.Gostring(unsafe.CastNative[C.char, byte](fnPtr))
 	file := unsafe.Gostring(unsafe.CastNative[C.char, byte](filePtr))
 	message := unsafe.Gostring(unsafe.CastNative[C.char, byte](msgPtr))

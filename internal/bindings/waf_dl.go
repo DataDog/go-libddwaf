@@ -65,12 +65,10 @@ func NewWAFLib() (dl *WAFLib, err error) {
 	}
 
 	if val := os.Getenv(log.EnvVarLogLevel); val != "" {
-		setLogSym, symErr := purego.Dlsym(handle, "ddwaf_set_log_cb")
-		if symErr != nil {
-			return nil, fmt.Errorf("get symbol: %w", symErr)
-		}
 		logLevel := log.LevelNamed(val)
-		dl.syscall(setLogSym, log.CallbackFunctionPointer(), uintptr(logLevel))
+		if logLevel != log.LevelOff {
+			dl.SetLogCb(log.CallbackFunctionPointer(), logLevel)
+		}
 	}
 
 	return

@@ -7,6 +7,7 @@ package libddwaf
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -143,6 +144,8 @@ var nullableTypeKinds = map[reflect.Kind]struct{}{
 	reflect.Chan:          {},
 }
 
+var jsonNumberType = reflect.TypeOf(json.Number(""))
+
 // isValueNil check if the value is nullable and if it is actually nil
 // we cannot directly use value.IsNil() because it panics on non-pointer values
 func isValueNil(value reflect.Value) bool {
@@ -189,6 +192,10 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 	case value.CanFloat(): // any float type or alias
 		encodeNative(unsafe.NativeToUintptr(value.Float()), bindings.WAFFloatType, obj)
 
+	// 		json.Number -- string-represented arbitrary precision numbers
+	case value.Type() == jsonNumberType:
+		encoder.encodeJSONNumber(value.Interface().(json.Number), obj)
+
 	//		Strings
 	case kind == reflect.String: // string type
 		encoder.encodeString(value.String(), obj)
@@ -219,6 +226,23 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 	}
 
 	return nil
+}
+
+func (encoder *encoder) encodeJSONNumber(num json.Number, obj *bindings.WAFObject) {
+	// Important to attempt int64 first, as this is lossless. Values that are either too small or too
+	// large to be represented as int64 can be represented as float64, but this can be lossy.
+	if i, err := num.Int64(); err == nil {
+		encodeNative(uintptr(i), bindings.WAFIntType, obj)
+		return
+	}
+
+	if f, err := num.Float64(); err == nil {
+		encodeNative(unsafe.NativeToUintptr(f), bindings.WAFFloatType, obj)
+		return
+	}
+
+	// Could not store as int64 nor float, so we'll store it as a string...
+	encoder.encodeString(num.String(), obj)
 }
 
 func (encoder *encoder) encodeString(str string, obj *bindings.WAFObject) {

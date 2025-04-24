@@ -24,7 +24,6 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/lib"
-	"github.com/DataDog/go-libddwaf/v4/internal/log"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/stretchr/testify/require"
@@ -859,10 +858,6 @@ func TestConcurrency(t *testing.T) {
 		// This test validates that the WAF Context can be used from multiple
 		// threads, with mixed calls to `ddwaf_run` and `ddwaf_context_destroy`,
 		// which are not thread-safe.
-
-		wafLib.SetLogCb(log.CallbackFunctionPointer(), log.LevelDebug)
-		t.Cleanup(func() { wafLib.SetLogCb(0, log.LevelOff) })
-
 		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 

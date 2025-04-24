@@ -143,3 +143,12 @@ Another requirement of `libddwaf` is to have a FHS filesystem on your machine an
 - Do not use `uintptr` as function arguments or results types, coming from `unsafe.Pointer` casts of Go values, because they escape the pointer analysis which can create wrongly optimized code and crash. Pointer arithmetic is of course necessary in such a library but must be kept in the same function scope.
 - GDB is available on arm64 but is not officially supported so it usually crashes pretty fast (as of June 2023)
 - No pointer to variables on the stack shall be sent to the C code because Go stacks can be moved during the C call. More on this [here](https://medium.com/@trinad536/escape-analysis-in-golang-fc81b78f3550)
+
+## Debugging
+
+Debug-logging can be enabled for underlying C/C++ library by building (or testing) by setting the
+`DD_APPSEC_WAF_LOG_LEVEL` environment variable to one of: `trace`, `debug`, `info`, `warn` (or
+`warning`), `error`, `off` (which is the default behavior and logs nothing).
+
+The `DD_APPSEC_WAF_LOG_FILTER` environment variable can be set to a valid (per the `regexp` package)
+regular expression to limit logging to only messages that match the regular expression.

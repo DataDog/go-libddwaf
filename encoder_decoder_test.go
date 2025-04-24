@@ -10,9 +10,11 @@ package libddwaf
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -249,6 +251,26 @@ func TestEncodeDecode(t *testing.T) {
 			Output: map[string]any{"k1": uint64(1), "": "string pointer key", "k2": "2"},
 		},
 		{
+			Name:   "json-number.int",
+			Input:  json.Number("1234567890"),
+			Output: int64(1234567890),
+		},
+		{
+			Name:   "json-number.bigint",
+			Input:  json.Number(strconv.FormatUint(math.MaxUint64, 10) + "999"),
+			Output: math.MaxUint64*1000.0 + 999, // Gets represented as a float64
+		},
+		{
+			Name:   "json-number.float",
+			Input:  json.Number("1234567890.42"),
+			Output: 1234567890.42,
+		},
+		{
+			Name:   "json-number.bogus",
+			Input:  json.Number("bogus"),
+			Output: "bogus",
+		},
+		{
 			Name: "struct",
 			Input: struct {
 				Public  string
@@ -346,7 +368,7 @@ func TestEncodeDecode(t *testing.T) {
 				}
 
 				require.NoError(t, err, "unexpected error when decoding: %v", err)
-				require.True(t, reflect.DeepEqual(tc.Output, val), "expected %v, got %v", tc.Output, val)
+				require.True(t, reflect.DeepEqual(tc.Output, val), "expected %#v, got %#v", tc.Output, val)
 			})
 
 			t.Run("run", func(t *testing.T) {

@@ -8,20 +8,20 @@
 package libddwaf
 
 import (
+	"bytes"
 	"encoding/json"
 	"maps"
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/log"
 	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBuilder(t *testing.T) {
-	wafLib.SetLogCb(log.CallbackFunctionPointer(), log.LevelDebug)
-
 	if supported, err := Usable(); !supported || err != nil {
 		t.Skipf("target is not supported by the WAF: %v", err)
 	}
@@ -298,5 +298,90 @@ func TestBuilder(t *testing.T) {
 		handle := builder.Build()
 		require.NotNil(t, handle)
 		handle.Close()
+	})
+
+	t.Run("blank-string-encoding", func(t *testing.T) {
+		var rulesJSON = `{
+			"version": "2.1",
+			"metadata": {
+				"rules_version": "1.2.6"
+			},
+			"rules": [
+				{
+					"id": "canary_rule4",
+					"name": "Canary 4",
+					"tags": {
+						"type": "security_scanner",
+						"category": "attack_attempt"
+					},
+					"conditions": [
+						{
+							"parameters": {
+								"inputs": [
+									{
+										"address": "server.request.headers.no_cookies",
+										"key_path": [
+											"user-agent"
+										]
+									}
+								],
+								"regex": "^Canary\\/v4"
+							},
+							"operator": "match_regex"
+						}
+					],
+					"on_match": [
+						"block4"
+					]
+				}
+			],
+			"actions": [
+				{
+					"id": "block4",
+					"type": "redirect_request",
+					"parameters": {
+						"status_code": 303,
+						"location": ""
+					}
+				}
+			]
+		}
+		`
+
+		builder, err := NewBuilder("", "")
+		require.NoError(t, err)
+
+		dec := json.NewDecoder(bytes.NewReader([]byte(rulesJSON)))
+		dec.UseNumber()
+
+		var rules map[string]any
+		require.NoError(t, dec.Decode(&rules))
+
+		diag, err := builder.AddOrUpdateConfig("/", rules)
+		require.NoError(t, err)
+		diag.EachFeature(func(name string, feat *Feature) {
+			assert.Empty(t, feat.Error, "feature %s has top-level error", name)
+			assert.Empty(t, feat.Errors, "feature %s has errors", name)
+			assert.Empty(t, feat.Warnings, "feature %s has warnings", name)
+		})
+
+		waf := builder.Build()
+		require.NotNil(t, waf)
+		defer waf.Close()
+
+		ctx, err := waf.NewContext(time.Hour)
+		require.NoError(t, err)
+		defer ctx.Close()
+
+		res, err := ctx.Run(RunAddressData{
+			Persistent: map[string]any{
+				"server.request.headers.no_cookies": map[string][]string{
+					"user-agent": {"Canary/v4 bazinga"},
+				},
+			},
+		})
+		require.NoError(t, err)
+		assert.NotEmpty(t, res.Events)
+		assert.NotEmpty(t, res.Actions)
 	})
 }
