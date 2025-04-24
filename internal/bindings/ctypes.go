@@ -137,6 +137,8 @@ func (w *WAFObject) SetMapKey(pinner pin.Pinner, key string) {
 	w.ParameterName = uintptr(unsafe.Pointer(header.Data))
 }
 
+var blankCStringValue = unsafe.Pointer(unsafe.NativeStringUnwrap("\x00").Data)
+
 // SetString sets the receiving [WAFObject] value to the given string.
 func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
 	header := unsafe.NativeStringUnwrap(str)
@@ -144,7 +146,7 @@ func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
 	w.Type = WAFStringType
 	w.NbEntries = uint64(header.Len)
 	if w.NbEntries == 0 {
-		w.Value = 0
+		w.Value = uintptr(blankCStringValue)
 		return
 	}
 	pinner.Pin(unsafe.Pointer(header.Data))

@@ -7,6 +7,7 @@ package libddwaf
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -143,6 +144,8 @@ var nullableTypeKinds = map[reflect.Kind]struct{}{
 	reflect.Chan:          {},
 }
 
+var jsonNumberType = reflect.TypeOf(json.Number(""))
+
 // isValueNil check if the value is nullable and if it is actually nil
 // we cannot directly use value.IsNil() because it panics on non-pointer values
 func isValueNil(value reflect.Value) bool {
@@ -191,6 +194,19 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 
 	//		Strings
 	case kind == reflect.String: // string type
+		if value.Type() == jsonNumberType {
+			// Special-case for json.Number, which is string-like, but represents numbers...
+			num, _ := value.Interface().(json.Number)
+			if i, err := num.Int64(); err == nil {
+				encodeNative(unsafe.NativeToUintptr(i), bindings.WAFIntType, obj)
+				return nil
+			}
+			if f, err := num.Float64(); err == nil {
+				encodeNative(unsafe.NativeToUintptr(f), bindings.WAFFloatType, obj)
+				return nil
+			}
+			// Can't be "cleanly" encoded as an int nor float, so fall through to string...
+		}
 		encoder.encodeString(value.String(), obj)
 
 	case (kind == reflect.Array || kind == reflect.Slice) && value.Type().Elem().Kind() == reflect.Uint8:
