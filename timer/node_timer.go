@@ -26,10 +26,6 @@ func NewTreeTimer(options ...Option) (NodeTimer, error) {
 		return nil, errors.New("root timer cannot inherit parent budget, please provide a budget using timer.WithBudget() or timer.WithUnlimitedBudget()")
 	}
 
-	if len(config.components) == 0 {
-		return nil, errors.New("NewTreeTimer: tree timer must have at least one component, otherwise use NewTimer()")
-	}
-
 	return &nodeTimer{
 		baseTimer: baseTimer{
 			config: config,
@@ -39,7 +35,7 @@ func NewTreeTimer(options ...Option) (NodeTimer, error) {
 	}, nil
 }
 
-func (timer *nodeTimer) NewNode(name string, options ...Option) (NodeTimer, error) {
+func (timer *nodeTimer) NewNode(name Key, options ...Option) (NodeTimer, error) {
 	config := newConfig(options...)
 	if len(config.components) == 0 {
 		return nil, errors.New("NewNode: node timer must have at least one component, otherwise use NewLeaf()")
@@ -61,7 +57,7 @@ func (timer *nodeTimer) NewNode(name string, options ...Option) (NodeTimer, erro
 	}, nil
 }
 
-func (timer *nodeTimer) NewLeaf(name string, options ...Option) (Timer, error) {
+func (timer *nodeTimer) NewLeaf(name Key, options ...Option) (Timer, error) {
 	config := newConfig(options...)
 	if len(config.components) != 0 {
 		return nil, errors.New("NewLeaf: leaf timer cannot have components, otherwise use NewNode()")
@@ -80,7 +76,7 @@ func (timer *nodeTimer) NewLeaf(name string, options ...Option) (Timer, error) {
 	}, nil
 }
 
-func (timer *nodeTimer) MustLeaf(name string, options ...Option) Timer {
+func (timer *nodeTimer) MustLeaf(name Key, options ...Option) Timer {
 	leaf, err := timer.NewLeaf(name, options...)
 	if err != nil {
 		panic(err)
@@ -90,16 +86,11 @@ func (timer *nodeTimer) MustLeaf(name string, options ...Option) Timer {
 
 func (timer *nodeTimer) childStarted() {}
 
-func (timer *nodeTimer) childStopped(componentName string, duration time.Duration) {
+func (timer *nodeTimer) childStopped(componentName Key, duration time.Duration) {
 	timer.components.lookup[componentName].Add(int64(duration))
-	if timer.parent == nil {
-		return
-	}
-
-	timer.parent.childStopped(timer.componentName, duration)
 }
 
-func (timer *nodeTimer) AddTime(name string, duration time.Duration) {
+func (timer *nodeTimer) AddTime(name Key, duration time.Duration) {
 	value, ok := timer.components.lookup[name]
 	if !ok {
 		return
@@ -108,8 +99,8 @@ func (timer *nodeTimer) AddTime(name string, duration time.Duration) {
 	value.Add(int64(duration))
 }
 
-func (timer *nodeTimer) Stats() map[string]time.Duration {
-	stats := make(map[string]time.Duration, len(timer.components.lookup))
+func (timer *nodeTimer) Stats() map[Key]time.Duration {
+	stats := make(map[Key]time.Duration, len(timer.components.lookup))
 	for name, component := range timer.components.lookup {
 		stats[name] = time.Duration(component.Load())
 	}

@@ -226,9 +226,9 @@ func TestInheritBudget(t *testing.T) {
 
 func TestTree(t *testing.T) {
 	t.Run("100-leafs", func(t *testing.T) {
-		components := make([]string, 100)
+		components := make([]timer.Key, 100)
 		for i := range components {
-			components[i] = strconv.Itoa(i)
+			components[i] = timer.Key(strconv.Itoa(i))
 		}
 
 		rootTimer, err := timer.NewTreeTimer(timer.WithBudget(time.Hour), timer.WithComponents(components...))
@@ -251,9 +251,9 @@ func TestTree(t *testing.T) {
 	})
 
 	t.Run("100-nodes-1-leaf", func(t *testing.T) {
-		components := make([]string, 100)
+		components := make([]timer.Key, 100)
 		for i := range components {
-			components[i] = strconv.Itoa(i)
+			components[i] = timer.Key(strconv.Itoa(i))
 		}
 
 		rootTimer, err := timer.NewTreeTimer(timer.WithBudget(time.Hour), timer.WithComponents(components...))
@@ -279,9 +279,9 @@ func TestTree(t *testing.T) {
 	})
 
 	t.Run("100-nodes-100-leaf", func(t *testing.T) {
-		components := make([]string, 100)
+		components := make([]timer.Key, 100)
 		for i := range components {
-			components[i] = strconv.Itoa(i)
+			components[i] = timer.Key(strconv.Itoa(i))
 		}
 
 		rootTimer, err := timer.NewTreeTimer(timer.WithBudget(time.Hour), timer.WithComponents(components...))
