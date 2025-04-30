@@ -253,68 +253,73 @@ func TestTimeout(t *testing.T) {
 		"my.input": "Arachni",
 	}
 
+	var wafTimerKey timer.Key = "waf"
+	var raspTimerKey timer.Key = "rasp"
+
 	t.Run("not-empty-metrics-match", func(t *testing.T) {
-		context, err := waf.NewContext(time.Hour)
+		context, err := waf.NewContext(timer.WithBudget(time.Hour), timer.WithComponents(wafTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
-		_, err = context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue})
+		res, err := context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue, TimerKey: wafTimerKey})
 		require.NoError(t, err)
-		require.NotEmpty(t, context.Stats())
-		require.NotZero(t, context.Stats().Timers["waf.decode"])
-		require.NotZero(t, context.Stats().Timers["waf.encode"])
-		require.NotZero(t, context.Stats().Timers["waf.duration_ext"])
-		require.NotZero(t, context.Stats().Timers["waf.duration"])
+		require.NotEmpty(t, context.Timer.Stats())
+		require.NotZero(t, context.Timer.Stats()[wafTimerKey])
+
+		require.NotZero(t, res.TimerStats[DecodeTimeKey])
+		require.NotZero(t, res.TimerStats[EncodeTimeKey])
+		require.NotZero(t, res.TimerStats[DurationTimeKey])
 	})
 
 	t.Run("not-empty-metrics-no-match", func(t *testing.T) {
-		context, err := waf.NewContext(time.Hour)
+		context, err := waf.NewContext(timer.WithBudget(time.Hour), timer.WithComponents(wafTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
-		_, err = context.Run(RunAddressData{Persistent: map[string]any{"my.input": "curl/7.88"}})
+		res, err := context.Run(RunAddressData{Persistent: map[string]any{"my.input": "curl/7.88"}, TimerKey: wafTimerKey})
 		require.NoError(t, err)
-		require.NotEmpty(t, context.Stats())
-		require.NotZero(t, context.Stats().Timers["waf.decode"])
-		require.NotZero(t, context.Stats().Timers["waf.encode"])
-		require.NotZero(t, context.Stats().Timers["waf.duration_ext"])
-		require.NotZero(t, context.Stats().Timers["waf.duration"])
+		require.NotEmpty(t, context.Timer.Stats())
+		require.NotZero(t, context.Timer.Stats()[wafTimerKey])
+
+		require.NotZero(t, res.TimerStats[DecodeTimeKey])
+		require.NotZero(t, res.TimerStats[EncodeTimeKey])
+		require.NotZero(t, res.TimerStats[DurationTimeKey])
 	})
 
 	t.Run("timeout-persistent-encoder", func(t *testing.T) {
-		context, err := waf.NewContext(time.Millisecond)
+		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
-		_, err = context.Run(RunAddressData{Persistent: largeValue})
+		res, err := context.Run(RunAddressData{Persistent: largeValue, TimerKey: wafTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
-		require.GreaterOrEqual(t, context.Stats().Timers["waf.duration_ext"], time.Millisecond)
-		require.GreaterOrEqual(t, context.Stats().Timers["waf.encode"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Timer.Stats()[wafTimerKey], time.Millisecond)
+		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
 	})
 
 	t.Run("timeout-ephemeral-encoder", func(t *testing.T) {
-		context, err := waf.NewContext(time.Millisecond)
+		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
-		_, err = context.Run(RunAddressData{Ephemeral: largeValue})
+		res, err := context.Run(RunAddressData{Ephemeral: largeValue, TimerKey: wafTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
-		require.GreaterOrEqual(t, context.Stats().Timers["waf.duration_ext"], time.Millisecond)
-		require.GreaterOrEqual(t, context.Stats().Timers["waf.encode"], time.Millisecond)
+		require.GreaterOrEqual(t, context.Timer.Stats()[wafTimerKey], time.Millisecond)
+		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
 	})
 
 	t.Run("many-runs", func(t *testing.T) {
-		context, err := waf.NewContext(time.Millisecond)
+		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
 		for i := 0; i < 1000 && err != waferrors.ErrTimeout; i++ {
-			_, err = context.Run(RunAddressData{Persistent: normalValue})
+			_, err = context.Run(RunAddressData{Persistent: normalValue, TimerKey: wafTimerKey})
 		}
 
 		require.Equal(t, waferrors.ErrTimeout, err)
@@ -325,30 +330,53 @@ func TestTimeout(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, waf)
 
-		context, err := waf.NewContext(timer.UnlimitedBudget)
+		context, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget), timer.WithComponents(wafTimerKey, raspTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
-		_, err = context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue, Scope: RASPScope})
+		res, err := context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue, TimerKey: raspTimerKey})
 		require.NoError(t, err)
-		require.NotZero(t, context.Stats().Timers["rasp.duration_ext"])
-		require.NotZero(t, context.Stats().Timers["rasp.duration"])
-		require.NotZero(t, context.Stats().Timers["rasp.encode"])
-		require.NotZero(t, context.Stats().Timers["rasp.decode"])
+		require.NotEmpty(t, context.Timer.Stats())
+		require.NotZero(t, context.Timer.Stats()[raspTimerKey])
+
+		require.NotZero(t, res.TimerStats[DecodeTimeKey])
+		require.NotZero(t, res.TimerStats[EncodeTimeKey])
+		require.NotZero(t, res.TimerStats[DurationTimeKey])
 	})
 
 	t.Run("rasp-timeout", func(t *testing.T) {
-		context, err := waf.NewContext(time.Millisecond)
+		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey, raspTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
 
-		_, err = context.Run(RunAddressData{Persistent: largeValue, Scope: RASPScope})
+		res, err := context.Run(RunAddressData{Persistent: largeValue, TimerKey: raspTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
-		require.GreaterOrEqual(t, context.Stats().Timers["rasp.duration_ext"], time.Millisecond)
-		require.GreaterOrEqual(t, context.Stats().Timers["rasp.encode"], time.Millisecond)
-		require.EqualValues(t, 1, context.Stats().TimeoutRASPCount)
+		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey], time.Millisecond)
+		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
+	})
+
+	t.Run("both-timeout", func(t *testing.T) {
+		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey, raspTimerKey))
+		require.NoError(t, err)
+		require.NotNil(t, context)
+		defer context.Close()
+
+		res, err := context.Run(RunAddressData{Persistent: normalValue, TimerKey: wafTimerKey})
+		require.NoError(t, err)
+		require.NotEmpty(t, context.Timer.Stats())
+		require.NotZero(t, context.Timer.Stats()[wafTimerKey])
+
+		require.NotZero(t, res.TimerStats[DecodeTimeKey])
+		require.NotZero(t, res.TimerStats[EncodeTimeKey])
+		require.NotZero(t, res.TimerStats[DurationTimeKey])
+
+		res, err = context.Run(RunAddressData{Persistent: largeValue, TimerKey: raspTimerKey})
+		require.Equal(t, waferrors.ErrTimeout, err)
+		require.LessOrEqual(t, context.Timer.Stats()[wafTimerKey], time.Millisecond)
+		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey]+context.Timer.Stats()[wafTimerKey], time.Millisecond)
+		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey]+res.TimerStats[EncodeTimeKey], time.Millisecond)
 	})
 }
 
@@ -360,7 +388,7 @@ func TestMatching(t *testing.T) {
 
 	require.Equal(t, []string{"my.input"}, waf.Addresses())
 
-	wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+	wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 
@@ -416,7 +444,7 @@ func TestMatching(t *testing.T) {
 	wafCtx.Close()
 	waf.Close()
 	// Using the WAF instance after it was closed leads to a nil WAF context
-	ctx, err := waf.NewContext(timer.UnlimitedBudget)
+	ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 	require.Nil(t, ctx)
 	require.Error(t, err)
 }
@@ -427,7 +455,7 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 	require.NoError(t, err)
 	defer waf.Close()
 
-	wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+	wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()
@@ -480,7 +508,7 @@ func TestMatchingEphemeral(t *testing.T) {
 	sort.Strings(addrs)
 	require.Equal(t, []string{input1, input2}, addrs)
 
-	wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+	wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 
@@ -538,7 +566,7 @@ func TestMatchingEphemeral(t *testing.T) {
 	wafCtx.Close()
 	waf.Close()
 	// Using the WAF instance after it was closed leads to a nil WAF context
-	ctx, err := waf.NewContext(timer.UnlimitedBudget)
+	ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 	require.Nil(t, ctx)
 	require.Error(t, err)
 }
@@ -557,7 +585,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	sort.Strings(addrs)
 	require.Equal(t, []string{input1, input2}, addrs)
 
-	wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+	wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 
@@ -599,7 +627,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	wafCtx.Close()
 	waf.Close()
 	// Using the WAF instance after it was closed leads to a nil WAF context
-	ctx, err := waf.NewContext(timer.UnlimitedBudget)
+	ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 	require.Nil(t, ctx)
 	require.Error(t, err)
 }
@@ -613,7 +641,7 @@ func TestActions(t *testing.T) {
 			require.NotNil(t, waf)
 			defer waf.Close()
 
-			wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+			wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 			require.NoError(t, err)
 			require.NotNil(t, wafCtx)
 			defer wafCtx.Close()
@@ -664,7 +692,7 @@ func TestConcurrency(t *testing.T) {
 		require.NoError(t, err)
 		defer waf.Close()
 
-		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+		wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		defer wafCtx.Close()
 
@@ -759,7 +787,7 @@ func TestConcurrency(t *testing.T) {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+				wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 				require.NoError(t, err)
 				defer wafCtx.Close()
 
@@ -829,7 +857,7 @@ func TestConcurrency(t *testing.T) {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+				wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 				if wafCtx == nil || err != nil {
 					return
 				}
@@ -861,7 +889,7 @@ func TestConcurrency(t *testing.T) {
 		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 
-		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+		wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 
@@ -1036,6 +1064,9 @@ func TestMetrics(t *testing.T) {
 	waf, diags, err := newDefaultHandle(parsed)
 	require.NoError(t, err)
 	defer waf.Close()
+
+	var wafTimerKey timer.Key = "waf"
+
 	t.Run("Diagnostics", func(t *testing.T) {
 		require.NotNil(t, diags.Rules)
 		require.Len(t, diags.Rules.Failed, 3)
@@ -1056,7 +1087,7 @@ func TestMetrics(t *testing.T) {
 	})
 
 	t.Run("RunDuration", func(t *testing.T) {
-		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+		wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget), timer.WithComponents(wafTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
@@ -1068,15 +1099,14 @@ func TestMetrics(t *testing.T) {
 			"server.request.body": map[string]bool{"safe": true},
 		}
 		start := time.Now()
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
+		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral, TimerKey: wafTimerKey})
 		elapsedNS := time.Since(start).Nanoseconds()
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
 
 		// Make sure that WAF runtime was set
-		timers := wafCtx.Stats().Timers
-		overall, internal := timers["waf.duration_ext"], timers["waf.duration"]
+		overall, internal := wafCtx.Timer.Stats()[wafTimerKey], res.TimerStats[DurationTimeKey]
 		require.Greater(t, overall, time.Duration(0))
 		require.Greater(t, internal, time.Duration(0))
 		require.Greater(t, overall, internal)
@@ -1084,7 +1114,7 @@ func TestMetrics(t *testing.T) {
 	})
 
 	t.Run("Timeouts", func(t *testing.T) {
-		wafCtx, err := waf.NewContext(time.Nanosecond)
+		wafCtx, err := waf.NewContext(timer.WithBudget(time.Nanosecond), timer.WithComponents(wafTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
@@ -1097,9 +1127,8 @@ func TestMetrics(t *testing.T) {
 		}
 
 		for i := uint64(1); i <= 10; i++ {
-			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
+			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral, TimerKey: wafTimerKey})
 			require.Equal(t, waferrors.ErrTimeout, err)
-			require.Equal(t, wafCtx.Stats().TimeoutCount, i)
 		}
 	})
 }
@@ -1110,7 +1139,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, _, err := newDefaultHandle(rule)
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+		wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
@@ -1133,7 +1162,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, _, err := newDefaultHandle(rule)
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+		wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
@@ -1156,7 +1185,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		waf, _, err := newDefaultHandle(rule)
 		require.NoError(t, err)
 		defer waf.Close()
-		wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+		wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
 		defer wafCtx.Close()
@@ -1181,7 +1210,7 @@ func TestTruncationInformation(t *testing.T) {
 	require.NoError(t, err)
 	defer waf.Close()
 
-	ctx, err := waf.NewContext(timer.UnlimitedBudget)
+	ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 	defer ctx.Close()
 
@@ -1205,7 +1234,7 @@ func TestTruncationInformation(t *testing.T) {
 	require.Equal(t, map[TruncationReason][]int{
 		StringTooLong:     {bindings.MaxStringLength + extra + 2, bindings.MaxStringLength + extra},
 		ContainerTooLarge: {bindings.MaxContainerSize + extra + 2, bindings.MaxContainerSize + extra},
-	}, ctx.truncations[DefaultScope])
+	}, ctx.truncations)
 }
 
 func BenchmarkEncoder(b *testing.B) {

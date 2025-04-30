@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"runtime"
 	"sync/atomic"
-	"time"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
@@ -50,7 +49,7 @@ func wrapHandle(cHandle bindings.WAFHandle) *Handle {
 // NewContext returns a new WAF context for the given WAF handle.
 // An error is returned when the WAF handle was released or when the WAF context
 // couldn't be created.
-func (handle *Handle) NewContext(budget time.Duration) (*Context, error) {
+func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error) {
 	// Handle has been released
 	if !handle.retain() {
 		return nil, fmt.Errorf("handle was released")
@@ -62,7 +61,7 @@ func (handle *Handle) NewContext(budget time.Duration) (*Context, error) {
 		return nil, fmt.Errorf("could not get C context")
 	}
 
-	timer, err := timer.NewTreeTimer(timer.WithBudget(budget), timer.WithComponents(wafRunTag))
+	rootTimer, err := timer.NewTreeTimer(timerOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -70,13 +69,8 @@ func (handle *Handle) NewContext(budget time.Duration) (*Context, error) {
 	return &Context{
 		handle:      handle,
 		cContext:    cContext,
-		timer:       timer,
-		metrics:     metricsStore{data: make(map[metricKey]time.Duration, 5)},
-		truncations: make(map[Scope]map[TruncationReason][]int, 2),
-		timeoutCount: map[Scope]*atomic.Uint64{
-			DefaultScope: new(atomic.Uint64),
-			RASPScope:    new(atomic.Uint64),
-		},
+		Timer:       rootTimer,
+		truncations: make(map[TruncationReason][]int, 3),
 	}, nil
 }
 
