@@ -26,7 +26,7 @@ type DynamicBudgetFunc func(timer NodeTimer) time.Duration
 type config struct {
 	dynamicBudget DynamicBudgetFunc
 	// components store all the components of the timer
-	components []string
+	components []Key
 	// budget is the time budget for the timer
 	budget time.Duration
 }
@@ -79,7 +79,7 @@ func WithInheritedSumBudget() Option {
 }
 
 // WithComponents is an Option that adds multiple components to the components list
-func WithComponents(components ...string) Option {
+func WithComponents(components ...Key) Option {
 	return func(c *config) {
 		c.components = append(c.components, components...)
 	}

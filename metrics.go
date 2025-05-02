@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/DataDog/go-libddwaf/v4/timer"
 )
 
 // Stats stores the metrics collected by the WAF.
@@ -126,7 +128,7 @@ func (metrics *metricsStore) timers() map[string]time.Duration {
 }
 
 // merge merges the current metrics with new ones
-func (metrics *metricsStore) merge(scope Scope, other map[string]time.Duration) {
+func (metrics *metricsStore) merge(scope Scope, other map[timer.Key]time.Duration) {
 	metrics.mutex.Lock()
 	defer metrics.mutex.Unlock()
 	if metrics.data == nil {
@@ -134,7 +136,7 @@ func (metrics *metricsStore) merge(scope Scope, other map[string]time.Duration) 
 	}
 
 	for component, val := range other {
-		key := metricKey{scope, component}
+		key := metricKey{scope, string(component)}
 		prev, ok := metrics.data[key]
 		if !ok {
 			prev = 0

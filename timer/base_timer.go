@@ -26,7 +26,7 @@ type baseTimer struct {
 	parent NodeTimer
 
 	// componentName is the name of the component of the timer. It is used to store the time spent in the component and to propagate the stop of the timer to the parent timer.
-	componentName string
+	componentName Key
 
 	// spent is the time spent on the timer, set after calling stop
 	spent time.Duration

@@ -11,12 +11,12 @@ import (
 
 // components store the data shared between child timers of the same component name
 type components struct {
-	lookup  map[string]*atomic.Int64
+	lookup  map[Key]*atomic.Int64
 	storage []atomic.Int64
 }
 
-func newComponents(names []string) components {
-	lookup := make(map[string]*atomic.Int64, len(names))
+func newComponents(names []Key) components {
+	lookup := make(map[Key]*atomic.Int64, len(names))
 	storage := make([]atomic.Int64, len(names))
 	for i, name := range names {
 		lookup[name] = &storage[i]

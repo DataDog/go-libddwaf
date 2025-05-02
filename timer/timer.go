@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// Key is used to key track of each component of a tree timer. It can be used create constants that can be used to identify components in the tree.
+type Key string
+
 // Timer is the default interface for all timers. NewTimer will provide you with a Timer.
 // Keep in mind that they are NOT thread-safe and once Stop() is called, the Timer cannot be restarted.
 type Timer interface {
@@ -83,32 +86,32 @@ type NodeTimer interface {
 	// A node timer is required to have at least one component. If no component is provided, it will return an error asking you to use NewLeaf instead.
 	// If no budget is provided, it will inherit the budget from its parent when calling Start().
 	// NewNode is thread-safe
-	NewNode(name string, options ...Option) (NodeTimer, error)
+	NewNode(name Key, options ...Option) (NodeTimer, error)
 
 	// NewLeaf creates a new Timer with the given name and options. The given name must match one of the component name of the parent timer.
 	// A leaf timer is forbidden to have components. If a component is provided, it will return an error asking you to use NewNode instead.
 	// If no budget is provided, it will inherit the budget from its parent when calling Start().
 	// NewLeaf is thread-safe
-	NewLeaf(name string, options ...Option) (Timer, error)
+	NewLeaf(name Key, options ...Option) (Timer, error)
 
 	// MustLeaf creates a new Timer with the given name and options.  The given name must match one of the component name of the parent timer.
 	// MustLeaf wraps a call to NewLeaf but will panic if the error is not nil.
 	// MustLeaf is thread-safe
-	MustLeaf(name string, options ...Option) Timer
+	MustLeaf(name Key, options ...Option) Timer
 
 	// AddTime adds the given duration to the component of the timer with the given name.
 	// AddTime is thread-safe
-	AddTime(name string, duration time.Duration)
+	AddTime(name Key, duration time.Duration)
 
 	// Stats returns a map of the time spent in each component of the timer.
 	// Stats is thread-safe
-	Stats() map[string]time.Duration
+	Stats() map[Key]time.Duration
 
 	// childStarted is used to propagate the start of a child timer to the parent timer through the whole tree.
 	childStarted()
 
 	// childStopped is used to propagate the time spent in a child timer to the parent timer through the whole tree.
-	childStopped(componentName string, duration time.Duration)
+	childStopped(componentName Key, duration time.Duration)
 
 	// now is a convenience wrapper to swap the time.Now() function for testing and performance purposes.
 	now() time.Time
