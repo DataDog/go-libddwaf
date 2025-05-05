@@ -7,6 +7,8 @@ package libddwaf
 
 import (
 	"time"
+
+	"github.com/DataDog/go-libddwaf/v4/timer"
 )
 
 // Result stores the multiple values returned by a call to [Context.Run].
@@ -26,9 +28,8 @@ type Result struct {
 	// parameter values.
 	Actions map[string]any
 
-	// TimeSpent is the time the WAF self-reported as spent processing the call to
-	// [Context.Run].
-	TimeSpent time.Duration
+	// Timer returns the time spend in the different parts of the run. Keys can be found with the suffix [
+	TimerStats map[timer.Key]time.Duration
 }
 
 // HasEvents return true if the [Result] holds at least 1 event.
@@ -45,3 +46,12 @@ func (r *Result) HasDerivatives() bool {
 func (r *Result) HasActions() bool {
 	return len(r.Actions) > 0
 }
+
+const (
+	// EncodeTimeKey is the key used to track the time spent encoding the address data reported in [Result.TimerStats].
+	EncodeTimeKey timer.Key = "encode"
+	// DurationTimeKey is the key used to track the time spent in libddwaf ddwaf_run C function reported in [Result.TimerStats].
+	DurationTimeKey timer.Key = "duration"
+	// DecodeTimeKey is the key used to track the time spent decoding the address data reported in [Result.TimerStats].
+	DecodeTimeKey timer.Key = "decode"
+)

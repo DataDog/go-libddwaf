@@ -12,7 +12,6 @@ import (
 	"math"
 	"reflect"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
@@ -114,8 +113,12 @@ func (encoder *encoder) Encode(data any) (*bindings.WAFObject, error) {
 
 	err := encoder.encode(value, wo, encoder.objectMaxDepth)
 
-	if len(encoder.truncations[ObjectTooDeep]) != 0 && !encoder.timer.Exhausted() {
-		encoder.measureObjectDepth(value, encoder.timer.Remaining())
+	if _, ok := encoder.truncations[ObjectTooDeep]; ok && !encoder.timer.Exhausted() {
+		ctx, cancelCtx := context.WithTimeout(context.Background(), encoder.timer.Remaining())
+		defer cancelCtx()
+
+		depth, _ := depthOf(ctx, value)
+		encoder.truncations[ObjectTooDeep] = []int{depth}
 	}
 
 	return wo, err
@@ -452,17 +455,6 @@ func (encoder *encoder) addTruncation(reason TruncationReason, size int) {
 		encoder.truncations = make(map[TruncationReason][]int, 3)
 	}
 	encoder.truncations[reason] = append(encoder.truncations[reason], size)
-}
-
-// mesureObjectDepth traverses the provided object recursively to try and obtain
-// the real object depth, but limits itself to about 1ms of time budget, past
-// which it'll stop and return whatever it has go to so far.
-func (encoder *encoder) measureObjectDepth(obj reflect.Value, timeout time.Duration) {
-	ctx, cancelCtx := context.WithTimeout(context.Background(), timeout)
-	defer cancelCtx()
-
-	depth, _ := depthOf(ctx, obj)
-	encoder.truncations[ObjectTooDeep] = []int{depth}
 }
 
 // depthOf returns the depth of the provided object. This is 0 for scalar values,

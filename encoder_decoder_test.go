@@ -31,7 +31,7 @@ func wafTest(t *testing.T, obj *bindings.WAFObject) {
 	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
 	require.NoError(t, err)
 	defer waf.Close()
-	wafCtx, err := waf.NewContext(timer.UnlimitedBudget)
+	wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()
@@ -572,7 +572,8 @@ func TestEncoderLimits(t *testing.T) {
 		encoded := &bindings.WAFObject{}
 		err := encoder.encode(value, encoded, encoder.objectMaxDepth)
 		if len(encoder.truncations[ObjectTooDeep]) != 0 {
-			encoder.measureObjectDepth(value, time.Hour) // Stupid-sized timeout for slow arm CI runners
+			depth, _ := depthOf(context.Background(), value)
+			encoder.truncations[ObjectTooDeep] = []int{depth}
 		}
 
 		t.Run(tc.Name+"/assert", func(t *testing.T) {

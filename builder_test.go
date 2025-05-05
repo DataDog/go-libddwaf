@@ -71,7 +71,7 @@ func TestBuilder(t *testing.T) {
 		require.NotNil(t, handle)
 		defer handle.Close()
 
-		ctx, err := handle.NewContext(timer.UnlimitedBudget)
+		ctx, err := handle.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
 		defer ctx.Close()
@@ -195,7 +195,7 @@ func TestBuilder(t *testing.T) {
 		waf := builder.Build()
 		require.NotNil(t, waf)
 		defer waf.Close()
-		ctx, err := waf.NewContext(timer.UnlimitedBudget)
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
 		defer ctx.Close()
@@ -236,7 +236,7 @@ func TestBuilder(t *testing.T) {
 		waf = builder.Build()
 		require.NotNil(t, waf)
 		defer waf.Close()
-		ctx, err = waf.NewContext(timer.UnlimitedBudget)
+		ctx, err = waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
 		defer ctx.Close()
@@ -369,7 +369,7 @@ func TestBuilder(t *testing.T) {
 		require.NotNil(t, waf)
 		defer waf.Close()
 
-		ctx, err := waf.NewContext(time.Hour)
+		ctx, err := waf.NewContext(timer.WithBudget(time.Hour))
 		require.NoError(t, err)
 		defer ctx.Close()
 

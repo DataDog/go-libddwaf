@@ -33,13 +33,14 @@ func main() {
     }
     defer wafHandle.Close()
 
-    wafCtx := wafHandle.NewContext()
+    wafCtx := wafHandle.NewContext(timer.WithUnlimitedBudget(), timer.WithComponent("waf", "rasp"))
     defer wafCtx.Close()
 
     matches, actions := wafCtx.Run(RunAddressData{
         Persistent: map[string]any{
             "server.request.path_params": "/rfiinc.txt",
         },
+		TimerKey: "waf",
     })
 }
 ```
