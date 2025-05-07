@@ -34,14 +34,17 @@ type Handle struct {
 
 	// Instance of the WAF
 	cHandle bindings.WAFHandle
+
+	// newEncoder is used to choose the encoder to use for the WAF context and the rules
+	newEncoder NewEncoder
 }
 
 // wrapHandle wraps the provided C handle into a [Handle]. The caller is
 // responsible to ensure the cHandle value is not 0 (NULL). The returned
 // [Handle] has a reference count of 1, so callers need not call [Handle.retain]
 // on it.
-func wrapHandle(cHandle bindings.WAFHandle) *Handle {
-	handle := &Handle{cHandle: cHandle}
+func wrapHandle(cHandle bindings.WAFHandle, newEncoder NewEncoder) *Handle {
+	handle := &Handle{cHandle: cHandle, newEncoder: newEncoder}
 	handle.refCounter.Store(1) // We count the handle itself in the counter
 	return handle
 }
@@ -71,6 +74,7 @@ func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error)
 		cContext:    cContext,
 		Timer:       rootTimer,
 		truncations: make(map[TruncationReason][]int, 3),
+		newEncoder:  handle.newEncoder,
 	}, nil
 }
 

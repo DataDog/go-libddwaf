@@ -20,7 +20,8 @@ import (
 // or similar when sharing it across multiple goroutines. All methods of this
 // type are safe to call with a nil receiver.
 type Builder struct {
-	handle bindings.WAFBuilder
+	handle     bindings.WAFBuilder
+	newEncoder NewEncoder
 }
 
 // NewBuilder creates a new [Builder] instance. Its lifecycle is typically tied
@@ -41,7 +42,7 @@ func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builde
 		return nil, errors.New("failed to initialize the WAF builder")
 	}
 
-	return &Builder{handle: hdl}, nil
+	return &Builder{handle: hdl, newEncoder: NewDefaultEncoder}, nil
 }
 
 // Close releases all resources associated with this builder.
@@ -72,7 +73,11 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
-	encoder := newMaxEncoder(&pinner)
+	encoder, err := b.newEncoder(newMaxEncoderConfig(&pinner))
+	if err != nil {
+		return Diagnostics{}, fmt.Errorf("could not create encoder: %w", err)
+	}
+
 	frag, err := encoder.Encode(fragment)
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("could not encode the config fragment into a WAF object; %w", err)
@@ -118,6 +123,17 @@ func (b *Builder) ConfigPaths(filter string) []string {
 	return wafLib.BuilderGetConfigPaths(b.handle, filter)
 }
 
+// Encoder takes [NewEncoder] function to be used in the handle created by the builder.
+// This function is not thread-safe and should be called before the builder is
+// built. The default encoder is [NewDefaultEncoder].
+func (b *Builder) Encoder(newEncoder NewEncoder) {
+	if b == nil || b.handle == 0 || newEncoder == nil {
+		return
+	}
+
+	b.newEncoder = newEncoder
+}
+
 // Build creates a new [Handle] instance that uses the current configuration.
 // Returns nil if an error occurs when building the handle. The caller is
 // responsible for calling [Handle.Close] when the handle is no longer needed.
@@ -132,5 +148,5 @@ func (b *Builder) Build() *Handle {
 		return nil
 	}
 
-	return wrapHandle(hdl)
+	return wrapHandle(hdl, b.newEncoder)
 }

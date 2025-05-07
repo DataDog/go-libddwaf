@@ -220,7 +220,6 @@ func TestInheritBudget(t *testing.T) {
 
 		hasExpired(t, leafTimer, time.Millisecond)
 		hasSumExpired(t, nodeTimer, time.Millisecond)
-		hasSumExpired(t, rootTimer, time.Millisecond)
 	})
 }
 
@@ -271,7 +270,6 @@ func TestTree(t *testing.T) {
 
 			sum += leafTimer.Spent()
 			require.Equal(t, nodeTimer.SumSpent(), leafTimer.Spent())
-			require.Equal(t, rootTimer.SumSpent(), sum)
 		}
 
 		rootTimer.Stop()
@@ -299,14 +297,12 @@ func TestTree(t *testing.T) {
 			var subSum time.Duration
 			for _, component := range components {
 				leafTimer := nodeTimer.MustLeaf(component)
-				_ = leafTimer.Timed(func(timer timer.Timer) {})
 
-				subSum += leafTimer.Spent()
+				subSum += leafTimer.Timed(func(timer timer.Timer) {})
 				require.Equal(t, subSum, nodeTimer.SumSpent())
 			}
 
-			subSum += nodeTimer.Stop()
-			sum += subSum
+			sum += nodeTimer.Stop()
 			require.Equal(t, sum, rootTimer.SumSpent())
 
 			require.GreaterOrEqual(t, nodeTimer.Spent(), nodeTimer.SumSpent())

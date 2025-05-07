@@ -211,27 +211,27 @@ func newDefaultHandle(rule any) (*Handle, *Diagnostics, error) {
 	return builder.Build(), &diag, nil
 }
 
-func maxWafValueEncoder(encoder encoder) map[string]any {
+func maxWafValueEncoder(cfg EncoderConfig) map[string]any {
 	rnd := rand.New(rand.NewSource(33))
 	buf := make([]byte, bindings.MaxStringLength)
 	rnd.Read(buf)
 	fullstr := string(buf)
 
-	return maxWafValueRec(encoder, fullstr, encoder.objectMaxDepth)
+	return maxWafValueRec(&cfg, fullstr, cfg.ObjectMaxDepth)
 }
 
-func maxWafValueRec(encoder encoder, str string, depth int) map[string]any {
-	data := make(map[string]any, encoder.containerMaxSize)
+func maxWafValueRec(cfg *EncoderConfig, str string, depth int) map[string]any {
+	data := make(map[string]any, cfg.ContainerMaxSize)
 
 	if depth == 0 {
-		for i := 0; i < encoder.containerMaxSize; i++ {
+		for i := 0; i < cfg.ContainerMaxSize; i++ {
 			data[str+strconv.Itoa(i)] = str
 		}
 		return data
 	}
 
-	for i := 0; i < encoder.containerMaxSize; i++ {
-		data[str+strconv.Itoa(i)] = maxWafValueRec(encoder, str, depth-1)
+	for i := 0; i < cfg.ContainerMaxSize; i++ {
+		data[str+strconv.Itoa(i)] = maxWafValueRec(cfg, str, depth-1)
 	}
 	return data
 }
@@ -242,10 +242,10 @@ func TestTimeout(t *testing.T) {
 	require.NotNil(t, waf)
 
 	largeValue := map[string]any{
-		"my.input": maxWafValueEncoder(encoder{
-			containerMaxSize: 64,
-			objectMaxDepth:   2,
-			stringMaxSize:    512,
+		"my.input": maxWafValueEncoder(EncoderConfig{
+			ContainerMaxSize: 64,
+			ObjectMaxDepth:   2,
+			StringMaxSize:    512,
 		}),
 	}
 
@@ -1247,13 +1247,13 @@ func BenchmarkEncoder(b *testing.B) {
 	defer pinner.Unpin()
 
 	for _, l := range []int{1024, 4096, 8192, 16384} {
-		encoder := encoder{
-			pinner:           &pinner,
-			objectMaxDepth:   10,
-			stringMaxSize:    1 * 1024 * 1024,
-			containerMaxSize: 100,
-			timer:            encodeTimer,
-		}
+		encoder, _ := NewDefaultEncoder(EncoderConfig{
+			Pinner:           &pinner,
+			ObjectMaxDepth:   10,
+			StringMaxSize:    1 * 1024 * 1024,
+			ContainerMaxSize: 100,
+			Timer:            encodeTimer,
+		})
 		b.Run(fmt.Sprintf("%d", l), func(b *testing.B) {
 			b.ReportAllocs()
 			str := fullstr[:l]
