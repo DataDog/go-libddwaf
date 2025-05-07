@@ -6,6 +6,7 @@
 package libddwaf
 
 import (
+	"fmt"
 	"maps"
 	"runtime"
 	"sync"
@@ -24,7 +25,8 @@ import (
 type Context struct {
 	// Timer registers the time spent in the WAF and go-libddwaf. It is created alongside the Context using the options
 	// passed in to NewContext. Once its time budget is exhausted, each new call to Context.Run will return a timeout error.
-	Timer timer.NodeTimer
+	Timer      timer.NodeTimer
+	newEncoder NewEncoder
 
 	handle *Handle // Instance of the WAF
 
@@ -192,17 +194,21 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // ephemeral addresses are allowed to be null one at a time. In this case, Encode will return nil,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
 func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[string]any, timer timer.Timer) (*bindings.WAFObject, error) {
-	encoder := newLimitedEncoder(pinner, timer)
 	if addressData == nil {
 		return nil, nil
 	}
 
+	encoder, err := context.newEncoder(newLimitedEncoderConfig(pinner, timer))
+	if err != nil {
+		return nil, fmt.Errorf("could not create encoder: %w", err)
+	}
+
 	data, _ := encoder.Encode(addressData)
-	if len(encoder.truncations) > 0 {
+	if len(encoder.Truncations()) > 0 {
 		context.mutex.Lock()
 		defer context.mutex.Unlock()
 
-		context.truncations = merge(context.truncations, encoder.truncations)
+		context.truncations = merge(context.truncations, encoder.Truncations())
 	}
 
 	if timer.Exhausted() {
