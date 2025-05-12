@@ -21,6 +21,11 @@ import (
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
 
+type Encoder interface {
+	Encode(data any) (*bindings.WAFObject, error)
+	Truncations() map[TruncationReason][]int
+}
+
 // Encode Go values into wafObjects. Only the subset of Go types representable into wafObjects
 // will be encoded while ignoring the rest of it.
 // The encoder allocates the memory required for new wafObjects into the Go memory, which must be kept
