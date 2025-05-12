@@ -25,12 +25,12 @@ type EncoderConfig struct {
 	Pinner pin.Pinner
 	// Timer makes sure the encoder doesn't spend too much time doing its job.
 	Timer timer.Timer
-	// ContainerMaxSize is the maximum number of elements in a container (list, map, struct) that will be encoded.
-	ContainerMaxSize int
-	// StringMaxSize is the maximum length of a string that will be encoded.
-	StringMaxSize int
-	// ObjectMaxDepth is the maximum depth of the object that will be encoded.
-	ObjectMaxDepth int
+	// MaxContainerSize is the maximum number of elements in a container (list, map, struct) that will be encoded.
+	MaxContainerSize int
+	// MaxStringSize is the maximum length of a string that will be encoded.
+	MaxStringSize int
+	// MaxObjectDepth is the maximum depth of the object that will be encoded.
+	MaxObjectDepth int
 }
 
 // encoder encodes Go values into wafObjects. Only the subset of Go types representable into wafObjects
@@ -41,7 +41,7 @@ type EncoderConfig struct {
 // reference now or in the future, are stored and referenced in the `cgoRefs` field. The user MUST leverage
 // `keepAlive()` with it according to its ddwaf use-case.
 type encoder struct {
-	EncoderConfig
+	config EncoderConfig
 
 	// For each TruncationReason, holds the size that is required to avoid truncation for each truncation that happened.
 	truncations map[TruncationReason][]int
@@ -93,54 +93,52 @@ type WAFObject = bindings.WAFObject
 // make sure it doesn't spend too much time doing its job.
 // The encoder must also respect the [EncoderConfig] limits and report truncations.
 type Encodable interface {
-	// Encode encodes itself as the WAFObject obj using the provided EncoderConfig and remaining depth allowed.
-	// It returns a map of truncation reasons and their respective actual sizes. If the error returned is not nil
-	// It is greatly advised to return errors from the waferrors package error when it matters.
+	// Encode encodes the receiver as the WAFObject obj using the provided EncoderConfig and remaining depth allowed.
+	// It returns a map of truncation reasons and their respective actual sizes. If the error returned is not nil,
+	// it is greatly advised to return errors from the waferrors package error when it matters.
 	// Outside of encoding the value, it is expected to check for truncations sizes as advised in the EncoderConfig
 	// and to regularly call the EncoderConfig.Timer.Exhausted() method to check if the encoding is still allowed
 	// and return waferrors.ErrTimeout if it is not.
-	// This method is NOT thread-safe.
+	// This method is not expected or required to be safe to concurrently call from multiple goroutines.
 	Encode(config EncoderConfig, obj *bindings.WAFObject, depth int) (map[TruncationReason][]int, error)
 }
 
-func newDefaultEncoder(config EncoderConfig) (*encoder, error) {
+func newEncoder(config EncoderConfig) (*encoder, error) {
 	if config.Pinner == nil {
 		return nil, fmt.Errorf("pinner cannot be nil")
 	}
 	if config.Timer == nil {
 		config.Timer, _ = timer.NewTimer(timer.WithUnlimitedBudget())
 	}
-	if config.ContainerMaxSize < 0 {
+	if config.MaxContainerSize < 0 {
 		return nil, fmt.Errorf("container max size must be greater than 0")
 	}
-	if config.StringMaxSize < 0 {
+	if config.MaxStringSize < 0 {
 		return nil, fmt.Errorf("string max size must be greater than 0")
 	}
-	if config.ObjectMaxDepth < 0 {
+	if config.MaxObjectDepth < 0 {
 		return nil, fmt.Errorf("object max depth must be greater than 0")
 	}
 
-	return &encoder{
-		EncoderConfig: config,
-	}, nil
+	return &encoder{config: config}, nil
 }
 
-func newLimitedEncoderConfig(pinner pin.Pinner, timer timer.Timer) EncoderConfig {
+func newEncoderConfig(pinner pin.Pinner, timer timer.Timer) EncoderConfig {
 	return EncoderConfig{
 		Pinner:           pinner,
 		Timer:            timer,
-		ContainerMaxSize: bindings.MaxContainerSize,
-		StringMaxSize:    bindings.MaxStringLength,
-		ObjectMaxDepth:   bindings.MaxContainerDepth,
+		MaxContainerSize: bindings.MaxContainerSize,
+		MaxStringSize:    bindings.MaxStringLength,
+		MaxObjectDepth:   bindings.MaxContainerDepth,
 	}
 }
 
-func newMaxEncoderConfig(pinner pin.Pinner) EncoderConfig {
+func newUnlimitedEncoderConfig(pinner pin.Pinner) EncoderConfig {
 	return EncoderConfig{
 		Pinner:           pinner,
-		ContainerMaxSize: math.MaxInt,
-		StringMaxSize:    math.MaxInt,
-		ObjectMaxDepth:   math.MaxInt,
+		MaxContainerSize: math.MaxInt,
+		MaxStringSize:    math.MaxInt,
+		MaxObjectDepth:   math.MaxInt,
 	}
 }
 
@@ -152,10 +150,10 @@ func (encoder *encoder) Encode(data any) (*bindings.WAFObject, error) {
 	value := reflect.ValueOf(data)
 	wo := &bindings.WAFObject{}
 
-	err := encoder.encode(value, wo, encoder.ObjectMaxDepth)
+	err := encoder.encode(value, wo, encoder.config.MaxObjectDepth)
 
-	if _, ok := encoder.truncations[ObjectTooDeep]; ok && !encoder.Timer.Exhausted() {
-		ctx, cancelCtx := context.WithTimeout(context.Background(), encoder.Timer.Remaining())
+	if _, ok := encoder.truncations[ObjectTooDeep]; ok && !encoder.config.Timer.Exhausted() {
+		ctx, cancelCtx := context.WithTimeout(context.Background(), encoder.config.Timer.Remaining())
 		defer cancelCtx()
 
 		depth, _ := depthOf(ctx, value)
@@ -188,13 +186,13 @@ func isValueNil(value reflect.Value) bool {
 }
 
 func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, depth int) error {
-	if encoder.Timer.Exhausted() {
+	if encoder.config.Timer.Exhausted() {
 		return waferrors.ErrTimeout
 	}
 
 	if value.IsValid() && value.CanInterface() {
 		if encodable, ok := value.Interface().(Encodable); ok {
-			truncations, err := encodable.Encode(encoder.EncoderConfig, obj, depth)
+			truncations, err := encodable.Encode(encoder.config, obj, depth)
 			encoder.truncations = merge(encoder.truncations, truncations)
 			return err
 		}
@@ -289,11 +287,11 @@ func (encoder *encoder) encodeJSONNumber(num json.Number, obj *bindings.WAFObjec
 
 func (encoder *encoder) encodeString(str string, obj *bindings.WAFObject) {
 	size := len(str)
-	if size > encoder.StringMaxSize {
-		str = str[:encoder.StringMaxSize]
+	if size > encoder.config.MaxStringSize {
+		str = str[:encoder.config.MaxStringSize]
 		encoder.addTruncation(StringTooLong, size)
 	}
-	obj.SetString(encoder.Pinner, str)
+	obj.SetString(encoder.config.Pinner, str)
 }
 
 func getFieldNameFromType(field reflect.StructField) (string, bool) {
@@ -324,7 +322,7 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 // - Private fields and also values producing an error at encoding will be skipped
 // - Even if the element values are invalid or null we still keep them to report the field name
 func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObject, depth int) {
-	if encoder.Timer.Exhausted() {
+	if encoder.config.Timer.Exhausted() {
 		return
 	}
 
@@ -333,13 +331,13 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 
 	capacity := nbFields
 	length := 0
-	if capacity > encoder.ContainerMaxSize {
-		capacity = encoder.ContainerMaxSize
+	if capacity > encoder.config.MaxContainerSize {
+		capacity = encoder.config.MaxContainerSize
 	}
 
-	objArray := obj.SetMap(encoder.Pinner, uint64(capacity))
+	objArray := obj.SetMap(encoder.config.Pinner, uint64(capacity))
 	for i := 0; i < nbFields; i++ {
-		if encoder.Timer.Exhausted() {
+		if encoder.config.Timer.Exhausted() {
 			return
 		}
 
@@ -378,15 +376,15 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 // - Even if the element values are invalid or null we still keep them to report the map key
 func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	capacity := value.Len()
-	if capacity > encoder.ContainerMaxSize {
-		capacity = encoder.ContainerMaxSize
+	if capacity > encoder.config.MaxContainerSize {
+		capacity = encoder.config.MaxContainerSize
 	}
 
-	objArray := obj.SetMap(encoder.Pinner, uint64(capacity))
+	objArray := obj.SetMap(encoder.config.Pinner, uint64(capacity))
 
 	length := 0
 	for iter := value.MapRange(); iter.Next(); {
-		if encoder.Timer.Exhausted() {
+		if encoder.config.Timer.Exhausted() {
 			return
 		}
 
@@ -438,12 +436,12 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WAFObjec
 // string. The key may be truncated if it exceeds the maximum string size allowed by the encoder.
 func (encoder *encoder) encodeMapKeyFromString(keyStr string, obj *bindings.WAFObject) {
 	size := len(keyStr)
-	if size > encoder.StringMaxSize {
-		keyStr = keyStr[:encoder.StringMaxSize]
+	if size > encoder.config.MaxStringSize {
+		keyStr = keyStr[:encoder.config.MaxStringSize]
 		encoder.addTruncation(StringTooLong, size)
 	}
 
-	obj.SetMapKey(encoder.Pinner, keyStr)
+	obj.SetMapKey(encoder.config.Pinner, keyStr)
 }
 
 // encodeArray takes a reflect.Value and a wafObject pointer and iterates on the elements and returns
@@ -454,16 +452,16 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject
 	length := value.Len()
 
 	capacity := length
-	if capacity > encoder.ContainerMaxSize {
-		capacity = encoder.ContainerMaxSize
+	if capacity > encoder.config.MaxContainerSize {
+		capacity = encoder.config.MaxContainerSize
 	}
 
 	currIndex := 0
 
-	objArray := obj.SetArray(encoder.Pinner, uint64(capacity))
+	objArray := obj.SetArray(encoder.config.Pinner, uint64(capacity))
 
 	for i := 0; i < length; i++ {
-		if encoder.Timer.Exhausted() {
+		if encoder.config.Timer.Exhausted() {
 			return
 		}
 		if currIndex == capacity {

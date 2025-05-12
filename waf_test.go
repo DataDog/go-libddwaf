@@ -217,20 +217,20 @@ func maxWafValueEncoder(cfg EncoderConfig) map[string]any {
 	rnd.Read(buf)
 	fullstr := string(buf)
 
-	return maxWafValueRec(&cfg, fullstr, cfg.ObjectMaxDepth)
+	return maxWafValueRec(&cfg, fullstr, cfg.MaxObjectDepth)
 }
 
 func maxWafValueRec(cfg *EncoderConfig, str string, depth int) map[string]any {
-	data := make(map[string]any, cfg.ContainerMaxSize)
+	data := make(map[string]any, cfg.MaxContainerSize)
 
 	if depth == 0 {
-		for i := 0; i < cfg.ContainerMaxSize; i++ {
+		for i := 0; i < cfg.MaxContainerSize; i++ {
 			data[str+strconv.Itoa(i)] = str
 		}
 		return data
 	}
 
-	for i := 0; i < cfg.ContainerMaxSize; i++ {
+	for i := 0; i < cfg.MaxContainerSize; i++ {
 		data[str+strconv.Itoa(i)] = maxWafValueRec(cfg, str, depth-1)
 	}
 	return data
@@ -243,9 +243,9 @@ func TestTimeout(t *testing.T) {
 
 	largeValue := map[string]any{
 		"my.input": maxWafValueEncoder(EncoderConfig{
-			ContainerMaxSize: 64,
-			ObjectMaxDepth:   2,
-			StringMaxSize:    512,
+			MaxContainerSize: 64,
+			MaxObjectDepth:   2,
+			MaxStringSize:    512,
 		}),
 	}
 
@@ -1247,11 +1247,11 @@ func BenchmarkEncoder(b *testing.B) {
 	defer pinner.Unpin()
 
 	for _, l := range []int{1024, 4096, 8192, 16384} {
-		encoder, _ := newDefaultEncoder(EncoderConfig{
+		encoder, _ := newEncoder(EncoderConfig{
 			Pinner:           &pinner,
-			ObjectMaxDepth:   10,
-			StringMaxSize:    1 * 1024 * 1024,
-			ContainerMaxSize: 100,
+			MaxObjectDepth:   10,
+			MaxStringSize:    1 * 1024 * 1024,
+			MaxContainerSize: 100,
 			Timer:            encodeTimer,
 		})
 		b.Run(fmt.Sprintf("%d", l), func(b *testing.B) {
