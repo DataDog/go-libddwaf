@@ -20,27 +20,6 @@ import (
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
 
-// Encoder is the interface that all encoders must implement. It is used to encode
-// Go values into wafObjects. The encoder is responsible for using the [pin.Pinner]
-// object passed in the [EncoderConfig] to pin the data referenced by the encoded wafObjects.
-// The encoder must also use the [timer.Timer] passed in the [EncoderConfig] to
-// make sure it doesn't spend too much time doing its job.
-// The encoder must also respect the [EncoderConfig] limits and report truncations
-// in any in a following call to [Encoder.Truncations].
-// Both methods are not expected to be thread-safe, so the caller must ensure
-// that the encoder is not used concurrently by multiple goroutines.
-//
-// Note: Any custom encoder is still expected to be able to encode
-// the default types like NewDefaultEncoder does. This is to ensure that
-// the ruleset can be parsed and used by libddwaf.
-type Encoder interface {
-	Encode(any) (*bindings.WAFObject, error)
-
-	Truncations() map[TruncationReason][]int
-}
-
-var _ Encoder = (*encoder)(nil)
-
 type EncoderConfig struct {
 	// Pinner is used to pin the data referenced by the encoded wafObjects.
 	Pinner pin.Pinner
@@ -53,8 +32,6 @@ type EncoderConfig struct {
 	// ObjectMaxDepth is the maximum depth of the object that will be encoded.
 	ObjectMaxDepth int
 }
-
-type NewEncoder func(EncoderConfig) (Encoder, error)
 
 // encoder encodes Go values into wafObjects. Only the subset of Go types representable into wafObjects
 // will be encoded while ignoring the rest of it.
@@ -110,6 +87,11 @@ const (
 type WAFObject = bindings.WAFObject
 
 // Encodable represent a type that can encode itself into a WAFObject.
+// The encodable is responsible for using the [pin.Pinner]
+// object passed in the [EncoderConfig] to pin the data referenced by the encoded [bindings.WAFObject].
+// The encoder must also use the [timer.Timer] passed in the [EncoderConfig] to
+// make sure it doesn't spend too much time doing its job.
+// The encoder must also respect the [EncoderConfig] limits and report truncations.
 type Encodable interface {
 	// Encode encodes itself as the WAFObject obj using the provided EncoderConfig and remaining depth allowed.
 	// It returns a map of truncation reasons and their respective actual sizes. If the error returned is not nil
@@ -117,10 +99,11 @@ type Encodable interface {
 	// Outside of encoding the value, it is expected to check for truncations sizes as advised in the EncoderConfig
 	// and to regularly call the EncoderConfig.Timer.Exhausted() method to check if the encoding is still allowed
 	// and return waferrors.ErrTimeout if it is not.
+	// This method is NOT thread-safe.
 	Encode(config EncoderConfig, obj *bindings.WAFObject, depth int) (map[TruncationReason][]int, error)
 }
 
-func NewDefaultEncoder(config EncoderConfig) (Encoder, error) {
+func newDefaultEncoder(config EncoderConfig) (*encoder, error) {
 	if config.Pinner == nil {
 		return nil, fmt.Errorf("pinner cannot be nil")
 	}

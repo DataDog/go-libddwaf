@@ -25,8 +25,7 @@ import (
 type Context struct {
 	// Timer registers the time spent in the WAF and go-libddwaf. It is created alongside the Context using the options
 	// passed in to NewContext. Once its time budget is exhausted, each new call to Context.Run will return a timeout error.
-	Timer      timer.NodeTimer
-	newEncoder NewEncoder
+	Timer timer.NodeTimer
 
 	handle *Handle // Instance of the WAF
 
@@ -198,7 +197,7 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 		return nil, nil
 	}
 
-	encoder, err := context.newEncoder(newLimitedEncoderConfig(pinner, timer))
+	encoder, err := newDefaultEncoder(newLimitedEncoderConfig(pinner, timer))
 	if err != nil {
 		return nil, fmt.Errorf("could not create encoder: %w", err)
 	}

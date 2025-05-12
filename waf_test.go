@@ -1247,7 +1247,7 @@ func BenchmarkEncoder(b *testing.B) {
 	defer pinner.Unpin()
 
 	for _, l := range []int{1024, 4096, 8192, 16384} {
-		encoder, _ := NewDefaultEncoder(EncoderConfig{
+		encoder, _ := newDefaultEncoder(EncoderConfig{
 			Pinner:           &pinner,
 			ObjectMaxDepth:   10,
 			StringMaxSize:    1 * 1024 * 1024,
