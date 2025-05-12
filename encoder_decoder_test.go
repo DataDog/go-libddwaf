@@ -93,7 +93,7 @@ func TestEncodable(t *testing.T) {
 		_, err := encoder.Encode(&input)
 		require.NoError(t, err, "unexpected error when encoding: %v", err)
 
-		require.Equal(t, map[TruncationReason][]int{StringTooLong: {1}}, encoder.Truncations())
+		require.Equal(t, map[TruncationReason][]int{StringTooLong: {1}}, encoder.truncations)
 	})
 
 	t.Run("errorer", func(t *testing.T) {
@@ -640,7 +640,7 @@ func TestEncoderLimits(t *testing.T) {
 		encoded := &bindings.WAFObject{}
 		encoded, err = encoder.Encode(tc.Input)
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
-			require.Equal(t, tc.Truncations, sortValues(encoder.Truncations()))
+			require.Equal(t, tc.Truncations, sortValues(encoder.truncations))
 
 			if tc.EncodeError != nil {
 				require.Error(t, err, "expected an encoding error when encoding %v", tc.EncodeError)

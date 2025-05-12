@@ -203,11 +203,11 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 	}
 
 	data, _ := encoder.Encode(addressData)
-	if len(encoder.Truncations()) > 0 {
+	if len(encoder.truncations) > 0 {
 		context.mutex.Lock()
 		defer context.mutex.Unlock()
 
-		context.truncations = merge(context.truncations, encoder.Truncations())
+		context.truncations = merge(context.truncations, encoder.truncations)
 	}
 
 	if timer.Exhausted() {

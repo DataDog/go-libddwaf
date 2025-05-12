@@ -165,11 +165,6 @@ func (encoder *encoder) Encode(data any) (*bindings.WAFObject, error) {
 	return wo, err
 }
 
-// Truncations returns all truncations that happened during the encoder lifetime
-func (encoder *encoder) Truncations() map[TruncationReason][]int {
-	return encoder.truncations
-}
-
 var nullableTypeKinds = map[reflect.Kind]struct{}{
 	reflect.Interface:     {},
 	reflect.Pointer:       {},
