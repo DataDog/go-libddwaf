@@ -106,6 +106,26 @@ func (w *WAFObject) IsMap() bool {
 	return w.Type == WAFMapType
 }
 
+// IsInt determines whether this WAF Object is a iny or not.
+func (w *WAFObject) IsInt() bool {
+	return w.Type == WAFIntType
+}
+
+// IsUint determines whether this WAF Object is a uint or not.
+func (w *WAFObject) IsUint() bool {
+	return w.Type == WAFUintType
+}
+
+// IsBool determines whether this WAF Object is a bool or not.
+func (w *WAFObject) IsBool() bool {
+	return w.Type == WAFBoolType
+}
+
+// IsFloat determines whether this WAF Object is a float or not.
+func (w *WAFObject) IsFloat() bool {
+	return w.Type == WAFFloatType
+}
+
 // IsUnusable returns true if the wafObject has no impact on the WAF execution
 // But we still need this kind of objects to forward map keys in case the value of the map is invalid
 func (w *WAFObject) IsUnusable() bool {
@@ -151,6 +171,46 @@ func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
 	}
 	pinner.Pin(unsafe.Pointer(header.Data))
 	w.Value = uintptr(unsafe.Pointer(header.Data))
+}
+
+// SetInt sets the receiving [WAFObject] value to the given int.
+func (w *WAFObject) SetInt(i int64) {
+	w.Type = WAFIntType
+	w.Value = unsafe.NativeToUintptr(i)
+}
+
+// SetUint sets the receiving [WAFObject] value to the given uint.
+func (w *WAFObject) SetUint(i uint64) {
+	w.Type = WAFUintType
+	w.Value = unsafe.NativeToUintptr(i)
+}
+
+// SetBool sets the receiving [WAFObject] value to the given bool.
+func (w *WAFObject) SetBool(b bool) {
+	w.Type = WAFBoolType
+	if b {
+		w.Value = uintptr(1)
+	} else {
+		w.Value = uintptr(0)
+	}
+}
+
+// SetFloat sets the receiving [WAFObject] value to the given float.
+func (w *WAFObject) SetFloat(f float64) {
+	w.Type = WAFFloatType
+	w.Value = unsafe.NativeToUintptr(f)
+}
+
+// SetNil sets the receiving [WAFObject] to nil.
+func (w *WAFObject) SetNil() {
+	w.Type = WAFNilType
+	w.Value = 0
+}
+
+// SetInvalid sets the receiving [WAFObject] to invalid.
+func (w *WAFObject) SetInvalid() {
+	w.Type = WAFInvalidType
+	w.Value = 0
 }
 
 func (w *WAFObject) setArrayTyped(pinner pin.Pinner, capacity uint64, t WAFObjectType) []WAFObject {

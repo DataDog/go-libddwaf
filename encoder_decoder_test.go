@@ -42,6 +42,73 @@ func wafTest(t *testing.T, obj *bindings.WAFObject) {
 	require.NoError(t, err)
 }
 
+type abs int64
+
+func (p abs) Encode(config EncoderConfig, obj *bindings.WAFObject, depth int) (map[TruncationReason][]int, error) {
+	i := p
+	if i < 0 {
+		i = -i
+	}
+
+	obj.SetInt(int64(i))
+	return nil, nil
+}
+
+type truncator struct{}
+
+func (t *truncator) Encode(_ EncoderConfig, _ *bindings.WAFObject, _ int) (map[TruncationReason][]int, error) {
+	return map[TruncationReason][]int{StringTooLong: {1}}, nil
+}
+
+type errorer struct{}
+
+func (t *errorer) Encode(_ EncoderConfig, _ *bindings.WAFObject, _ int) (map[TruncationReason][]int, error) {
+	return nil, waferrors.ErrUnsupportedValue
+}
+
+func TestEncodable(t *testing.T) {
+	t.Run("abs", func(t *testing.T) {
+		input := abs(-4)
+		output := int64(4)
+
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		encoder, _ := NewDefaultEncoder(newMaxEncoderConfig(&pinner))
+		encoded, err := encoder.Encode(&input)
+
+		require.NoError(t, err, "unexpected error when encoding: %v", err)
+		val, err := decodeObject(encoded)
+		require.NoError(t, err, "unexpected error when decoding: %v", err)
+		require.True(t, reflect.DeepEqual(output, val), "expected %#v, got %#v", output, val)
+	})
+
+	t.Run("truncator", func(t *testing.T) {
+		input := truncator{}
+
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		encoder, _ := NewDefaultEncoder(newMaxEncoderConfig(&pinner))
+		_, err := encoder.Encode(&input)
+		require.NoError(t, err, "unexpected error when encoding: %v", err)
+
+		require.Equal(t, map[TruncationReason][]int{StringTooLong: {1}}, encoder.Truncations())
+	})
+
+	t.Run("errorer", func(t *testing.T) {
+		input := errorer{}
+
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		encoder, _ := NewDefaultEncoder(newMaxEncoderConfig(&pinner))
+		_, err := encoder.Encode(&input)
+		require.Error(t, err, "expected an error when encoding: %v", err)
+		require.ErrorIs(t, err, waferrors.ErrUnsupportedValue)
+	})
+}
+
 func TestEncodeDecode(t *testing.T) {
 
 	// Nil value as Output as a special meaning: the output should be the same as the input

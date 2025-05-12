@@ -16,7 +16,6 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/pin"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
@@ -106,8 +105,19 @@ const (
 	AppsecFieldTagValueIgnore = "ignore"
 )
 
-type native interface {
-	int64 | uint64 | uintptr
+// WAFObject is the C struct that represents a WAF object. It is passed as-is to the C-world.
+// It is highly advised to use the methods on the object to manipulate it and not set the fields manually.
+type WAFObject = bindings.WAFObject
+
+// Encodable represent a type that can encode itself into a WAFObject.
+type Encodable interface {
+	// Encode encodes itself as the WAFObject obj using the provided EncoderConfig and remaining depth allowed.
+	// It returns a map of truncation reasons and their respective actual sizes. If the error returned is not nil
+	// It is greatly advised to return errors from the waferrors package error when it matters.
+	// Outside of encoding the value, it is expected to check for truncations sizes as advised in the EncoderConfig
+	// and to regularly call the EncoderConfig.Timer.Exhausted() method to check if the encoding is still allowed
+	// and return waferrors.ErrTimeout if it is not.
+	Encode(config EncoderConfig, obj *bindings.WAFObject, depth int) (map[TruncationReason][]int, error)
 }
 
 func NewDefaultEncoder(config EncoderConfig) (Encoder, error) {
@@ -177,11 +187,6 @@ func (encoder *encoder) Truncations() map[TruncationReason][]int {
 	return encoder.truncations
 }
 
-func encodeNative[T native](val T, t bindings.WAFObjectType, obj *bindings.WAFObject) {
-	obj.Type = t
-	obj.Value = (uintptr)(val)
-}
-
 var nullableTypeKinds = map[reflect.Kind]struct{}{
 	reflect.Interface:     {},
 	reflect.Pointer:       {},
@@ -192,7 +197,10 @@ var nullableTypeKinds = map[reflect.Kind]struct{}{
 	reflect.Chan:          {},
 }
 
-var jsonNumberType = reflect.TypeOf(json.Number(""))
+var (
+	jsonNumberType = reflect.TypeFor[json.Number]()
+	byteArrayType  = reflect.TypeFor[[]byte]()
+)
 
 // isValueNil check if the value is nullable and if it is actually nil
 // we cannot directly use value.IsNil() because it panics on non-pointer values
@@ -204,6 +212,14 @@ func isValueNil(value reflect.Value) bool {
 func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, depth int) error {
 	if encoder.Timer.Exhausted() {
 		return waferrors.ErrTimeout
+	}
+
+	if value.IsValid() && value.CanInterface() {
+		if encodable, ok := value.Interface().(Encodable); ok {
+			truncations, err := encodable.Encode(encoder.EncoderConfig, obj, depth)
+			encoder.truncations = merge(encoder.truncations, truncations)
+			return err
+		}
 	}
 
 	value, kind := resolvePointer(value)
@@ -226,19 +242,19 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 		return waferrors.ErrUnsupportedValue
 	// 		Is nullable type: nil pointers, channels, maps or functions
 	case isValueNil(value):
-		encodeNative[uintptr](0, bindings.WAFNilType, obj)
+		obj.SetNil()
 
 	// 		Booleans
 	case kind == reflect.Bool:
-		encodeNative(unsafe.NativeToUintptr(value.Bool()), bindings.WAFBoolType, obj)
+		obj.SetBool(value.Bool())
 
 	// 		Numbers
 	case value.CanInt(): // any int type or alias
-		encodeNative(value.Int(), bindings.WAFIntType, obj)
+		obj.SetInt(value.Int())
 	case value.CanUint(): // any Uint type or alias
-		encodeNative(value.Uint(), bindings.WAFUintType, obj)
+		obj.SetUint(value.Uint())
 	case value.CanFloat(): // any float type or alias
-		encodeNative(unsafe.NativeToUintptr(value.Float()), bindings.WAFFloatType, obj)
+		obj.SetFloat(value.Float())
 
 	// 		json.Number -- string-represented arbitrary precision numbers
 	case value.Type() == jsonNumberType:
@@ -280,12 +296,12 @@ func (encoder *encoder) encodeJSONNumber(num json.Number, obj *bindings.WAFObjec
 	// Important to attempt int64 first, as this is lossless. Values that are either too small or too
 	// large to be represented as int64 can be represented as float64, but this can be lossy.
 	if i, err := num.Int64(); err == nil {
-		encodeNative(uintptr(i), bindings.WAFIntType, obj)
+		obj.SetInt(i)
 		return
 	}
 
 	if f, err := num.Float64(); err == nil {
-		encodeNative(unsafe.NativeToUintptr(f), bindings.WAFFloatType, obj)
+		obj.SetFloat(f)
 		return
 	}
 
@@ -368,7 +384,7 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 
 		if err := encoder.encode(value.Field(i), objElem, depth); err != nil {
 			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
-			encodeNative[uintptr](0, bindings.WAFInvalidType, objElem)
+			objElem.SetInvalid()
 		}
 
 		length++
@@ -408,7 +424,7 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, 
 
 		if err := encoder.encode(iter.Value(), objElem, depth); err != nil {
 			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
-			encodeNative[uintptr](0, bindings.WAFInvalidType, objElem)
+			objElem.SetInvalid()
 		}
 
 		length++
@@ -430,7 +446,7 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WAFObjec
 		return waferrors.ErrInvalidMapKey
 	case kind == reflect.String:
 		keyStr = value.String()
-	case value.Type() == reflect.TypeOf([]byte(nil)):
+	case value.Type() == byteArrayType:
 		keyStr = string(value.Bytes())
 	default:
 		return waferrors.ErrInvalidMapKey
@@ -515,7 +531,7 @@ func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
 	var itemDepth int
 	switch kind {
 	case reflect.Array, reflect.Slice:
-		if obj.Type() == reflect.TypeOf([]byte(nil)) {
+		if obj.Type() == byteArrayType {
 			// We treat byte slices as strings
 			return 0, nil
 		}
