@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
@@ -31,74 +32,91 @@ func (e *jsonEncoder) parse(jsonData []byte) (*bindings.WAFObject, error) {
 		// - A malformed JSON that:
 		//     - Parsing error if the initial JSON is **not** truncated
 		//     - Parsing error (unrelated to the initial truncation) if there is still more byte in the buffer
-		//     - Parsing error (unrelated to the initial truncation) when invalid token or structure
-		//     - Parsing limit reached (ex: custom limit on the number of elements in a container that directly affects the root)
-		return nil, err
+
+		if (errors.Is(err, waferrors.ErrTimeout) || !e.initiallyTruncated) || rootObj.Type == bindings.WAFInvalidType {
+			return nil, err
+		}
+	}
+
+	if rootObj.Type == bindings.WAFInvalidType {
+		// If the root object is invalid, we need to return an error
+		return nil, fmt.Errorf("invalid json at root")
 	}
 
 	return rootObj, nil
 }
 
+// returns skip, error
+// already do the skip part
 func (e *jsonEncoder) parseValue(iter *jsoniter.Iterator, obj *bindings.WAFObject, depth int) error {
 	if e.timer.Exhausted() {
 		return waferrors.ErrTimeout
 	}
 
-	iter.WhatIsNext()
-
+	// todo: is it really called?
 	if depth < 0 {
-		e.addTruncation(ObjectTooDeep, e.objectMaxDepth)
+		e.addTruncation(ObjectTooDeep, e.objectMaxDepth-depth)
 		iter.Skip()
-		return waferrors.ErrMaxDepthExceeded // The WAF Object will have a default value of WAFInvalidType as it's not set
+		return nil
 	}
+
+	var err error
 
 	switch iter.WhatIsNext() {
 	case jsoniter.ObjectValue:
-		depth -= 1
-		data := iter.SkipAndReturnBytes()
-		length, err := e.getObjectMapLength(data, depth)
-		if err != nil {
-			return err
-		}
-		return e.parseObject(data, length, obj, depth)
+		err = e.parseObject(iter.SkipAndReturnBytes(), obj, depth-1)
 	case jsoniter.ArrayValue:
-		depth -= 1
-		data := iter.SkipAndReturnBytes()
-		length, err := e.getArrayLength(data, depth)
-		if err != nil {
-			return err
-		}
-		return e.parseArray(data, length, obj, depth)
+		err = e.parseArray(iter.SkipAndReturnBytes(), obj, depth-1)
 	case jsoniter.StringValue:
 		s := iter.ReadString()
-		e.encodeString(s, obj)
-		return iter.Error
+		if err = iter.Error; err == nil || err == io.EOF {
+			e.encodeString(s, obj)
+		}
 	case jsoniter.NumberValue:
 		jsonNbr := iter.ReadNumber()
-		e.encodeJSONNumber(jsonNbr, obj)
-		return iter.Error
+		if err = iter.Error; err == nil || err == io.EOF {
+			err = nil
+			e.encodeJSONNumber(jsonNbr, obj)
+		}
 	case jsoniter.BoolValue:
 		b := iter.ReadBool()
-		encodeNative(unsafe.NativeToUintptr(b), bindings.WAFBoolType, obj)
-		return iter.Error
+		if err = iter.Error; err == nil || err == io.EOF {
+			err = nil
+			encodeNative(unsafe.NativeToUintptr(b), bindings.WAFBoolType, obj)
+		}
 	case jsoniter.NilValue:
 		iter.ReadNil()
-		encodeNative[uintptr](0, bindings.WAFNilType, obj)
-		return iter.Error
+		if err = iter.Error; err == nil || err == io.EOF {
+			err = nil
+			encodeNative[uintptr](0, bindings.WAFNilType, obj)
+		}
 	default:
-		// InvalidValue: this case implies an invalid JSON token or structure
-		// WAFObject remains as WAFInvalidType by default
-		return fmt.Errorf("unexpected JSON token: %v", iter.WhatIsNext())
+		err = fmt.Errorf("unexpected JSON token: %v", iter.WhatIsNext())
 	}
+
+	return err
 }
 
-func (e *jsonEncoder) parseObject(data []byte, length int, parentObj *bindings.WAFObject, depth int) error {
+func (e *jsonEncoder) parseObject(data []byte, parentObj *bindings.WAFObject, depth int) error {
 	if e.timer.Exhausted() {
 		return waferrors.ErrTimeout
 	}
 
+	if depth < 0 {
+		e.addTruncation(ObjectTooDeep, e.objectMaxDepth-depth)
+		return nil
+	}
+
+	length, err := e.getContainerLength(data, true)
+	if err != nil && (errors.Is(err, waferrors.ErrTimeout) || !e.initiallyTruncated) {
+		// Return error only for timeout or if JSON was not initially truncated
+		// The error would still be propagated at the end of the function when partially parsed
+		return err
+	}
+
 	objMap := parentObj.SetMap(e.pinner, uint64(length))
 	if length == 0 {
+		// Still correctly set a map with 0 entries
 		return nil
 	}
 
@@ -113,59 +131,45 @@ func (e *jsonEncoder) parseObject(data []byte, length int, parentObj *bindings.W
 			errRec = waferrors.ErrTimeout
 			return false
 		}
-		if errRec != nil { // An error occurred in a previous iteration
-			return false
-		}
 
 		if count >= length {
-			// Skip further elements for this object by returning true but not processing
-			// We need to consume the value to advance the iterator
-			i.Skip()
-			return true // Continue to allow iterator to finish object, but don't add more
+			return false
 		}
 
 		entryObj := &objMap[count]
-		err := e.parseValue(i, entryObj, depth)
-		if err != nil {
-			if errors.Is(err, waferrors.ErrMaxDepthExceeded) {
-				// Do not encode the object (skip it) but still set the field key in the map
-				e.encodeMapKeyFromString(field, entryObj)
-				return true // Skip it
-			}
-			errRec = err
+		errParseValue := e.parseValue(i, entryObj, depth)
+		if errParseValue != nil {
+			errRec = errParseValue
 			return false
 		}
 
-		// Todo: check if this error check is really relevant
-		if i.Error != nil {
-			errRec = i.Error
-			return false
-		}
-
-		// Map key
 		e.encodeMapKeyFromString(field, entryObj)
-
 		count++
 		return true
 	})
 
-	// Todo: if json malformed (with a truncated value at start) return directly
+	parentObj.NbEntries = uint64(length)
+
 	if errRec != nil {
 		return errRec
 	}
-
-	parentObj.NbEntries = uint64(length)
-
-	// Todo: check?
-	if iter.Error != nil {
-		return iter.Error
-	}
-	return errRec
+	return iter.Error
 }
 
-func (e *jsonEncoder) parseArray(data []byte, length int, parentObj *bindings.WAFObject, depth int) error {
+func (e *jsonEncoder) parseArray(data []byte, parentObj *bindings.WAFObject, depth int) error {
 	if e.timer.Exhausted() {
 		return waferrors.ErrTimeout
+	}
+
+	if depth < 0 {
+		e.addTruncation(ObjectTooDeep, e.objectMaxDepth-depth)
+		return nil
+	}
+
+	length, err := e.getContainerLength(data, false)
+	if err != nil && (errors.Is(err, waferrors.ErrTimeout) || !e.initiallyTruncated) {
+		// Return error only for timeout or if JSON was not initially truncated
+		return err
 	}
 
 	objArray := parentObj.SetArray(e.pinner, uint64(length))
@@ -184,24 +188,15 @@ func (e *jsonEncoder) parseArray(data []byte, length int, parentObj *bindings.WA
 			errRec = waferrors.ErrTimeout
 			return false
 		}
-		if errRec != nil { // An error occurred in a previous iteration
+
+		if count >= length {
 			return false
 		}
 
-		if count >= length {
-			// Skip further elements for this object by returning true but not processing
-			// We need to consume the value to advance the iterator
-			i.Skip()
-			return true // Continue to allow iterator to finish object, but don't add more
-		}
-
 		objElem := &objArray[count]
-		err := e.parseValue(i, objElem, depth)
-		if err != nil {
-			if errors.Is(err, waferrors.ErrMaxDepthExceeded) {
-				return true // Skip it
-			}
-			errRec = err
+		errParseValue := e.parseValue(i, objElem, depth)
+		if errParseValue != nil {
+			errRec = errParseValue
 			return false
 		}
 
@@ -209,28 +204,15 @@ func (e *jsonEncoder) parseArray(data []byte, length int, parentObj *bindings.WA
 			count++
 		}
 
-		// Todo: check if this error check is really relevant
-		// maybe when the parseValue is called
-		if i.Error != nil {
-			errRec = i.Error
-			return false
-		}
-
 		return true
 	})
 
-	// Todo: if json malformed (with a truncated value at start) return directly
+	parentObj.NbEntries = uint64(count)
+
 	if errRec != nil {
 		return errRec
 	}
-
-	parentObj.NbEntries = uint64(count)
-
-	// Todo: check?
-	if iter.Error != nil {
-		return iter.Error
-	}
-	return errRec
+	return iter.Error
 }
 
 func (e *jsonEncoder) encodeJSONNumber(num json.Number, obj *bindings.WAFObject) {
@@ -260,27 +242,28 @@ func (e *jsonEncoder) encodeString(str string, obj *bindings.WAFObject) {
 	obj.SetString(e.pinner, str)
 }
 
-func (e *jsonEncoder) getObjectMapLength(object []byte, depth int) (int, error) {
-	if depth < 0 {
-		e.addTruncation(ObjectTooDeep, e.objectMaxDepth-depth)
-		return 0, waferrors.ErrMaxDepthExceeded
-	}
-
-	// Todo: get default json-iterator config
-	cfg := jsoniter.ConfigCompatibleWithStandardLibrary
-	iter := cfg.BorrowIterator(object)
+// getContainerLength is a helper function to get the length of a JSON container (object or array).
+// An error is returned only when the parsing needs to be ended.
+func (e *jsonEncoder) getContainerLength(data []byte, isObject bool) (int, error) {
+	iter, cfg := createJsonIterator(data)
 	defer cfg.ReturnIterator(iter)
+
 	var errRec error
 	count := 0
 
-	iter.ReadObjectCB(func(iter *jsoniter.Iterator, _ string) bool {
+	// our shared callback body
+	elemCB := func() bool {
 		if e.timer.Exhausted() {
 			errRec = waferrors.ErrTimeout
 			return false
 		}
+
 		if iter.Error != nil {
+			errRec = iter.Error
 			return false
 		}
+
+		count++ // not sure if need to ++ before or after the skip
 
 		iter.Skip()
 		if iter.Error != nil {
@@ -288,70 +271,26 @@ func (e *jsonEncoder) getObjectMapLength(object []byte, depth int) (int, error) 
 			return false
 		}
 
-		count++
 		return true
-	})
+	}
 
-	// Don't check the iterator error here
-	// If the json we want to pare has been initially truncated, we want to partially parse it
-	// So don't bubble up the error as we want to parse the part of the array that is valid
-	if ((errRec != nil && !errors.Is(errRec, waferrors.ErrTimeout)) || iter.Error != nil) && !e.initiallyTruncated {
-		return 0, errRec
+	if isObject {
+		// key is ignored here, but you can inspect it if needed
+		iter.ReadObjectCB(func(it *jsoniter.Iterator, _ string) bool {
+			return elemCB()
+		})
+	} else {
+		iter.ReadArrayCB(func(it *jsoniter.Iterator) bool {
+			return elemCB()
+		})
 	}
 
 	if count > e.containerMaxSize {
 		e.addTruncation(ContainerTooLarge, count)
-		return e.containerMaxSize, nil
+		count = e.containerMaxSize
 	}
 
-	return count, nil
-}
-
-func (e *jsonEncoder) getArrayLength(object []byte, depth int) (int, error) {
-	if depth < 0 {
-		e.addTruncation(ObjectTooDeep, e.objectMaxDepth-depth)
-		return 0, waferrors.ErrMaxDepthExceeded
-	}
-
-	cfg := jsoniter.ConfigCompatibleWithStandardLibrary
-	iter := cfg.BorrowIterator(object)
-	defer cfg.ReturnIterator(iter)
-	var errRec error
-	count := 0
-
-	iter.ReadArrayCB(func(iter *jsoniter.Iterator) bool {
-		if e.timer.Exhausted() {
-			errRec = waferrors.ErrTimeout
-			return false
-		}
-		if iter.Error != nil {
-			errRec = iter.Error
-			return false
-		}
-
-		iter.Skip()
-		if iter.Error != nil {
-			errRec = iter.Error
-			return false
-		}
-
-		count++
-		return true
-	})
-
-	// Don't check the iterator error here
-	// If the json we want to pare has been initially truncated, we want to partially parse it
-	// So don't bubble up the error as we want to parse the part of the array that is valid
-	if errRec != nil && !errors.Is(errRec, waferrors.ErrTimeout) && !e.initiallyTruncated {
-		return 0, errRec
-	}
-
-	if count > e.containerMaxSize {
-		e.addTruncation(ContainerTooLarge, count)
-		return e.containerMaxSize, nil
-	}
-
-	return count, nil
+	return count, errRec
 }
 
 // encodeMapKeyFromString takes a string and a wafObject and sets the map key attribute on the wafObject to the supplied

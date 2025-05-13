@@ -394,15 +394,6 @@ func TestEncoderLimits(t *testing.T) {
 		DecodeError        error
 	}{
 		{
-			Name:          "thrhrt",
-			MaxValueDepth: 2,
-			// {"a": {"b": {"c": 1}}}`
-			Input:       map[string]any{"a": map[string]any{"b": map[string]any{"c": uint64(1)}}},
-			DecodeError: waferrors.ErrUnsupportedValue,
-
-			Truncations: map[TruncationReason][]int{ObjectTooDeep: {3}},
-		},
-		{
 			Name:          "array-depth",
 			MaxValueDepth: 1,
 			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},

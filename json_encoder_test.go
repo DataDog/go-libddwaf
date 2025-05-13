@@ -8,12 +8,14 @@
 package libddwaf
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"reflect"
 	"runtime"
 	"sort"
 	"testing"
+
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
 
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/stretchr/testify/require"
@@ -439,9 +441,9 @@ func TestJSONEncode_InvalidInput(t *testing.T) {
 	defer pinner.Unpin()
 
 	type expectation struct {
-		truncations           map[TruncationReason][]int
-		expectedOutput        any
-		expectedEncodingError error
+		truncations         map[TruncationReason][]int
+		expectedOutput      any
+		expectEncodingError bool
 	}
 
 	testCases := []struct {
@@ -459,39 +461,60 @@ func TestJSONEncode_InvalidInput(t *testing.T) {
 				expectedOutput: map[string]any{"key": "value"},
 			},
 			notTruncatedExpectation: expectation{
-				expectedOutput:        nil,
-				expectedEncodingError: waferrors.ErrInvalidObject,
+				expectedOutput:      nil,
+				expectEncodingError: true,
 			},
 		},
-		/*{
-			// malformed json - full discard
-			name:           "malformed json - trailing comma in array",
-			jsonInput:      `[1, 2, ]`,
-			expectedErr:    true,
-			expectedOutput: nil,
-		},
-		{
-			// malformed json truncated - partial parsing
-			name:           "malformed json - trailing comma in array",
-			jsonInput:      `[1, 2,`,
-			expectedErr:    true,
-			expectedOutput: []any{int64(1), int64(2)},
-		},
 		{
 			// malformed json - full discard
-			name:        "malformed json - trailing comma in object",
-			jsonInput:   `{"key1":"val1", }`,
-			expectedErr: true,
+			name:      "malformed json - trailing comma in array",
+			jsonInput: `[1, 2, ]`,
+			truncatedExpectation: expectation{
+				expectedOutput: []any{int64(1), int64(2)}, // Might change
+			},
+			notTruncatedExpectation: expectation{
+				expectEncodingError: true,
+			},
 		},
 		{
-			name:        "malformed json - missing colon",
-			jsonInput:   `{"key" "value"}`,
-			expectedErr: true,
+			name:      "malformed json - trailing comma in array",
+			jsonInput: `[1, 2,`,
+			truncatedExpectation: expectation{
+				expectedOutput: []any{int64(1), int64(2)},
+			},
+			notTruncatedExpectation: expectation{
+				expectEncodingError: true,
+			},
 		},
 		{
-			name:        "malformed json - bare string",
-			jsonInput:   `hello world`,
-			expectedErr: true,
+			name:      "malformed json - trailing comma in object",
+			jsonInput: `{"key1":"val1", }`,
+			truncatedExpectation: expectation{
+				expectedOutput: map[string]any{"key1": "val1"}, // Might change
+			},
+			notTruncatedExpectation: expectation{
+				expectEncodingError: true,
+			},
+		},
+		{
+			name:      "malformed json - missing colon",
+			jsonInput: `{"key" "value"}`,
+			truncatedExpectation: expectation{
+				expectedOutput: map[string]any{}, // Might change to invalid
+			},
+			notTruncatedExpectation: expectation{
+				expectEncodingError: true,
+			},
+		},
+		{
+			name:      "malformed json - bare string",
+			jsonInput: `hello world`,
+			truncatedExpectation: expectation{
+				expectEncodingError: true,
+			},
+			notTruncatedExpectation: expectation{
+				expectEncodingError: true,
+			},
 		},
 		{
 			name:      "root string too long",
@@ -499,17 +522,27 @@ func TestJSONEncode_InvalidInput(t *testing.T) {
 			encoderSetup: func(e *jsonEncoder) {
 				e.stringMaxSize = 10
 			},
-			expectedOutput: "thisisaver",
-			expectedTruncs: map[TruncationReason][]int{StringTooLong: {41}}, // Length of original string
+			truncatedExpectation: expectation{
+				expectedOutput: "thisisaver",
+				truncations:    map[TruncationReason][]int{StringTooLong: {40}}, // Length of original string
+			},
+			notTruncatedExpectation: expectation{
+				expectedOutput: "thisisaver",
+				truncations:    map[TruncationReason][]int{StringTooLong: {40}},
+			},
 		},
 		{
 			name:      "root level not an object or array - max depth 0",
 			jsonInput: `"string"`, // A string is not a container, depth is effectively 0 for it.
-			// Max depth applies to containers. So a string should pass even with depth 0.
 			encoderSetup: func(e *jsonEncoder) {
 				e.objectMaxDepth = 0
 			},
-			expectedOutput: "string", // Should still encode the string
+			truncatedExpectation: expectation{
+				expectedOutput: "string",
+			},
+			notTruncatedExpectation: expectation{
+				expectedOutput: "string",
+			},
 		},
 		{
 			name:      "object max depth 0 - actual object",
@@ -517,9 +550,14 @@ func TestJSONEncode_InvalidInput(t *testing.T) {
 			encoderSetup: func(e *jsonEncoder) {
 				e.objectMaxDepth = 0
 			},
-			expectedOutput: map[string]any{},
-			expectedErr:    true,
-			expectedTruncs: map[TruncationReason][]int{ObjectTooDeep: {-1}},
+			truncatedExpectation: expectation{
+				truncations:         map[TruncationReason][]int{ObjectTooDeep: {1}},
+				expectEncodingError: true,
+			},
+			notTruncatedExpectation: expectation{
+				truncations:         map[TruncationReason][]int{ObjectTooDeep: {1}},
+				expectEncodingError: true,
+			},
 		},
 		{
 			name:      "array max depth 0 - actual array",
@@ -527,10 +565,15 @@ func TestJSONEncode_InvalidInput(t *testing.T) {
 			encoderSetup: func(e *jsonEncoder) {
 				e.objectMaxDepth = 0
 			},
-			expectedOutput: []any{},
-			expectedErr:    true,
-			expectedTruncs: map[TruncationReason][]int{ObjectTooDeep: {-1}},
-		},*/
+			truncatedExpectation: expectation{
+				truncations:         map[TruncationReason][]int{ObjectTooDeep: {1}},
+				expectEncodingError: true,
+			},
+			notTruncatedExpectation: expectation{
+				truncations:         map[TruncationReason][]int{ObjectTooDeep: {1}},
+				expectEncodingError: true,
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -547,14 +590,29 @@ func TestJSONEncode_InvalidInput(t *testing.T) {
 					tc.encoderSetup(encoder)
 				}
 
-				wafObj, err := encoder.Encode([]byte(tc.jsonInput))
+				if !truncated {
+					// Unmarshal using encoding/json
+					var decoded any
+					err := json.Unmarshal([]byte(tc.jsonInput), &decoded)
 
-				if exp.expectedEncodingError != nil {
-					require.Error(t, err, "Expected an error during Encode")
-				} else {
-					require.NoError(t, err, "Encode failed unexpectedly")
+					if exp.expectEncodingError && err == nil {
+						t.Fatalf("Expected an error during Encode, but got nil")
+					}
+
+					if !exp.expectEncodingError && err != nil {
+						t.Fatalf("Expected no error during Encode, but got %v", err)
+					}
 				}
 
+				wafObj, err := encoder.Encode([]byte(tc.jsonInput))
+
+				if exp.expectEncodingError {
+					require.Error(t, err, "Expected an error during Encode")
+					require.Nil(t, wafObj, "WAFObject is not nil")
+					return
+				}
+
+				require.NoError(t, err, "Encode failed unexpectedly")
 				require.NotNil(t, wafObj, "WAFObject is nil")
 
 				decoded, decodeErr := decodeObject(wafObj)
