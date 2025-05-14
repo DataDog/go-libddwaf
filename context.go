@@ -6,6 +6,7 @@
 package libddwaf
 
 import (
+	"fmt"
 	"maps"
 	"runtime"
 	"sync"
@@ -192,9 +193,13 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // ephemeral addresses are allowed to be null one at a time. In this case, Encode will return nil,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
 func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[string]any, timer timer.Timer) (*bindings.WAFObject, error) {
-	encoder := newLimitedEncoder(pinner, timer)
 	if addressData == nil {
 		return nil, nil
+	}
+
+	encoder, err := newEncoder(newEncoderConfig(pinner, timer))
+	if err != nil {
+		return nil, fmt.Errorf("could not create encoder: %w", err)
 	}
 
 	data, _ := encoder.Encode(addressData)

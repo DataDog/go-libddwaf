@@ -72,7 +72,11 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
-	encoder := newMaxEncoder(&pinner)
+	encoder, err := newEncoder(newUnlimitedEncoderConfig(&pinner))
+	if err != nil {
+		return Diagnostics{}, fmt.Errorf("could not create encoder: %w", err)
+	}
+
 	frag, err := encoder.Encode(fragment)
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("could not encode the config fragment into a WAF object; %w", err)
