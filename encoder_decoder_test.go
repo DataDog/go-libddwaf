@@ -78,7 +78,7 @@ func TestEncodable(t *testing.T) {
 		encoded, err := encoder.Encode(&input)
 
 		require.NoError(t, err, "unexpected error when encoding: %v", err)
-		val, err := decodeObject(encoded)
+		val, err := DecodeObject(encoded)
 		require.NoError(t, err, "unexpected error when decoding: %v", err)
 		require.True(t, reflect.DeepEqual(output, val), "expected %#v, got %#v", output, val)
 	})
@@ -426,7 +426,7 @@ func TestEncodeDecode(t *testing.T) {
 				}
 
 				require.NoError(t, err, "unexpected error when encoding: %v", err)
-				val, err := decodeObject(encoded)
+				val, err := DecodeObject(encoded)
 
 				if tc.DecodeError != nil {
 					require.Error(t, err, "expected a decoding error when decoding %v", tc.Input)
@@ -650,7 +650,7 @@ func TestEncoderLimits(t *testing.T) {
 
 			require.NoError(t, err, "unexpected error when encoding: %v", err)
 
-			val, err := decodeObject(encoded)
+			val, err := DecodeObject(encoded)
 			if tc.DecodeError != nil {
 				require.Error(t, err, "expected a decoding error when decoding %v", tc.DecodeError)
 				require.ErrorIs(t, err, tc.DecodeError)

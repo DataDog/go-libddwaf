@@ -156,7 +156,8 @@ func decodeStringArray(obj *bindings.WAFObject) ([]string, error) {
 	return strArr, nil
 }
 
-func decodeObject(obj *bindings.WAFObject) (any, error) {
+// DecodeObject decodes a WAFObject into a native Go type.
+func DecodeObject(obj *WAFObject) (any, error) {
 	switch obj.Type {
 	case bindings.WAFMapType:
 		return decodeMap(obj)
@@ -175,7 +176,7 @@ func decodeObject(obj *bindings.WAFObject) (any, error) {
 	case bindings.WAFNilType:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("decodeObject: %w: %d", waferrors.ErrUnsupportedValue, obj.Type)
+		return nil, fmt.Errorf("DecodeObject: %w: %d", waferrors.ErrUnsupportedValue, obj.Type)
 	}
 }
 
@@ -192,7 +193,7 @@ func decodeArray(obj *bindings.WAFObject) ([]any, error) {
 
 	for i := uint64(0); i < obj.NbEntries; i++ {
 		objElem := unsafe.CastWithOffset[bindings.WAFObject](obj.Value, i)
-		val, err := decodeObject(objElem)
+		val, err := DecodeObject(objElem)
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +216,7 @@ func decodeMap(obj *bindings.WAFObject) (map[string]any, error) {
 	for i := uint64(0); i < obj.NbEntries; i++ {
 		objElem := unsafe.CastWithOffset[bindings.WAFObject](obj.Value, i)
 		key := unsafe.GostringSized(unsafe.Cast[byte](objElem.ParameterName), objElem.ParameterNameLength)
-		val, err := decodeObject(objElem)
+		val, err := DecodeObject(objElem)
 		if err != nil {
 			return nil, err
 		}
