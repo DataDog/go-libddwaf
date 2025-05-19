@@ -14,6 +14,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/modern-go/reflect2"
+
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/pin"
 	"github.com/DataDog/go-libddwaf/v4/timer"
@@ -147,59 +149,41 @@ func newUnlimitedEncoderConfig(pinner pin.Pinner) EncoderConfig {
 // The only error case is if the top-level object is "Unusable" which means that the data is nil or a non-data type
 // like a function or a channel.
 func (encoder *encoder) Encode(data any) (*bindings.WAFObject, error) {
-	value := reflect.ValueOf(data)
 	wo := &bindings.WAFObject{}
-
-	err := encoder.encode(value, wo, encoder.config.MaxObjectDepth)
+	err := encoder.encode(reflect2.PtrOf(data), wo, encoder.config.MaxObjectDepth)
 
 	if _, ok := encoder.truncations[ObjectTooDeep]; ok && !encoder.config.Timer.Exhausted() {
 		ctx, cancelCtx := context.WithTimeout(context.Background(), encoder.config.Timer.Remaining())
 		defer cancelCtx()
 
-		depth, _ := depthOf(ctx, value)
+		depth, _ := depthOf(ctx, data)
 		encoder.truncations[ObjectTooDeep] = []int{depth}
 	}
 
 	return wo, err
 }
 
-var nullableTypeKinds = map[reflect.Kind]struct{}{
-	reflect.Interface:     {},
-	reflect.Pointer:       {},
-	reflect.UnsafePointer: {},
-	reflect.Map:           {},
-	reflect.Slice:         {},
-	reflect.Func:          {},
-	reflect.Chan:          {},
-}
-
-var (
-	jsonNumberType = reflect.TypeFor[json.Number]()
-	byteArrayType  = reflect.TypeFor[[]byte]()
-)
-
-// isValueNil check if the value is nullable and if it is actually nil
-// we cannot directly use value.IsNil() because it panics on non-pointer values
-func isValueNil(value reflect.Value) bool {
-	_, nullable := nullableTypeKinds[value.Kind()]
-	return nullable && value.IsNil()
-}
-
-func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, depth int) error {
+func (encoder *encoder) encode(value any, obj *bindings.WAFObject, depth int) error {
 	if encoder.config.Timer.Exhausted() {
 		return waferrors.ErrTimeout
 	}
 
-	if value.IsValid() && value.CanInterface() {
-		if encodable, ok := value.Interface().(Encodable); ok {
-			truncations, err := encodable.Encode(encoder.config, obj, depth)
-			encoder.truncations = merge(encoder.truncations, truncations)
-			return err
-		}
+	typ := reflect2.TypeOf(value)
+
+	if typ.IsNil(value) {
+		obj.SetNil()
+		return nil
 	}
 
-	value, kind := resolvePointer(value)
-	if (kind == reflect.Interface || kind == reflect.Pointer) && !value.IsNil() {
+	if encodable, ok := typ.(Encodable); ok {
+		truncations, err := encodable.Encode(encoder.config, obj, depth)
+		encoder.truncations = merge(encoder.truncations, truncations)
+		return err
+	}
+
+	value, typ = resolvePointer(value)
+	kind := typ.Kind()
+	if (kind == reflect.Interface || kind == reflect.Pointer) && typ.IsNil(value) {
 		// resolvePointer failed to resolve to something that's not a pointer, it
 		// has indirected too many times...
 		return waferrors.ErrTooManyIndirections
@@ -214,15 +198,12 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 	switch {
 	// Terminal cases (leaves of the tree)
 	//		Is invalid type: nil interfaces for example, cannot be used to run any reflect method or it's susceptible to panic
-	case !value.IsValid() || kind == reflect.Invalid:
+	case kind == reflect.Invalid:
 		return waferrors.ErrUnsupportedValue
-	// 		Is nullable type: nil pointers, channels, maps or functions
-	case isValueNil(value):
-		obj.SetNil()
 
 	// 		Booleans
 	case kind == reflect.Bool:
-		obj.SetBool(value.Bool())
+		obj.SetBool(typ.N)
 
 	// 		Numbers
 	case value.CanInt(): // any int type or alias
@@ -294,8 +275,8 @@ func (encoder *encoder) encodeString(str string, obj *bindings.WAFObject) {
 	obj.SetString(encoder.config.Pinner, str)
 }
 
-func getFieldNameFromType(field reflect.StructField) (string, bool) {
-	fieldName := field.Name
+func getFieldNameFromType(field reflect2.StructField) (string, bool) {
+	fieldName := field.Name()
 
 	// Private and synthetics fields
 	if len(fieldName) < 1 || unicode.IsLower(rune(fieldName[0])) {
@@ -303,7 +284,7 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 	}
 
 	// Use the json tag name as field name if present
-	if tag, ok := field.Tag.Lookup("json"); ok {
+	if tag, ok := field.Tag().Lookup("json"); ok {
 		if i := strings.IndexByte(tag, byte(',')); i > 0 {
 			tag = tag[:i]
 		}
@@ -410,20 +391,29 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, 
 	obj.NbEntries = uint64(length)
 }
 
-// encodeMapKey takes a reflect.Value and a wafObject and returns a wafObject ready to be considered a map entry. We use
-// the function cgoRefPool.AllocWafMapKey to store the key in the wafObject. But first we need to grab the real
+// encodeMapKey takes a value and a WAFObject and returns a WAFObject ready to be considered a map entry. We use
+// the function cgoRefPool.AllocWafMapKey to store the key in the WAFObject. But first we need to grab the real
 // underlying value by recursing through the pointer and interface values.
-func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WAFObject) error {
-	value, kind := resolvePointer(value)
+func (encoder *encoder) encodeMapKey(value any, obj *bindings.WAFObject) error {
+	value, typ := resolvePointer(value)
+	kind := typ.Kind()
 
 	var keyStr string
 	switch {
 	case kind == reflect.Invalid:
 		return waferrors.ErrInvalidMapKey
 	case kind == reflect.String:
-		keyStr = value.String()
-	case value.Type() == byteArrayType:
-		keyStr = string(value.Bytes())
+		keyStr = *value.(*string)
+	case kind == reflect.Array || kind == reflect.Slice:
+		value, ok := value.([]byte)
+		if !ok {
+			return waferrors.ErrInvalidMapKey
+		}
+		if len(value) > encoder.config.MaxStringSize { // truncate because doing a copy
+			value = value[:encoder.config.MaxStringSize]
+			encoder.addTruncation(StringTooLong, len(value))
+		}
+		keyStr = string(value)
 	default:
 		return waferrors.ErrInvalidMapKey
 	}
@@ -448,7 +438,7 @@ func (encoder *encoder) encodeMapKeyFromString(keyStr string, obj *bindings.WAFO
 // a wafObject array of type wafArrayType. The specificities are the following:
 // - It will only take the first encoder.ContainerMaxSize elements of the array
 // - Elements producing an error at encoding or null values will be skipped
-func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject, depth int) {
+func (encoder *encoder) encodeArray(value any, obj *bindings.WAFObject, depth int) {
 	length := value.Len()
 
 	capacity := length
@@ -496,32 +486,49 @@ func (encoder *encoder) addTruncation(reason TruncationReason, size int) {
 
 // depthOf returns the depth of the provided object. This is 0 for scalar values,
 // such as strings.
-func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
+func depthOf(ctx context.Context, obj any) (depth int, err error) {
 	if err = ctx.Err(); err != nil {
 		// Timed out, won't go any deeper
 		return 0, err
 	}
 
-	obj, kind := resolvePointer(obj)
+	obj, typ := resolvePointer(obj)
 
 	var itemDepth int
-	switch kind {
-	case reflect.Array, reflect.Slice:
-		if obj.Type() == byteArrayType {
+	switch typ.Kind() {
+	case reflect.Array:
+		if _, ok := obj.([]byte); ok {
 			// We treat byte slices as strings
 			return 0, nil
 		}
-		for i := 0; i < obj.Len(); i++ {
-			itemDepth, err = depthOf(ctx, obj.Index(i))
+		arrayType := typ.(reflect2.ArrayType)
+		for i := 0; i < arrayType.Len(); i++ {
+			itemDepth, err = depthOf(ctx, arrayType.GetIndex(obj, i))
 			depth = max(depth, itemDepth)
 			if err != nil {
 				break
 			}
 		}
 		return depth + 1, err
+	case reflect.Slice:
+		if _, ok := obj.([]byte); ok {
+			// We treat byte slices as strings
+			return 0, nil
+		}
+
+		sliceType := typ.(reflect2.SliceType)
+		for i := 0; i < sliceType.LengthOf(obj); i++ {
+			itemDepth, err = depthOf(ctx, sliceType.GetIndex(obj, i))
+			depth = max(depth, itemDepth)
+			if err != nil {
+				break
+			}
+		}
 	case reflect.Map:
-		for iter := obj.MapRange(); iter.Next(); {
-			itemDepth, err = depthOf(ctx, iter.Value())
+		mapType := typ.(reflect2.MapType)
+		var value any
+		for iter := mapType.Iterate(obj); iter.HasNext(); _, value = iter.Next() {
+			itemDepth, err = depthOf(ctx, value)
 			depth = max(depth, itemDepth)
 			if err != nil {
 				break
@@ -529,15 +536,15 @@ func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
 		}
 		return depth + 1, err
 	case reflect.Struct:
-		typ := obj.Type()
-		for i := 0; i < obj.NumField(); i++ {
-			fieldType := typ.Field(i)
+		structType := typ.(reflect2.StructType)
+		for i := 0; i < structType.NumField(); i++ {
+			fieldType := structType.Field(i)
 			_, usable := getFieldNameFromType(fieldType)
 			if !usable {
 				continue
 			}
 
-			itemDepth, err = depthOf(ctx, obj.Field(i))
+			itemDepth, err = depthOf(ctx, fieldType.Get(obj))
 			depth = max(depth, itemDepth)
 			if err != nil {
 				break
@@ -547,19 +554,23 @@ func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
 	default:
 		return 0, nil
 	}
+
+	return 0, nil
 }
 
 // resolvePointer attempts to resolve a pointer while limiting the pointer depth
 // to be traversed, so that this is not susceptible to an infinite loop when
 // provided a self-referencing pointer.
-func resolvePointer(obj reflect.Value) (reflect.Value, reflect.Kind) {
-	kind := obj.Kind()
-	for limit := 8; limit > 0 && kind == reflect.Pointer || kind == reflect.Interface; limit-- {
-		if obj.IsNil() {
-			return obj, kind
+func resolvePointer(obj any) (any, reflect2.Type) {
+	typ := reflect2.TypeOf(obj)
+	kind := typ.Kind()
+	for limit := 8; limit > 0 && (kind == reflect.Pointer || kind == reflect.Interface); limit-- {
+		if typ.IsNil(obj) {
+			return obj, typ
 		}
-		obj = obj.Elem()
-		kind = obj.Kind()
+		obj = typ.Indirect(obj)
+		typ = reflect2.TypeOf(obj)
+		kind = typ.Kind()
 	}
-	return obj, kind
+	return obj, typ
 }
