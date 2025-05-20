@@ -82,9 +82,26 @@ const (
 	AppsecFieldTagValueIgnore = "ignore"
 )
 
-// WAFObject is the C struct that represents a WAF object. It is passed as-is to the C-world.
-// It is highly advised to use the methods on the object to manipulate it and not set the fields manually.
-type WAFObject = bindings.WAFObject
+type (
+	// WAFObject is the C struct that represents a WAF object. It is passed as-is to the C-world.
+	// It is highly advised to use the methods on the object to manipulate it and not set the fields manually.
+	WAFObject = bindings.WAFObject
+	// WAFObjectType describes the valid values of the [bindings.WAFObject.Type] field.
+	WAFObjectType = bindings.WAFObjectType
+)
+
+// Forwarding the constants from the bindings package so they can be re-used by external code that
+// produces pre-encoded [WAFObject] values.
+const (
+	WAFIntType    WAFObjectType = bindings.WAFIntType
+	WAFUintType   WAFObjectType = bindings.WAFUintType
+	WAFStringType WAFObjectType = bindings.WAFStringType
+	WAFArrayType  WAFObjectType = bindings.WAFArrayType
+	WAFMapType    WAFObjectType = bindings.WAFMapType
+	WAFBoolType   WAFObjectType = bindings.WAFBoolType
+	WAFFloatType  WAFObjectType = bindings.WAFFloatType
+	WAFNilType    WAFObjectType = bindings.WAFNilType
+)
 
 // Encodable represent a type that can encode itself into a WAFObject.
 // The encodable is responsible for using the [pin.Pinner]
@@ -191,7 +208,17 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 	}
 
 	if value.IsValid() && value.CanInterface() {
-		if encodable, ok := value.Interface().(Encodable); ok {
+		iface := value.Interface()
+		if wo, ok := iface.(*bindings.WAFObject); ok {
+			*obj = *wo
+			return nil
+		}
+		if wo, ok := iface.(bindings.WAFObject); ok {
+			*obj = wo
+			return nil
+		}
+
+		if encodable, ok := iface.(Encodable); ok {
 			truncations, err := encodable.Encode(encoder.config, obj, depth)
 			encoder.truncations = merge(encoder.truncations, truncations)
 			return err
