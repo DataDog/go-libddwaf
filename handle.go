@@ -137,11 +137,6 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 }
 
 func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscatorRegex string) *bindings.WAFConfig {
-	keyRegex := unsafe.Pointer(unsafe.Cstring(keyObfuscatorRegex))
-	pinner.Pin(keyRegex)
-	valRegex := unsafe.Pointer(unsafe.Cstring(valueObfuscatorRegex))
-	pinner.Pin(valRegex)
-
 	return &bindings.WAFConfig{
 		Limits: bindings.WAFConfigLimits{
 			MaxContainerDepth: bindings.MaxContainerDepth,
@@ -149,8 +144,8 @@ func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscato
 			MaxStringLength:   bindings.MaxStringLength,
 		},
 		Obfuscator: bindings.WAFConfigObfuscator{
-			KeyRegex:   uintptr(keyRegex),
-			ValueRegex: uintptr(valRegex),
+			KeyRegex:   unsafe.PtrToUintptr(unsafe.Cstring(pinner, keyObfuscatorRegex)),
+			ValueRegex: unsafe.PtrToUintptr(unsafe.Cstring(pinner, valueObfuscatorRegex)),
 		},
 		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
 		FreeFn: 0,

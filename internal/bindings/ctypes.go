@@ -11,6 +11,8 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v4/internal/pin"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -126,6 +128,11 @@ func (w *WAFObject) IsFloat() bool {
 	return w.Type == WAFFloatType
 }
 
+// IsString determines whether this WAF Object is a string or not.
+func (w *WAFObject) IsString() bool {
+	return w.Type == WAFStringType
+}
+
 // IsUnusable returns true if the wafObject has no impact on the WAF execution
 // But we still need this kind of objects to forward map keys in case the value of the map is invalid
 func (w *WAFObject) IsUnusable() bool {
@@ -155,6 +162,124 @@ func (w *WAFObject) SetMapKey(pinner pin.Pinner, key string) {
 	}
 	pinner.Pin(unsafe.Pointer(header.Data))
 	w.ParameterName = uintptr(unsafe.Pointer(header.Data))
+}
+
+func (w *WAFObject) MapKey() string {
+	return string(unsafe.Slice(*(**byte)(unsafe.Pointer(&w.ParameterName)), w.ParameterNameLength))
+}
+
+func (w *WAFObject) Values() ([]WAFObject, error) {
+	if !w.IsArray() && !w.IsMap() {
+		return nil, errors.New("value is not an array or map")
+	}
+	return unsafe.Slice(*(**WAFObject)(unsafe.Pointer(&w.Value)), w.NbEntries), nil
+}
+
+func (w *WAFObject) AnyValue() (any, error) {
+	switch w.Type {
+	case WAFArrayType:
+		return w.ArrayValue()
+	case WAFBoolType:
+		return w.BoolValue()
+	case WAFFloatType:
+		return w.FloatValue()
+	case WAFIntType:
+		return w.IntValue()
+	case WAFMapType:
+		return w.MapValue()
+	case WAFStringType:
+		return w.StringValue()
+	case WAFUintType:
+		return w.UIntValue()
+	case WAFNilType:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("%w: %s", waferrors.ErrUnsupportedValue, w.Type)
+	}
+}
+
+func (w *WAFObject) ArrayValue() ([]any, error) {
+	if w.IsNil() {
+		return nil, nil
+	}
+
+	if !w.IsArray() {
+		return nil, errors.New("value is not an array")
+	}
+
+	items, err := w.Values()
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]any, len(items))
+	for i, item := range items {
+		res[i], err = item.AnyValue()
+		if err != nil {
+			return nil, fmt.Errorf("while decoding item at index %d: %w", i, err)
+		}
+	}
+	return res, nil
+}
+
+func (w *WAFObject) MapValue() (map[string]any, error) {
+	if w.IsNil() {
+		return nil, nil
+	}
+
+	if !w.IsMap() {
+		return nil, errors.New("value is not a map")
+	}
+
+	items, err := w.Values()
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]any, len(items))
+	for _, item := range items {
+		key := item.MapKey()
+		res[key], err = item.AnyValue()
+		if err != nil {
+			return nil, fmt.Errorf("while decoding value at %q: %w", key, err)
+		}
+	}
+	return res, nil
+}
+
+func (w *WAFObject) BoolValue() (bool, error) {
+	if !w.IsBool() {
+		return false, errors.New("value is not a boolean")
+	}
+	return w.Value != 0, nil
+}
+
+func (w *WAFObject) FloatValue() (float64, error) {
+	if !w.IsFloat() {
+		return 0, errors.New("value is not a uint")
+	}
+	return *(*float64)(unsafe.Pointer(&w.Value)), nil
+}
+
+func (w *WAFObject) IntValue() (int64, error) {
+	if !w.IsInt() {
+		return 0, errors.New("value is not a uint")
+	}
+	return int64(w.Value), nil
+}
+
+func (w *WAFObject) StringValue() (string, error) {
+	if !w.IsString() {
+		return "", errors.New("value is not a string")
+	}
+	return string(unsafe.Slice(*(**byte)(unsafe.Pointer(&w.Value)), w.NbEntries)), nil
+}
+
+func (w *WAFObject) UIntValue() (uint64, error) {
+	if !w.IsUint() {
+		return 0, errors.New("value is not a uint")
+	}
+	return uint64(w.Value), nil
 }
 
 var blankCStringValue = unsafe.Pointer(unsafe.NativeStringUnwrap("\x00").Data)

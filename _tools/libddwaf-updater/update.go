@@ -246,9 +246,12 @@ func handleTarget(wg *sync.WaitGroup, version string, tgt target, assets map[str
 }
 
 func compressFilter(r io.Reader, w io.Writer) error {
-	gz := gzip.NewWriter(w)
+	gz, err := gzip.NewWriterLevel(w, gzip.BestCompression)
+	if err != nil {
+		return err
+	}
 	defer gz.Close()
-	_, err := io.Copy(gz, r)
+	_, err = io.Copy(gz, r)
 	return err
 }
 

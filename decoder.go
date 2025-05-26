@@ -156,72 +156,8 @@ func decodeStringArray(obj *bindings.WAFObject) ([]string, error) {
 	return strArr, nil
 }
 
-// DecodeObject decodes a WAFObject into a native Go type.
+// Deprecated: This is merely wrapping [bindings.WAFObject.AnyValue], which should be used directly
+// instead.
 func DecodeObject(obj *WAFObject) (any, error) {
-	switch obj.Type {
-	case bindings.WAFMapType:
-		return decodeMap(obj)
-	case bindings.WAFArrayType:
-		return decodeArray(obj)
-	case bindings.WAFStringType:
-		return unsafe.GostringSized(unsafe.Cast[byte](obj.Value), obj.NbEntries), nil
-	case bindings.WAFIntType:
-		return int64(obj.Value), nil
-	case bindings.WAFUintType:
-		return uint64(obj.Value), nil
-	case bindings.WAFFloatType:
-		return unsafe.UintptrToNative[float64](obj.Value), nil
-	case bindings.WAFBoolType:
-		return unsafe.UintptrToNative[bool](obj.Value), nil
-	case bindings.WAFNilType:
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("DecodeObject: %w: %d", waferrors.ErrUnsupportedValue, obj.Type)
-	}
-}
-
-func decodeArray(obj *bindings.WAFObject) ([]any, error) {
-	if obj.IsNil() {
-		return nil, nil
-	}
-
-	if !obj.IsArray() {
-		return nil, fmt.Errorf("decodeArray: %w: expected array, got %s", waferrors.ErrInvalidObjectType, obj.Type)
-	}
-
-	events := make([]any, obj.NbEntries)
-
-	for i := uint64(0); i < obj.NbEntries; i++ {
-		objElem := unsafe.CastWithOffset[bindings.WAFObject](obj.Value, i)
-		val, err := DecodeObject(objElem)
-		if err != nil {
-			return nil, fmt.Errorf("while decoding array element %d: %w", i, err)
-		}
-		events[i] = val
-	}
-
-	return events, nil
-}
-
-func decodeMap(obj *bindings.WAFObject) (map[string]any, error) {
-	if obj.IsNil() {
-		return nil, nil
-	}
-
-	if !obj.IsMap() {
-		return nil, fmt.Errorf("decodeMap: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type)
-	}
-
-	result := make(map[string]any, obj.NbEntries)
-	for i := uint64(0); i < obj.NbEntries; i++ {
-		objElem := unsafe.CastWithOffset[bindings.WAFObject](obj.Value, i)
-		key := unsafe.GostringSized(unsafe.Cast[byte](objElem.ParameterName), objElem.ParameterNameLength)
-		val, err := DecodeObject(objElem)
-		if err != nil {
-			return nil, fmt.Errorf("while decoding map element %q: %w", key, err)
-		}
-		result[key] = val
-	}
-
-	return result, nil
+	return obj.AnyValue()
 }

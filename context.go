@@ -220,12 +220,12 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 // run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
 // context appropriately around this call.
 func (context *Context) run(persistentData, ephemeralData *bindings.WAFObject, runTimer timer.NodeTimer) (Result, error) {
-	var result bindings.WAFResult
-	defer wafLib.ResultFree(&result)
-
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
+
+	var result bindings.WAFObject
 	pinner.Pin(&result)
+	defer wafLib.ObjectFree(&result)
 
 	// The value of the timeout cannot exceed 2^55
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
@@ -241,40 +241,79 @@ func (context *Context) run(persistentData, ephemeralData *bindings.WAFObject, r
 	return res, err
 }
 
-func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFResult) (res Result, duration time.Duration, err error) {
-	if result.Timeout > 0 {
-		err = waferrors.ErrTimeout
-	} else {
-		// Derivatives can be generated even if no security event gets detected, so we decode them as long as the WAF
-		// didn't timeout
-		res.Derivatives, err = decodeMap(&result.Derivatives)
-		if err != nil {
-			return Result{}, 0, fmt.Errorf("could not decode derivatives: %w", err)
-		}
+func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Result, time.Duration, error) {
+	if !result.IsMap() {
+		return Result{}, 0, fmt.Errorf("invalid result (expected map, got %s)", result.Type)
 	}
 
-	duration = time.Duration(result.TotalRuntime) * time.Nanosecond
-
-	if ret == bindings.WAFOK {
-		return res, duration, err
-	}
-
-	if ret != bindings.WAFMatch {
-		return res, duration, goRunError(ret)
-	}
-
-	res.Events, err = decodeArray(&result.Events)
+	entries, err := result.Values()
 	if err != nil {
-		return res, duration, err
+		return Result{}, 0, err
 	}
-	if size := result.Actions.NbEntries; size > 0 {
-		res.Actions, err = decodeMap(&result.Actions)
-		if err != nil {
-			return res, duration, fmt.Errorf("could not decode actions: %w", err)
+
+	var (
+		res      Result
+		duration time.Duration
+	)
+	for _, entry := range entries {
+		switch key := entry.MapKey(); key {
+		case "timeout":
+			timeout, err := entry.BoolValue()
+			if err != nil {
+				return Result{}, 0, fmt.Errorf("failed to decode timeout: %w", err)
+			}
+			if timeout {
+				err = waferrors.ErrTimeout
+			}
+		case "keep":
+			keep, err := entry.BoolValue()
+			if err != nil {
+				return Result{}, 0, fmt.Errorf("failed to decode keep: %w", err)
+			}
+			res.Keep = keep
+		case "duration":
+			dur, err := entry.UIntValue()
+			if err != nil {
+				return Result{}, 0, fmt.Errorf("failed to decode duration: %w", err)
+			}
+			duration = time.Duration(dur) * time.Nanosecond
+		case "events":
+			if !entry.IsArray() {
+				return Result{}, 0, fmt.Errorf("invalid events (expected array, got %s)", entry.Type)
+			}
+			if entry.NbEntries != 0 {
+				events, err := entry.ArrayValue()
+				if err != nil {
+					return Result{}, 0, fmt.Errorf("failed to decode events: %w", err)
+				}
+				res.Events = events
+			}
+		case "actions":
+			if !entry.IsMap() {
+				return Result{}, 0, fmt.Errorf("invalid actions (expected map, got %s)", entry.Type)
+			}
+			if entry.NbEntries != 0 {
+				actions, err := entry.MapValue()
+				if err != nil {
+					return Result{}, 0, fmt.Errorf("failed to decode actions: %w", err)
+				}
+				res.Actions = actions
+			}
+		case "attributes":
+			if !entry.IsMap() {
+				return Result{}, 0, fmt.Errorf("invalid attributes (expected map, got %s)", entry.Type)
+			}
+			if entry.NbEntries != 0 {
+				derivatives, err := entry.MapValue()
+				if err != nil {
+					return Result{}, 0, fmt.Errorf("failed to decode attributes: %w", err)
+				}
+				res.Derivatives = derivatives
+			}
 		}
 	}
 
-	return res, duration, err
+	return res, duration, goRunError(ret)
 }
 
 // Close disposes of the underlying `ddwaf_context` and releases the associated

@@ -6,6 +6,7 @@
 package unsafe
 
 import (
+	"runtime"
 	"unsafe"
 )
 
@@ -13,6 +14,10 @@ type Pointer = unsafe.Pointer
 
 func SliceData[E any, T ~[]E](slice T) *E {
 	return unsafe.SliceData(slice)
+}
+
+func StringData(str string) *byte {
+	return unsafe.StringData(str)
 }
 
 // Gostring copies a char* to a Go string.
@@ -49,9 +54,10 @@ func GostringSized(ptr *byte, size uint64) string {
 }
 
 // Cstring converts a go string to *byte that can be passed to C code.
-func Cstring(name string) *byte {
+func Cstring(pinner *runtime.Pinner, name string) *byte {
 	var b = make([]byte, len(name)+1)
 	copy(b, name)
+	pinner.Pin(&b[0])
 	return unsafe.SliceData(b)
 }
 
@@ -95,4 +101,12 @@ func PtrToUintptr[T any](arg *T) uintptr {
 
 func SliceToUintptr[T any](arg []T) uintptr {
 	return uintptr(unsafe.Pointer(unsafe.SliceData(arg)))
+}
+
+func Slice[T any](ptr *T, length uint64) []T {
+	return unsafe.Slice(ptr, length)
+}
+
+func String(ptr *byte, length uint64) string {
+	return unsafe.String(ptr, length)
 }
