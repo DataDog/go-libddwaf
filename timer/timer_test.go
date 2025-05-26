@@ -6,11 +6,11 @@
 package timer_test
 
 import (
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 
 	"github.com/stretchr/testify/require"
@@ -355,7 +355,7 @@ func BenchmarkContext(b *testing.B) {
 
 			runTimer.MustLeaf("persistent-encoder").Timed(func(timer timer.Timer) {
 				for i := 0; i < 10; i++ {
-					unsafe.KeepAlive(timer.Exhausted())
+					runtime.KeepAlive(timer.Exhausted())
 				}
 			})
 
@@ -365,7 +365,7 @@ func BenchmarkContext(b *testing.B) {
 
 			runTimer.MustLeaf("ephemera-encoder").Timed(func(timer timer.Timer) {
 				for i := 0; i < 10; i++ {
-					unsafe.KeepAlive(timer.Exhausted())
+					runtime.KeepAlive(timer.Exhausted())
 				}
 			})
 
@@ -400,7 +400,7 @@ func BenchmarkRun(b *testing.B) {
 
 		runTimer.MustLeaf("persistent-encoder").Timed(func(timer timer.Timer) {
 			for i := 0; i < 10; i++ {
-				unsafe.KeepAlive(timer.Exhausted())
+				runtime.KeepAlive(timer.Exhausted())
 			}
 		})
 
@@ -410,7 +410,7 @@ func BenchmarkRun(b *testing.B) {
 
 		runTimer.MustLeaf("ephemera-encoder").Timed(func(timer timer.Timer) {
 			for i := 0; i < 10; i++ {
-				unsafe.KeepAlive(timer.Exhausted())
+				runtime.KeepAlive(timer.Exhausted())
 			}
 		})
 

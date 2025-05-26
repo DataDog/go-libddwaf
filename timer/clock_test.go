@@ -1,10 +1,9 @@
 package timer
 
 import (
+	"runtime"
 	"testing"
 	"time"
-
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 )
 
 func BenchmarkMostUsedFunctions(b *testing.B) {
@@ -20,7 +19,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			unsafe.KeepAlive(timers[i].Start())
+			runtime.KeepAlive(timers[i].Start())
 		}
 	})
 
@@ -32,7 +31,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			unsafe.KeepAlive(timer.Spent())
+			runtime.KeepAlive(timer.Spent())
 		}
 	})
 
@@ -44,7 +43,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			unsafe.KeepAlive(timer.Remaining())
+			runtime.KeepAlive(timer.Remaining())
 		}
 	})
 
@@ -56,7 +55,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			unsafe.KeepAlive(timer.Exhausted())
+			runtime.KeepAlive(timer.Exhausted())
 		}
 	})
 }
@@ -65,13 +64,13 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 func BenchmarkNow(b *testing.B) {
 	b.Run("time.Now()", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			unsafe.KeepAlive(time.Now())
+			runtime.KeepAlive(time.Now())
 		}
 	})
 	ct := &clock{lastRequest: time.Now()}
 	b.Run("clock.now()", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			unsafe.KeepAlive(ct.now())
+			runtime.KeepAlive(ct.now())
 		}
 	})
 }

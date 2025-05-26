@@ -96,22 +96,3 @@ func PtrToUintptr[T any](arg *T) uintptr {
 func SliceToUintptr[T any](arg []T) uintptr {
 	return uintptr(unsafe.Pointer(unsafe.SliceData(arg)))
 }
-
-// KeepAlive() globals
-var (
-	alwaysFalse bool
-	escapeSink  any
-)
-
-// KeepAlive is a copy of runtime.KeepAlive
-// keepAlive has 2 usages:
-// - It forces the deallocation of the memory to take place later than expected (just like runtime.KeepAlive)
-// - It forces the given argument x to be escaped on the heap by saving it into a global value (Go doesn't provide a standard way to do it as of today)
-// It is implemented so that the compiler cannot optimize it.
-//
-//go:noinline
-func KeepAlive[T any](x T) {
-	if alwaysFalse {
-		escapeSink = x
-	}
-}
