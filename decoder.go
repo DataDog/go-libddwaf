@@ -195,7 +195,7 @@ func decodeArray(obj *bindings.WAFObject) ([]any, error) {
 		objElem := unsafe.CastWithOffset[bindings.WAFObject](obj.Value, i)
 		val, err := DecodeObject(objElem)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("while decoding array element %d: %w", i, err)
 		}
 		events[i] = val
 	}
@@ -218,7 +218,7 @@ func decodeMap(obj *bindings.WAFObject) (map[string]any, error) {
 		key := unsafe.GostringSized(unsafe.Cast[byte](objElem.ParameterName), objElem.ParameterNameLength)
 		val, err := DecodeObject(objElem)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("while decoding map element %q: %w", key, err)
 		}
 		result[key] = val
 	}
