@@ -9,6 +9,7 @@
 package libddwaf
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
@@ -57,24 +58,41 @@ func TestWafObject(t *testing.T) {
 	})
 
 	t.Run("string", func(t *testing.T) {
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		ptr := unsafe.Cstring("toto")
+		pinner.Pin(ptr)
+
 		var actual bindings.WAFObject
-		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual), unsafe.PtrToUintptr(unsafe.Cstring("toto")))
+		pinner.Pin(&actual)
+		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual), unsafe.PtrToUintptr(ptr))
 		require.NotEqualValues(t, 0, r1)
 		require.Equal(t, "toto", unsafe.Gostring(unsafe.Cast[byte](actual.Value)))
 		require.EqualValues(t, bindings.WAFStringType, actual.Type)
 	})
 
 	t.Run("padding", func(t *testing.T) {
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+		ptr1 := unsafe.Cstring("toto1")
+		ptr2 := unsafe.Cstring("toto2")
+		ptr3 := unsafe.Cstring("toto3")
+		pinner.Pin(ptr1)
+		pinner.Pin(ptr2)
+		pinner.Pin(ptr3)
+
 		var actual [3]bindings.WAFObject
-		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual[0]), unsafe.PtrToUintptr(unsafe.Cstring("toto1")))
+		pinner.Pin(&actual[0])
+		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual[0]), unsafe.PtrToUintptr(ptr1))
 		require.NotEqualValues(t, 0, r1)
 		require.Equal(t, "toto1", unsafe.Gostring(unsafe.Cast[byte](actual[0].Value)))
 		require.EqualValues(t, bindings.WAFStringType, actual[0].Type)
-		r1, _, _ = purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual[1]), unsafe.PtrToUintptr(unsafe.Cstring("toto2")))
+		r1, _, _ = purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual[1]), unsafe.PtrToUintptr(ptr2))
 		require.NotEqualValues(t, 0, r1)
 		require.Equal(t, "toto2", unsafe.Gostring(unsafe.Cast[byte](actual[1].Value)))
 		require.EqualValues(t, bindings.WAFStringType, actual[1].Type)
-		r1, _, _ = purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual[2]), unsafe.PtrToUintptr(unsafe.Cstring("toto3")))
+		r1, _, _ = purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual[2]), unsafe.PtrToUintptr(ptr3))
 		require.NotEqualValues(t, 0, r1)
 		require.Equal(t, "toto3", unsafe.Gostring(unsafe.Cast[byte](actual[2].Value)))
 		require.EqualValues(t, bindings.WAFStringType, actual[2].Type)

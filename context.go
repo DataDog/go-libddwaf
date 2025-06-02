@@ -220,19 +220,23 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 // run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
 // context appropriately around this call.
 func (context *Context) run(persistentData, ephemeralData *bindings.WAFObject, runTimer timer.NodeTimer) (Result, error) {
-	result := new(bindings.WAFResult)
-	defer wafLib.ResultFree(result)
+	var result bindings.WAFResult
+	defer wafLib.ResultFree(&result)
+
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	pinner.Pin(&result)
 
 	// The value of the timeout cannot exceed 2^55
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
 	timeout := uint64(runTimer.SumRemaining().Microseconds()) & 0x008FFFFFFFFFFFFF
-	ret := wafLib.Run(context.cContext, persistentData, ephemeralData, result, timeout)
+	ret := wafLib.Run(context.cContext, persistentData, ephemeralData, &result, timeout)
 
 	decodeTimer := runTimer.MustLeaf(DecodeTimeKey)
 	decodeTimer.Start()
 	defer decodeTimer.Stop()
 
-	res, duration, err := unwrapWafResult(ret, result)
+	res, duration, err := unwrapWafResult(ret, &result)
 	runTimer.AddTime(DurationTimeKey, duration)
 	return res, err
 }
@@ -244,6 +248,9 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFResult) (re
 		// Derivatives can be generated even if no security event gets detected, so we decode them as long as the WAF
 		// didn't timeout
 		res.Derivatives, err = decodeMap(&result.Derivatives)
+		if err != nil {
+			return Result{}, 0, fmt.Errorf("could not decode derivatives: %w", err)
+		}
 	}
 
 	duration = time.Duration(result.TotalRuntime) * time.Nanosecond
@@ -263,7 +270,7 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFResult) (re
 	if size := result.Actions.NbEntries; size > 0 {
 		res.Actions, err = decodeMap(&result.Actions)
 		if err != nil {
-			return res, duration, err
+			return res, duration, fmt.Errorf("could not decode actions: %w", err)
 		}
 	}
 

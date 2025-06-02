@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/lib"
 	"github.com/DataDog/go-libddwaf/v4/internal/log"
@@ -87,7 +88,7 @@ func (waf *WAFLib) GetVersion() string {
 // which may be nil. Returns nil in case of an error.
 func (waf *WAFLib) BuilderInit(cfg *WAFConfig) WAFBuilder {
 	builder := WAFBuilder(waf.syscall(waf.builderInit, unsafe.PtrToUintptr(cfg)))
-	unsafe.KeepAlive(cfg)
+	runtime.KeepAlive(cfg)
 	return builder
 }
 
@@ -102,9 +103,9 @@ func (waf *WAFLib) BuilderAddOrUpdateConfig(builder WAFBuilder, path string, con
 		unsafe.PtrToUintptr(config),
 		unsafe.PtrToUintptr(diags),
 	)
-	unsafe.KeepAlive(path)
-	unsafe.KeepAlive(config)
-	unsafe.KeepAlive(diags)
+	runtime.KeepAlive(path)
+	runtime.KeepAlive(config)
+	runtime.KeepAlive(diags)
 	return byte(res) != 0
 }
 
@@ -116,7 +117,7 @@ func (waf *WAFLib) BuilderRemoveConfig(builder WAFBuilder, path string) bool {
 		unsafe.PtrToUintptr(unsafe.Cstring(path)),
 		uintptr(len(path)),
 	)
-	unsafe.KeepAlive(path)
+	runtime.KeepAlive(path)
 	return byte(res) != 0
 }
 
@@ -161,7 +162,7 @@ func (waf *WAFLib) SetLogCb(cb uintptr, level log.Level) {
 // Destroy destroys a WAF instance.
 func (waf *WAFLib) Destroy(handle WAFHandle) {
 	waf.syscall(waf.destroy, uintptr(handle))
-	unsafe.KeepAlive(handle)
+	runtime.KeepAlive(handle)
 }
 
 func (waf *WAFLib) KnownAddresses(handle WAFHandle) []string {
@@ -186,40 +187,40 @@ func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 		addresses[i] = unsafe.Gostring(*unsafe.CastWithOffset[*byte](arrayVoidC, uint64(i)))
 	}
 
-	unsafe.KeepAlive(&nbAddresses)
-	unsafe.KeepAlive(handle)
+	runtime.KeepAlive(&nbAddresses)
+	runtime.KeepAlive(handle)
 
 	return addresses
 }
 
 func (waf *WAFLib) ContextInit(handle WAFHandle) WAFContext {
 	ctx := WAFContext(waf.syscall(waf.contextInit, uintptr(handle)))
-	unsafe.KeepAlive(handle)
+	runtime.KeepAlive(handle)
 	return ctx
 }
 
 func (waf *WAFLib) ContextDestroy(context WAFContext) {
 	waf.syscall(waf.contextDestroy, uintptr(context))
-	unsafe.KeepAlive(context)
+	runtime.KeepAlive(context)
 }
 
 func (waf *WAFLib) ResultFree(result *WAFResult) {
 	waf.syscall(waf.resultFree, unsafe.PtrToUintptr(result))
-	unsafe.KeepAlive(result)
+	runtime.KeepAlive(result)
 }
 
 func (waf *WAFLib) ObjectFree(obj *WAFObject) {
 	waf.syscall(waf.objectFree, unsafe.PtrToUintptr(obj))
-	unsafe.KeepAlive(obj)
+	runtime.KeepAlive(obj)
 }
 
 func (waf *WAFLib) Run(context WAFContext, persistentData, ephemeralData *WAFObject, result *WAFResult, timeout uint64) WAFReturnCode {
 	rc := WAFReturnCode(waf.syscall(waf.run, uintptr(context), unsafe.PtrToUintptr(persistentData), unsafe.PtrToUintptr(ephemeralData), unsafe.PtrToUintptr(result), uintptr(timeout)))
-	unsafe.KeepAlive(context)
-	unsafe.KeepAlive(persistentData)
-	unsafe.KeepAlive(ephemeralData)
-	unsafe.KeepAlive(result)
-	unsafe.KeepAlive(timeout)
+	runtime.KeepAlive(context)
+	runtime.KeepAlive(persistentData)
+	runtime.KeepAlive(ephemeralData)
+	runtime.KeepAlive(result)
+	runtime.KeepAlive(timeout)
 	return rc
 }
 
