@@ -1,0 +1,98 @@
+name: Default Ruleset
+on:
+  workflow_dispatch: # Manually
+  schedule: # Every Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+
+permissions: read-all
+
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    name: Update
+    outputs:
+      mutation-happened: ${{ steps.detect.outputs.mutation-happened }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup Go
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version: oldstable
+          cache-dependency-path: _tools/ruleset-updater/go.mod
+      - name: Generate a GitHub token
+        id: generate-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ vars.DD_K9_LIBRARY_GO_APP_ID }}
+          private-key: ${{ secrets.DD_K9_LIBRARY_GO_APP_PRIVATE_KEY }}
+      - name: Update Default Ruleset
+        run: go run -C _tools/ruleset-updater run . -output=${{ github.workspace }}/internal/ruleset/recommended.json.gz
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+      - name: Detect Mutation
+        id: detect
+        run: |-
+          git add .
+          git diff --staged --patch --exit-code > ${{ runner.temp }}/repo.patch || echo "mutation-happened=true" >> "${GITHUB_OUTPUT}"
+      - name: Upload Patch
+        if: steps.detect.outputs.mutation_happened
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: repo.patch
+          path: ${{ runner.temp }}/repo.patch
+
+  pr:
+    runs-on: ubuntu-latest
+    name: Create PR
+    needs: update
+    if: needs.update.outputs.mutation-happened
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Download Patch
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: repo.patch
+          path: ${{ runner.temp }}
+      - name: Apply Patch
+        id: apply
+        run: |-
+          git apply ${{ runner.temp }}/repo.patch
+          echo "version=$(jq -r '.metadata.rules_version' < ./appsec/rules.json)" >> $GITHUB_OUTPUT
+
+      - name: Create PR Branch
+        id: create-branch
+        run: |-
+          branch="automation/default-ruleset-update/${{ steps.apply.outputs.version }}"
+          git push origin "${{ github.sha }}":"refs/heads/${branch}"
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+          git fetch origin "${branch}"
+      - name: Generate a GitHub token
+        id: generate-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ vars.DD_K9_LIBRARY_GO_APP_ID }}
+          private-key: ${{ secrets.DD_K9_LIBRARY_GO_APP_PRIVATE_KEY }}
+      # We use ghcommit to create signed commits directly using the GitHub API
+      - name: Create Commit on PR Branch
+        uses: planetscale/ghcommit-action@6a383e778f6620afde4bf4b45069d3c6983c1ae2 # v0.2.15
+        with:
+          commit_message: "chore: update default ruleset to ${{ steps.apply.outputs.version }}"
+          branch: ${{ steps.create-branch.outputs.branch }}
+          repo: ${{ github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+      - name: Create PR
+        run: |-
+          git fetch origin "${{ steps.create-branch.outputs.branch }}"
+          git reset --hard HEAD
+          git switch "${{ steps.create-branch.outputs.branch }}"
+          gh pr create --title "chore: update default ruleset to ${{ steps.apply.outputs.version }}" \
+                        --body "Updated default ruleset to ${{ steps.apply.outputs.version }}." \
+                        --head="${{ steps.create-branch.outputs.branch }}"
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
