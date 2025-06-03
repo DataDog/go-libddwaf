@@ -302,31 +302,22 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 		return "", false
 	}
 
-	// Use the json tag name as field name if present
-	if tag, ok := field.Tag.Lookup("json"); ok {
-		tag, _, _ = strings.Cut(tag, ",")
-		switch tag {
-		case "":
-			// Nothing to do
-		case "-":
-			// Explicitly ignored
-			return "", false
-		default:
-			return tag, true
-		}
+	// This is the XML namespace/name pair, this isn't technically part of the data.
+	if field.Type == reflect.TypeFor[xml.Name]() {
+		return "", false
 	}
 
-	// Use the XML tag name as a field name if present
-	if tag, ok := field.Tag.Lookup("xml"); ok {
-		if field.Type == reflect.TypeFor[xml.Name]() {
-			// This is the XML namespace/name pair, this isn't technically part of the data.
-			return "", false
+	// Use the encoding tag name as field name if present
+	for _, tagName := range []string{"json", "yaml", "xml", "toml"} {
+		tag, ok := field.Tag.Lookup(tagName)
+		if !ok {
+			continue
 		}
-
 		tag, _, _ = strings.Cut(tag, ",")
 		switch tag {
 		case "":
 			// Nothing to do
+			continue
 		case "-":
 			// Explicitly ignored
 			return "", false
