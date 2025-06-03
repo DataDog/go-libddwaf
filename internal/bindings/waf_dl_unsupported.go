@@ -50,11 +50,9 @@ func (*WAFLib) ContextInit(WAFHandle) WAFContext { return 0 }
 
 func (*WAFLib) ContextDestroy(WAFContext) {}
 
-func (*WAFLib) ResultFree(*WAFResult) {}
-
 func (*WAFLib) ObjectFree(*WAFObject) {}
 
-func (*WAFLib) Run(WAFContext, *WAFObject, *WAFObject, *WAFResult, uint64) WAFReturnCode {
+func (*WAFLib) Run(WAFContext, *WAFObject, *WAFObject, *WAFObject, uint64) WAFReturnCode {
 	return WAFErrInternal
 }
 
