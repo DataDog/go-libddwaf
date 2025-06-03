@@ -8,11 +8,11 @@ package libddwaf
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"math"
 	"reflect"
 	"strings"
-	"unicode"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/pin"
@@ -298,17 +298,40 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 	fieldName := field.Name
 
 	// Private and synthetics fields
-	if len(fieldName) < 1 || unicode.IsLower(rune(fieldName[0])) {
+	if !field.IsExported() {
 		return "", false
 	}
 
 	// Use the json tag name as field name if present
 	if tag, ok := field.Tag.Lookup("json"); ok {
-		if i := strings.IndexByte(tag, byte(',')); i > 0 {
-			tag = tag[:i]
+		tag, _, _ = strings.Cut(tag, ",")
+		switch tag {
+		case "":
+			// Nothing to do
+		case "-":
+			// Explicitly ignored
+			return "", false
+		default:
+			return tag, true
 		}
-		if len(tag) > 0 {
-			fieldName = tag
+	}
+
+	// Use the XML tag name as a field name if present
+	if tag, ok := field.Tag.Lookup("xml"); ok {
+		if field.Type == reflect.TypeFor[xml.Name]() {
+			// This is the XML namespace/name pair, this isn't technically part of the data.
+			return "", false
+		}
+
+		tag, _, _ = strings.Cut(tag, ",")
+		switch tag {
+		case "":
+			// Nothing to do
+		case "-":
+			// Explicitly ignored
+			return "", false
+		default:
+			return tag, true
 		}
 	}
 
