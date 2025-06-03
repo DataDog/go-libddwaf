@@ -67,10 +67,12 @@ jobs:
       - name: Create PR Branch
         id: create-branch
         run: |-
-          branch="automation/default-ruleset-update/${{ steps.apply.outputs.version }}"
+          branch="automation/default-ruleset-update/${VERSION}"
           git push origin "${{ github.sha }}":"refs/heads/${branch}"
           echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
           git fetch origin "${branch}"
+        env:
+          VERSION: ${{ steps.apply.outputs.version }}
       - name: Generate a GitHub token
         id: generate-token
         uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
@@ -91,8 +93,9 @@ jobs:
           git fetch origin "${{ steps.create-branch.outputs.branch }}"
           git reset --hard HEAD
           git switch "${{ steps.create-branch.outputs.branch }}"
-          gh pr create --title "chore: update default ruleset to ${{ steps.apply.outputs.version }}" \
-                        --body "Updated default ruleset to ${{ steps.apply.outputs.version }}." \
+          gh pr create --title "chore: update default ruleset to ${VERSION}" \
+                        --body "Updated default ruleset to ${VERSION}." \
                         --head="${{ steps.create-branch.outputs.branch }}"
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          VERSION: ${{ steps.apply.outputs.version }}
