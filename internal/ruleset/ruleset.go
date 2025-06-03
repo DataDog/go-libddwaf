@@ -11,8 +11,8 @@ import (
 	_ "embed"
 	"runtime"
 
-	"github.com/DataDog/go-libddwaf/v4/decoder"
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/json"
 ) // For go:embed
 
 //go:embed recommended.json.gz
@@ -24,7 +24,7 @@ func DefaultRuleset(pinner *runtime.Pinner) (bindings.WAFObject, error) {
 		return bindings.WAFObject{}, err
 	}
 
-	dec := decoder.New(gz, pinner)
+	dec := json.NewDecoder(gz, pinner)
 
 	var ruleset bindings.WAFObject
 	if err := dec.Decode(&ruleset); err != nil {

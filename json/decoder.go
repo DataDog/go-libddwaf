@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-package decoder
+package json
 
 import (
 	"encoding/json"
@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strconv"
 	"unique"
-	"unsafe"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 )
@@ -23,7 +22,7 @@ type Decoder struct {
 	json   *json.Decoder
 }
 
-func New(rd io.Reader, pinner *runtime.Pinner) *Decoder {
+func NewDecoder(rd io.Reader, pinner *runtime.Pinner) *Decoder {
 	js := json.NewDecoder(rd)
 	js.UseNumber()
 	return &Decoder{pinner: pinner, json: js}
@@ -50,20 +49,15 @@ func (d *Decoder) Decode(v *bindings.WAFObject) error {
 		return decodeNumber(v, tok)
 
 	case bool:
-		v.Type = bindings.WAFBoolType
-		if tok {
-			v.Value = 1
-		} else {
-			v.Value = 0
-		}
+		v.SetBool(tok)
 		return nil
 
 	case string:
-		v.Type = bindings.WAFStringType
-		v.NbEntries = uint64(len(tok))
-		tokPtr := unsafe.StringData(tok)
-		d.pinner.Pin(tokPtr)
-		v.Value = uintptr(unsafe.Pointer(tokPtr))
+		v.SetString(d.pinner, tok)
+		return nil
+
+	case nil:
+		v.SetNil()
 		return nil
 
 	default:
@@ -86,12 +80,8 @@ func (d *Decoder) decodeArray(v *bindings.WAFObject) error {
 		return err
 	}
 
-	v.Type = bindings.WAFArrayType
-	v.NbEntries = uint64(len(items))
-	if len(items) != 0 {
-		d.pinner.Pin(&items[0])
-		v.Value = uintptr(unsafe.Pointer(&items[0]))
-	}
+	entries := v.SetArray(d.pinner, uint64(len(items)))
+	copy(entries, items)
 
 	return nil
 }
@@ -112,10 +102,7 @@ func (d *Decoder) decodeMap(v *bindings.WAFObject) error {
 		key = unique.Make(key).Value()
 
 		var v bindings.WAFObject
-		v.ParameterNameLength = uint64(len(key))
-		keyPtr := unsafe.StringData(key)
-		d.pinner.Pin(keyPtr)
-		v.ParameterName = uintptr(unsafe.Pointer(keyPtr))
+		v.SetMapKey(d.pinner, key)
 		if err := d.Decode(&v); err != nil {
 			return err
 		}
@@ -127,26 +114,19 @@ func (d *Decoder) decodeMap(v *bindings.WAFObject) error {
 		return err
 	}
 
-	v.Type = bindings.WAFMapType
-	v.NbEntries = uint64(len(items))
-	if len(items) != 0 {
-		d.pinner.Pin(&items[0])
-		v.Value = uintptr(unsafe.Pointer(&items[0]))
-	}
-
+	entries := v.SetMap(d.pinner, uint64(len(items)))
+	copy(entries, items)
 	return nil
 }
 
 func decodeNumber(v *bindings.WAFObject, tok json.Number) error {
 	if i, err := strconv.ParseUint(string(tok), 10, 64); err == nil {
-		v.Type = bindings.WAFUintType
-		v.Value = uintptr(i)
+		v.SetUint(i)
 		return nil
 	}
 
 	if i, err := tok.Int64(); err == nil {
-		v.Type = bindings.WAFIntType
-		v.Value = uintptr(*(*uint64)(unsafe.Pointer(&i)))
+		v.SetInt(i)
 		return nil
 	}
 
@@ -155,8 +135,7 @@ func decodeNumber(v *bindings.WAFObject, tok json.Number) error {
 		return fmt.Errorf("invalid number %q: %w", tok, err)
 	}
 
-	v.Type = bindings.WAFFloatType
-	v.Value = uintptr(*(*uint64)(unsafe.Pointer(&f)))
+	v.SetFloat(f)
 
 	return nil
 }
