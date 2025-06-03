@@ -30,6 +30,9 @@ type Result struct {
 
 	// Timer returns the time spend in the different parts of the run. Keys can be found with the suffix [
 	TimerStats map[timer.Key]time.Duration
+
+	// Keep is true if the WAF instructs the trace should be set to manual keep priority.
+	Keep bool
 }
 
 // HasEvents return true if the [Result] holds at least 1 event.

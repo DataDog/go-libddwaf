@@ -78,7 +78,7 @@ func TestEncodable(t *testing.T) {
 		encoded, err := encoder.Encode(&input)
 
 		require.NoError(t, err, "unexpected error when encoding: %v", err)
-		val, err := DecodeObject(encoded)
+		val, err := encoded.AnyValue()
 		require.NoError(t, err, "unexpected error when decoding: %v", err)
 		require.True(t, reflect.DeepEqual(output, val), "expected %#v, got %#v", output, val)
 	})
@@ -426,7 +426,7 @@ func TestEncodeDecode(t *testing.T) {
 				}
 
 				require.NoError(t, err, "unexpected error when encoding: %v", err)
-				val, err := DecodeObject(encoded)
+				val, err := encoded.AnyValue()
 
 				if tc.DecodeError != nil {
 					require.Error(t, err, "expected a decoding error when decoding %v", tc.Input)
@@ -490,32 +490,32 @@ func TestEncoderLimits(t *testing.T) {
 			Name:          "map-depth",
 			MaxValueDepth: 1,
 			Input:         map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
-			Output:        map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": nil},
+			Output:        map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]any{}},
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
 			DecodeError:   waferrors.ErrUnsupportedValue,
 		},
 		{
-			Name:          "map-depth",
+			Name:          "map-depth-ok",
 			MaxValueDepth: 2,
 			Input:         map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
 			Output:        map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]any{}},
 		},
 		{
-			Name:          "map-depth",
+			Name:          "map-depth-exceeded",
 			MaxValueDepth: 0,
 			Input:         map[string]any{},
 			EncodeError:   waferrors.ErrMaxDepthExceeded,
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {1}},
 		},
 		{
-			Name:          "struct-depth",
+			Name:          "struct-depth-ok",
 			MaxValueDepth: 0,
 			Input:         struct{}{},
 			EncodeError:   waferrors.ErrMaxDepthExceeded,
 			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {1}},
 		},
 		{
-			Name:          "struct-depth",
+			Name:          "struct-depth-exceeded",
 			MaxValueDepth: 1,
 			Input: struct {
 				F0 string
@@ -650,7 +650,7 @@ func TestEncoderLimits(t *testing.T) {
 
 			require.NoError(t, err, "unexpected error when encoding: %v", err)
 
-			val, err := DecodeObject(encoded)
+			val, err := encoded.AnyValue()
 			if tc.DecodeError != nil {
 				require.Error(t, err, "expected a decoding error when decoding %v", tc.DecodeError)
 				require.ErrorIs(t, err, tc.DecodeError)
@@ -658,7 +658,7 @@ func TestEncoderLimits(t *testing.T) {
 			}
 
 			require.NoError(t, err, "unexpected error when decoding: %v", err)
-			require.True(t, reflect.DeepEqual(tc.Output, val), "expected %v, got %v", tc.Output, val)
+			require.Equal(t, tc.Output, val, "expected %v, got %v", tc.Output, val)
 		})
 
 		t.Run(tc.Name+"/run", func(t *testing.T) {

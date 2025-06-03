@@ -87,38 +87,43 @@ func (waf *WAFLib) GetVersion() string {
 // BuilderInit initializes a new WAF builder with the provided configuration,
 // which may be nil. Returns nil in case of an error.
 func (waf *WAFLib) BuilderInit(cfg *WAFConfig) WAFBuilder {
-	builder := WAFBuilder(waf.syscall(waf.builderInit, unsafe.PtrToUintptr(cfg)))
-	runtime.KeepAlive(cfg)
-	return builder
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	pinner.Pin(cfg)
+
+	return WAFBuilder(waf.syscall(waf.builderInit, unsafe.PtrToUintptr(cfg)))
 }
 
 // BuilderAddOrUpdateConfig adds or updates a configuration based on the
 // given path, which must be a unique identifier for the provided configuration.
 // Returns false in case of an error.
 func (waf *WAFLib) BuilderAddOrUpdateConfig(builder WAFBuilder, path string, config *WAFObject, diags *WAFObject) bool {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	pinner.Pin(config)
+	pinner.Pin(diags)
+
 	res := waf.syscall(waf.builderAddOrUpdateConfig,
 		uintptr(builder),
-		unsafe.PtrToUintptr(unsafe.Cstring(path)),
+		unsafe.PtrToUintptr(unsafe.Cstring(&pinner, path)),
 		uintptr(len(path)),
 		unsafe.PtrToUintptr(config),
 		unsafe.PtrToUintptr(diags),
 	)
-	runtime.KeepAlive(path)
-	runtime.KeepAlive(config)
-	runtime.KeepAlive(diags)
 	return byte(res) != 0
 }
 
 // BuilderRemoveConfig removes a configuration based on the provided path.
 // Returns false in case of an error.
 func (waf *WAFLib) BuilderRemoveConfig(builder WAFBuilder, path string) bool {
-	res := waf.syscall(waf.builderRemoveConfig,
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	return byte(waf.syscall(waf.builderRemoveConfig,
 		uintptr(builder),
-		unsafe.PtrToUintptr(unsafe.Cstring(path)),
+		unsafe.PtrToUintptr(unsafe.Cstring(&pinner, path)),
 		uintptr(len(path)),
-	)
-	runtime.KeepAlive(path)
-	return byte(res) != 0
+	)) != 0
 }
 
 // BuilderBuildInstance builds a WAF instance based on the current set of configurations.
@@ -131,11 +136,15 @@ func (waf *WAFLib) BuilderBuildInstance(builder WAFBuilder) WAFHandle {
 // Returns nil in case of an error.
 func (waf *WAFLib) BuilderGetConfigPaths(builder WAFBuilder, filter string) []string {
 	var paths WAFObject
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	pinner.Pin(&filter)
+	pinner.Pin(&paths)
 
 	count := waf.syscall(waf.builderGetConfigPaths,
 		uintptr(builder),
 		unsafe.PtrToUintptr(&paths),
-		unsafe.PtrToUintptr(unsafe.Cstring(filter)),
+		unsafe.PtrToUintptr(unsafe.StringData(filter)),
 		uintptr(len(filter)),
 	)
 	defer waf.ObjectFree(&paths)
@@ -162,7 +171,6 @@ func (waf *WAFLib) SetLogCb(cb uintptr, level log.Level) {
 // Destroy destroys a WAF instance.
 func (waf *WAFLib) Destroy(handle WAFHandle) {
 	waf.syscall(waf.destroy, uintptr(handle))
-	runtime.KeepAlive(handle)
 }
 
 func (waf *WAFLib) KnownAddresses(handle WAFHandle) []string {
@@ -176,8 +184,16 @@ func (waf *WAFLib) KnownActions(handle WAFHandle) []string {
 func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 	var nbAddresses uint32
 
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	pinner.Pin(&nbAddresses)
+
 	arrayVoidC := waf.syscall(symbol, uintptr(handle), unsafe.PtrToUintptr(&nbAddresses))
 	if arrayVoidC == 0 {
+		return nil
+	}
+
+	if nbAddresses == 0 {
 		return nil
 	}
 
@@ -187,41 +203,34 @@ func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 		addresses[i] = unsafe.Gostring(*unsafe.CastWithOffset[*byte](arrayVoidC, uint64(i)))
 	}
 
-	runtime.KeepAlive(&nbAddresses)
-	runtime.KeepAlive(handle)
-
 	return addresses
 }
 
 func (waf *WAFLib) ContextInit(handle WAFHandle) WAFContext {
-	ctx := WAFContext(waf.syscall(waf.contextInit, uintptr(handle)))
-	runtime.KeepAlive(handle)
-	return ctx
+	return WAFContext(waf.syscall(waf.contextInit, uintptr(handle)))
 }
 
 func (waf *WAFLib) ContextDestroy(context WAFContext) {
 	waf.syscall(waf.contextDestroy, uintptr(context))
-	runtime.KeepAlive(context)
-}
-
-func (waf *WAFLib) ResultFree(result *WAFResult) {
-	waf.syscall(waf.resultFree, unsafe.PtrToUintptr(result))
-	runtime.KeepAlive(result)
 }
 
 func (waf *WAFLib) ObjectFree(obj *WAFObject) {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	pinner.Pin(obj)
+
 	waf.syscall(waf.objectFree, unsafe.PtrToUintptr(obj))
-	runtime.KeepAlive(obj)
 }
 
-func (waf *WAFLib) Run(context WAFContext, persistentData, ephemeralData *WAFObject, result *WAFResult, timeout uint64) WAFReturnCode {
-	rc := WAFReturnCode(waf.syscall(waf.run, uintptr(context), unsafe.PtrToUintptr(persistentData), unsafe.PtrToUintptr(ephemeralData), unsafe.PtrToUintptr(result), uintptr(timeout)))
-	runtime.KeepAlive(context)
-	runtime.KeepAlive(persistentData)
-	runtime.KeepAlive(ephemeralData)
-	runtime.KeepAlive(result)
-	runtime.KeepAlive(timeout)
-	return rc
+func (waf *WAFLib) Run(context WAFContext, persistentData, ephemeralData *WAFObject, result *WAFObject, timeout uint64) WAFReturnCode {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	pinner.Pin(persistentData)
+	pinner.Pin(ephemeralData)
+	pinner.Pin(result)
+
+	return WAFReturnCode(waf.syscall(waf.run, uintptr(context), unsafe.PtrToUintptr(persistentData), unsafe.PtrToUintptr(ephemeralData), unsafe.PtrToUintptr(result), uintptr(timeout)))
 }
 
 func (waf *WAFLib) Handle() uintptr {

@@ -24,7 +24,6 @@ type wafSymbols struct {
 	contextInit              uintptr
 	contextDestroy           uintptr
 	objectFree               uintptr
-	resultFree               uintptr
 	run                      uintptr
 }
 
@@ -68,9 +67,6 @@ func newWafSymbols(handle uintptr) (syms wafSymbols, err error) {
 		return syms, err
 	}
 	if syms.objectFree, err = purego.Dlsym(handle, "ddwaf_object_free"); err != nil {
-		return syms, err
-	}
-	if syms.resultFree, err = purego.Dlsym(handle, "ddwaf_result_free"); err != nil {
 		return syms, err
 	}
 	if syms.run, err = purego.Dlsym(handle, "ddwaf_run"); err != nil {
