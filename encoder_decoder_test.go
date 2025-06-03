@@ -625,9 +625,10 @@ func TestEncoderLimits(t *testing.T) {
 			Name: "xml-tagged",
 			Input: struct {
 				xml.Name    `xml:"fancy"`
+				Ignored     string `xml:"-"`
 				Transparent string `xml:",omitempty"`
 				Renamed     string `xml:"field,attr"`
-			}{Transparent: "2", Renamed: "3"},
+			}{Ignored: "1", Transparent: "2", Renamed: "3"},
 			Output: map[string]any{"Transparent": "2", "field": "3"},
 		},
 	} {
