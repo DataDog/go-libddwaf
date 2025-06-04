@@ -294,6 +294,8 @@ func (encoder *encoder) encodeString(str string, obj *bindings.WAFObject) {
 	obj.SetString(encoder.config.Pinner, str)
 }
 
+var xmlNameType = reflect.TypeFor[xml.Name]()
+
 func getFieldNameFromType(field reflect.StructField) (string, bool) {
 	fieldName := field.Name
 
@@ -303,16 +305,18 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 	}
 
 	// This is the XML namespace/name pair, this isn't technically part of the data.
-	if field.Type == reflect.TypeFor[xml.Name]() {
+	if field.Type == xmlNameType {
 		return "", false
 	}
 
 	// Use the encoding tag name as field name if present
+	var contentTypeTag bool
 	for _, tagName := range []string{"json", "yaml", "xml", "toml"} {
 		tag, ok := field.Tag.Lookup(tagName)
 		if !ok {
 			continue
 		}
+		contentTypeTag = true
 		tag, _, _ = strings.Cut(tag, ",")
 		switch tag {
 		case "":
@@ -323,6 +327,18 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 			return "", false
 		default:
 			return tag, true
+		}
+	}
+
+	// If none of the content-type tags are set, the field name is used; but we
+	// specifically exclude those fields tagged as coming from a header, path
+	// parameter or query parameter (this is used by labstack/echo.v4, see
+	// https://echo.labstack.com/docs/binding).
+	if !contentTypeTag {
+		for _, tagName := range []string{"header", "path", "query"} {
+			if _, ok := field.Tag.Lookup(tagName); ok {
+				return "", false
+			}
 		}
 	}
 
