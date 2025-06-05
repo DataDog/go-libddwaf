@@ -10,6 +10,7 @@ package libddwaf
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"math"
 	"reflect"
 	"runtime"
@@ -610,6 +611,25 @@ func TestEncoderLimits(t *testing.T) {
 			Name:        "self-recursive-map-value",
 			Input:       map[string]any{"bomb": selfPointer},
 			DecodeError: waferrors.ErrUnsupportedValue,
+		},
+		{
+			Name: "json-tagged",
+			Input: struct {
+				Ignored     string `json:"-"`
+				Transparent string `json:",omitempty"`
+				Renamed     string `json:"field"`
+			}{Ignored: "1", Transparent: "2", Renamed: "3"},
+			Output: map[string]any{"Transparent": "2", "field": "3"},
+		},
+		{
+			Name: "xml-tagged",
+			Input: struct {
+				xml.Name    `xml:"fancy"`
+				Ignored     string `xml:"-"`
+				Transparent string `xml:",omitempty"`
+				Renamed     string `xml:"field,attr"`
+			}{Ignored: "1", Transparent: "2", Renamed: "3"},
+			Output: map[string]any{"Transparent": "2", "field": "3"},
 		},
 	} {
 		maxValueDepth := 99999
