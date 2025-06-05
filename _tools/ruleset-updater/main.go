@@ -10,10 +10,8 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"io"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/google/go-github/v72/github"
 	"github.com/iancoleman/orderedmap"
@@ -58,6 +56,9 @@ func main() {
 	dec := json.NewDecoder(file)
 	dec.UseNumber()
 
+	// Decode the original ruleset into an [orderedmap.OrderedMap] so we preserve the order of items
+	// from the original file. This makes it easier to ensure the output GZIP file is always the same
+	// given a version of the input file.
 	var ruleset orderedmap.OrderedMap
 	if err := dec.Decode(&ruleset); err != nil {
 		log.Fatalln("Failed to decode recommended.json:", err)
@@ -69,16 +70,13 @@ func main() {
 	}
 	defer out.Close()
 
-	wr := io.WriteCloser(out)
-	if strings.HasSuffix(output, ".gz") {
-		var err error
-		wr, err = gzip.NewWriterLevel(wr, gzip.BestCompression)
-		if err != nil {
-			log.Fatalln("Failed to create gzip writer:", err)
-		}
-		defer wr.Close()
+	wr, err := gzip.NewWriterLevel(out, gzip.BestCompression)
+	if err != nil {
+		log.Fatalln("Failed to create gzip writer:", err)
 	}
+	defer wr.Close()
 
+	// Strip all irrelevant whitespace from the JSON so it is as small as possible.
 	enc := json.NewEncoder(wr)
 	enc.SetIndent("", "")
 
