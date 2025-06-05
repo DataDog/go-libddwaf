@@ -80,9 +80,7 @@ func (d *Decoder) decodeArray(v *bindings.WAFObject) error {
 		return err
 	}
 
-	entries := v.SetArray(d.pinner, uint64(len(items)))
-	copy(entries, items)
-
+	v.SetArrayData(d.pinner, items)
 	return nil
 }
 
@@ -114,8 +112,7 @@ func (d *Decoder) decodeMap(v *bindings.WAFObject) error {
 		return err
 	}
 
-	entries := v.SetMap(d.pinner, uint64(len(items)))
-	copy(entries, items)
+	v.SetMapData(d.pinner, items)
 	return nil
 }
 
