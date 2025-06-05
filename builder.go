@@ -21,7 +21,8 @@ import (
 // or similar when sharing it across multiple goroutines. All methods of this
 // type are safe to call with a nil receiver.
 type Builder struct {
-	handle bindings.WAFBuilder
+	handle        bindings.WAFBuilder
+	defaultLoaded bool
 }
 
 // NewBuilder creates a new [Builder] instance. Its lifecycle is typically tied
@@ -72,14 +73,22 @@ func (b *Builder) AddDefaultRecommendedRuleset() (Diagnostics, error) {
 		return Diagnostics{}, fmt.Errorf("failed to load default recommended ruleset: %w", err)
 	}
 
-	return b.addOrUpdateConfig(defaultRecommendedRulesetPath, &ruleset)
+	diag, err := b.addOrUpdateConfig(defaultRecommendedRulesetPath, &ruleset)
+	if err == nil {
+		b.defaultLoaded = true
+	}
+	return diag, err
 }
 
 // RemoveDefaultRecommendedRuleset removes the default recommended ruleset from
 // the receiving [Builder]. Returns true if the removal occurred (meaning the
 // default recommended ruleset was indeed present in the builder).
 func (b *Builder) RemoveDefaultRecommendedRuleset() bool {
-	return b.RemoveConfig(defaultRecommendedRulesetPath)
+	if b.RemoveConfig(defaultRecommendedRulesetPath) {
+		b.defaultLoaded = false
+		return true
+	}
+	return false
 }
 
 // AddOrUpdateConfig adds or updates a configuration fragment to this [Builder].

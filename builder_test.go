@@ -46,6 +46,58 @@ func TestBuilder(t *testing.T) {
 		},
 	}
 
+	t.Run("recommended ruleset", func(t *testing.T) {
+		builder, err := NewBuilder("", "")
+		require.NoError(t, err)
+		require.NotNil(t, builder)
+		defer builder.Close()
+
+		// The config is currently empty...
+		require.Equal(t, []string{}, builder.ConfigPaths(""))
+		handle := builder.Build()
+		require.Nil(t, handle)
+
+		// We can add the default recommended ruleset alright...
+		diag, err := builder.AddDefaultRecommendedRuleset()
+		require.NoError(t, err)
+		assert.NotEmpty(t, diag.Version)
+		assert.NotEmpty(t, diag.Rules.Loaded)
+
+		// The default recommended ruleset is now indeed in there...
+		require.Equal(t, []string{defaultRecommendedRulesetPath}, builder.ConfigPaths(""))
+
+		// Adding again is idempotent...
+		diag, err = builder.AddDefaultRecommendedRuleset()
+		require.NoError(t, err)
+		assert.NotEmpty(t, diag.Version)
+		assert.NotEmpty(t, diag.Rules.Loaded)
+		require.Equal(t, []string{defaultRecommendedRulesetPath}, builder.ConfigPaths(""))
+
+		// We can actually build a handle with the default recommended ruleset...
+		hdl := builder.Build()
+		require.NotNil(t, hdl)
+		hdl.Close()
+
+		// And we can remove it...
+		require.True(t, builder.RemoveDefaultRecommendedRuleset())
+		require.Equal(t, []string{}, builder.ConfigPaths(""))
+		hdl = builder.Build()
+		require.Nil(t, hdl)
+
+		// Removing it again is "idempotent" (almost, it returns false)
+		require.False(t, builder.RemoveDefaultRecommendedRuleset())
+		require.Equal(t, []string{}, builder.ConfigPaths(""))
+
+		// Finally, we can add the default recommended ruleset again after deleting it...
+		diag, err = builder.AddDefaultRecommendedRuleset()
+		require.NoError(t, err)
+		assert.NotEmpty(t, diag.Version)
+		assert.NotEmpty(t, diag.Rules.Loaded)
+		hdl = builder.Build()
+		require.NotNil(t, hdl)
+		hdl.Close()
+	})
+
 	t.Run("accepts a valid ruleset", func(t *testing.T) {
 		builder, err := NewBuilder("", "")
 		require.NoError(t, err)
