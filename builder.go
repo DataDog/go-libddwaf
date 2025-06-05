@@ -11,6 +11,7 @@ import (
 	"runtime"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/internal/ruleset"
 )
 
 // Builder manages an evolving WAF configuration over time. Its lifecycle is
@@ -58,6 +59,29 @@ var (
 	errBuilderClosed = errors.New("builder has already been closed")
 )
 
+const defaultRecommendedRulesetPath = "::/go-libddwaf/default/recommended.json"
+
+// AddDefaultRecommendedRuleset adds the default recommended ruleset to the
+// receiving [Builder], and returns the [Diagnostics] produced in the process.
+func (b *Builder) AddDefaultRecommendedRuleset() (Diagnostics, error) {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	ruleset, err := ruleset.DefaultRuleset(&pinner)
+	if err != nil {
+		return Diagnostics{}, fmt.Errorf("failed to load default recommended ruleset: %w", err)
+	}
+
+	return b.addOrUpdateConfig(defaultRecommendedRulesetPath, &ruleset)
+}
+
+// RemoveDefaultRecommendedRuleset removes the default recommended ruleset from
+// the receiving [Builder]. Returns true if the removal occurred (meaning the
+// default recommended ruleset was indeed present in the builder).
+func (b *Builder) RemoveDefaultRecommendedRuleset() bool {
+	return b.RemoveConfig(defaultRecommendedRulesetPath)
+}
+
 // AddOrUpdateConfig adds or updates a configuration fragment to this [Builder].
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, error) {
@@ -82,15 +106,22 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 		return Diagnostics{}, fmt.Errorf("could not encode the config fragment into a WAF object; %w", err)
 	}
 
+	return b.addOrUpdateConfig(path, frag)
+}
+
+// addOrUpdateConfig adds or updates a configuration fragment to this [Builder].
+// Returns the [Diagnostics] produced by adding or updating this configuration.
+func (b *Builder) addOrUpdateConfig(path string, cfg *bindings.WAFObject) (Diagnostics, error) {
 	var diagnosticsWafObj bindings.WAFObject
 	defer wafLib.ObjectFree(&diagnosticsWafObj)
 
-	res := wafLib.BuilderAddOrUpdateConfig(b.handle, path, frag, &diagnosticsWafObj)
+	res := wafLib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
 
 	var diags Diagnostics
 	if !diagnosticsWafObj.IsInvalid() {
 		// The Diagnostics object will be invalid if the config was completely
 		// rejected.
+		var err error
 		diags, err = decodeDiagnostics(&diagnosticsWafObj)
 		if err != nil {
 			return diags, fmt.Errorf("failed to decode WAF diagnostics: %w", err)
