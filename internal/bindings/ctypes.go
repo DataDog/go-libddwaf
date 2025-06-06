@@ -145,9 +145,19 @@ func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint64) []WAFObject {
 	return w.setArrayTyped(pinner, capacity, WAFArrayType)
 }
 
+// SetArrayData sets the receiving [WAFObject] to the provided array items.
+func (w *WAFObject) SetArrayData(pinner pin.Pinner, data []WAFObject) {
+	w.setArrayDataTyped(pinner, data, WAFArrayType)
+}
+
 // SetMap sets the receiving [WAFObject] to a new map with the given capacity.
 func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint64) []WAFObject {
 	return w.setArrayTyped(pinner, capacity, WAFMapType)
+}
+
+// SetMapData sets the receiving [WAFObject] to the provided map items.
+func (w *WAFObject) SetMapData(pinner pin.Pinner, data []WAFObject) {
+	w.setArrayDataTyped(pinner, data, WAFMapType)
 }
 
 // SetMapKey sets the receiving [WAFObject] to a new map key with the given
@@ -339,18 +349,25 @@ func (w *WAFObject) SetInvalid() {
 }
 
 func (w *WAFObject) setArrayTyped(pinner pin.Pinner, capacity uint64, t WAFObjectType) []WAFObject {
+	var arr []WAFObject
+	if capacity > 0 {
+		arr = make([]WAFObject, capacity)
+	}
+	w.setArrayDataTyped(pinner, arr, t)
+	return arr
+}
+
+func (w *WAFObject) setArrayDataTyped(pinner pin.Pinner, arr []WAFObject, t WAFObjectType) {
 	w.Type = t
-	w.NbEntries = capacity
+	w.NbEntries = uint64(len(arr))
 	if w.NbEntries == 0 {
 		w.Value = 0
-		return nil
+		return
 	}
 
-	arr := make([]WAFObject, capacity)
-	data := unsafe.Pointer(unsafe.SliceData(arr))
-	pinner.Pin(data)
-	w.Value = uintptr(data)
-	return arr
+	ptr := unsafe.Pointer(unsafe.SliceData(arr))
+	pinner.Pin(ptr)
+	w.Value = uintptr(ptr)
 }
 
 type WAFConfig struct {
