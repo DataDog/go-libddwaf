@@ -12,6 +12,7 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/object"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
@@ -70,7 +71,7 @@ func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error)
 		handle:      handle,
 		cContext:    cContext,
 		Timer:       rootTimer,
-		truncations: make(map[TruncationReason][]int, 3),
+		truncations: make(map[object.TruncationReason][]int, 3),
 	}, nil
 }
 

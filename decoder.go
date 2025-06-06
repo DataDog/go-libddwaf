@@ -10,6 +10,7 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/object"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
 
@@ -158,6 +159,6 @@ func decodeStringArray(obj *bindings.WAFObject) ([]string, error) {
 
 // Deprecated: This is merely wrapping [bindings.WAFObject.AnyValue], which should be used directly
 // instead.
-func DecodeObject(obj *WAFObject) (any, error) {
+func DecodeObject(obj *object.WAFObject) (any, error) {
 	return obj.AnyValue()
 }

@@ -1,11 +1,11 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-present Datadog, Inc.
+// Copyright 2025 Datadog, Inc.
 
 //go:build (amd64 || arm64) && (linux || darwin) && !go1.25 && !datadog.no_waf && (cgo || appsec)
 
-package libddwaf
+package reflect
 
 import (
 	"context"
@@ -21,94 +21,12 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/object"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 
 	"github.com/stretchr/testify/require"
 )
-
-func wafTest(t *testing.T, obj *bindings.WAFObject) {
-	// Pass the encoded value to the WAF to make sure it doesn't return an error
-	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
-	require.NoError(t, err)
-	defer waf.Close()
-	wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
-	require.NoError(t, err)
-	require.NotNil(t, wafCtx)
-	defer wafCtx.Close()
-	_, err = wafCtx.Run(RunAddressData{
-		Persistent: map[string]any{"my.input": obj},
-		Ephemeral:  map[string]any{"my.other.input": obj},
-	})
-	require.NoError(t, err)
-}
-
-type abs int64
-
-func (p abs) Encode(config EncoderConfig, obj *bindings.WAFObject, depth int) (map[TruncationReason][]int, error) {
-	i := p
-	if i < 0 {
-		i = -i
-	}
-
-	obj.SetInt(int64(i))
-	return nil, nil
-}
-
-type truncator struct{}
-
-func (t *truncator) Encode(_ EncoderConfig, _ *bindings.WAFObject, _ int) (map[TruncationReason][]int, error) {
-	return map[TruncationReason][]int{StringTooLong: {1}}, nil
-}
-
-type errorer struct{}
-
-func (t *errorer) Encode(_ EncoderConfig, _ *bindings.WAFObject, _ int) (map[TruncationReason][]int, error) {
-	return nil, waferrors.ErrUnsupportedValue
-}
-
-func TestEncodable(t *testing.T) {
-	t.Run("abs", func(t *testing.T) {
-		input := abs(-4)
-		output := int64(4)
-
-		var pinner runtime.Pinner
-		defer pinner.Unpin()
-
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
-		encoded, err := encoder.Encode(&input)
-
-		require.NoError(t, err, "unexpected error when encoding: %v", err)
-		val, err := encoded.AnyValue()
-		require.NoError(t, err, "unexpected error when decoding: %v", err)
-		require.True(t, reflect.DeepEqual(output, val), "expected %#v, got %#v", output, val)
-	})
-
-	t.Run("truncator", func(t *testing.T) {
-		input := truncator{}
-
-		var pinner runtime.Pinner
-		defer pinner.Unpin()
-
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
-		_, err := encoder.Encode(&input)
-		require.NoError(t, err, "unexpected error when encoding: %v", err)
-
-		require.Equal(t, map[TruncationReason][]int{StringTooLong: {1}}, encoder.truncations)
-	})
-
-	t.Run("errorer", func(t *testing.T) {
-		input := errorer{}
-
-		var pinner runtime.Pinner
-		defer pinner.Unpin()
-
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
-		_, err := encoder.Encode(&input)
-		require.Error(t, err, "expected an error when encoding: %v", err)
-		require.ErrorIs(t, err, waferrors.ErrUnsupportedValue)
-	})
-}
 
 func TestEncodeDecode(t *testing.T) {
 
@@ -416,32 +334,26 @@ func TestEncodeDecode(t *testing.T) {
 			var pinner runtime.Pinner
 			defer pinner.Unpin()
 
-			encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+			encoder, _ := NewEncoder(object.NewUnlimitedEncoderConfig(&pinner))
 			encoded, err := encoder.Encode(tc.Input)
 
-			t.Run("equal", func(t *testing.T) {
-				if tc.EncodeError != nil {
-					require.Error(t, err, "expected an encoding error when encoding %v", tc.Input)
-					require.ErrorIs(t, err, tc.EncodeError)
-					return
-				}
+			if tc.EncodeError != nil {
+				require.Error(t, err, "expected an encoding error when encoding %v", tc.Input)
+				require.ErrorIs(t, err, tc.EncodeError)
+				return
+			}
 
-				require.NoError(t, err, "unexpected error when encoding: %v", err)
-				val, err := encoded.AnyValue()
+			require.NoError(t, err, "unexpected error when encoding: %v", err)
+			val, err := encoded.AnyValue()
 
-				if tc.DecodeError != nil {
-					require.Error(t, err, "expected a decoding error when decoding %v", tc.Input)
-					require.ErrorIs(t, err, tc.DecodeError)
-					return
-				}
+			if tc.DecodeError != nil {
+				require.Error(t, err, "expected a decoding error when decoding %v", tc.Input)
+				require.ErrorIs(t, err, tc.DecodeError)
+				return
+			}
 
-				require.NoError(t, err, "unexpected error when decoding: %v", err)
-				require.True(t, reflect.DeepEqual(tc.Output, val), "expected %#v, got %#v", tc.Output, val)
-			})
-
-			t.Run("run", func(t *testing.T) {
-				wafTest(t, encoded)
-			})
+			require.NoError(t, err, "unexpected error when decoding: %v", err)
+			require.True(t, reflect.DeepEqual(tc.Output, val), "expected %#v, got %#v", tc.Output, val)
 		})
 	}
 }
@@ -457,7 +369,7 @@ func TestEncoderLimits(t *testing.T) {
 		MaxValueDepth      any
 		MaxContainerLength any
 		MaxStringLength    any
-		Truncations        map[TruncationReason][]int
+		Truncations        map[object.TruncationReason][]int
 		EncodeError        error
 		DecodeError        error
 	}{
@@ -466,7 +378,7 @@ func TestEncoderLimits(t *testing.T) {
 			MaxValueDepth: 1,
 			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
 			Output:        []any{uint64(1), uint64(2), uint64(3), uint64(4)},
-			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
+			Truncations:   map[object.TruncationReason][]int{object.ContainerDepth: {2}},
 		},
 		{
 			Name:          "array-depth",
@@ -479,7 +391,7 @@ func TestEncoderLimits(t *testing.T) {
 			MaxValueDepth: 0,
 			Input:         []any{uint64(1), uint64(2), uint64(3), uint64(4), []any{uint64(1), uint64(2), uint64(3), uint64(4)}},
 			EncodeError:   waferrors.ErrMaxDepthExceeded,
-			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
+			Truncations:   map[object.TruncationReason][]int{object.ContainerDepth: {2}},
 		},
 		{
 			Name:          "key-map-depth",
@@ -492,7 +404,7 @@ func TestEncoderLimits(t *testing.T) {
 			MaxValueDepth: 1,
 			Input:         map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]string{}},
 			Output:        map[string]any{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": map[string]any{}},
-			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {2}},
+			Truncations:   map[object.TruncationReason][]int{object.ContainerDepth: {2}},
 			DecodeError:   waferrors.ErrUnsupportedValue,
 		},
 		{
@@ -506,14 +418,14 @@ func TestEncoderLimits(t *testing.T) {
 			MaxValueDepth: 0,
 			Input:         map[string]any{},
 			EncodeError:   waferrors.ErrMaxDepthExceeded,
-			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {1}},
+			Truncations:   map[object.TruncationReason][]int{object.ContainerDepth: {1}},
 		},
 		{
 			Name:          "struct-depth-ok",
 			MaxValueDepth: 0,
 			Input:         struct{}{},
 			EncodeError:   waferrors.ErrMaxDepthExceeded,
-			Truncations:   map[TruncationReason][]int{ObjectTooDeep: {1}},
+			Truncations:   map[object.TruncationReason][]int{object.ContainerDepth: {1}},
 		},
 		{
 			Name:          "struct-depth-exceeded",
@@ -526,7 +438,7 @@ func TestEncoderLimits(t *testing.T) {
 				"F0": "F0",
 				"F1": nil,
 			},
-			Truncations: map[TruncationReason][]int{ObjectTooDeep: {2}},
+			Truncations: map[object.TruncationReason][]int{object.ContainerDepth: {2}},
 			DecodeError: waferrors.ErrUnsupportedValue,
 		},
 		{
@@ -540,7 +452,7 @@ func TestEncoderLimits(t *testing.T) {
 				"F0": "F0",
 				"F1": nil,
 			},
-			Truncations: map[TruncationReason][]int{ObjectTooDeep: {2}},
+			Truncations: map[object.TruncationReason][]int{object.ContainerDepth: {2}},
 			DecodeError: waferrors.ErrUnsupportedValue,
 		},
 		{
@@ -548,21 +460,21 @@ func TestEncoderLimits(t *testing.T) {
 			MaxContainerLength: 3,
 			Input:              []any{uint64(1), uint64(2), uint64(3), uint64(4), uint64(5)},
 			Output:             []any{uint64(1), uint64(2), uint64(3)},
-			Truncations:        map[TruncationReason][]int{ContainerTooLarge: {5}},
+			Truncations:        map[object.TruncationReason][]int{object.ContainerSize: {5}},
 		},
 		{
 			Name:               "array-max-length-with-invalid",
 			MaxContainerLength: 3,
 			Input:              []any{make(chan any), uint64(1), uint64(2), uint64(3), uint64(4), uint64(5)},
 			Output:             []any{uint64(1), uint64(2), uint64(3)},
-			Truncations:        map[TruncationReason][]int{ContainerTooLarge: {6}},
+			Truncations:        map[object.TruncationReason][]int{object.ContainerSize: {6}},
 		},
 		{
 			Name:               "array-max-length-with-invalid",
 			MaxContainerLength: 3,
 			Input:              []any{uint64(1), uint64(2), uint64(3), uint64(4), uint64(5), make(chan any)},
 			Output:             []any{uint64(1), uint64(2), uint64(3)},
-			Truncations:        map[TruncationReason][]int{ContainerTooLarge: {6}},
+			Truncations:        map[object.TruncationReason][]int{object.ContainerSize: {6}},
 		},
 		{
 			Name:               "struct-max-length",
@@ -573,7 +485,7 @@ func TestEncoderLimits(t *testing.T) {
 				F2 string
 			}{F0: "", F1: "", F2: ""},
 			Output:      map[string]any{"F0": "", "F1": ""},
-			Truncations: map[TruncationReason][]int{ContainerTooLarge: {3}},
+			Truncations: map[object.TruncationReason][]int{object.ContainerSize: {3}},
 		},
 		{
 			Name:               "struct-max-length-with-invalid",
@@ -584,22 +496,22 @@ func TestEncoderLimits(t *testing.T) {
 				F2 chan any
 			}{F0: "", F1: "", F2: make(chan any)},
 			Output:      map[string]any{"F0": "", "F1": ""},
-			Truncations: map[TruncationReason][]int{ContainerTooLarge: {3}},
+			Truncations: map[object.TruncationReason][]int{object.ContainerSize: {3}},
 		},
 		{
 			Name:            "string-max-length",
 			MaxStringLength: 3,
 			Input:           "123456789",
 			Output:          "123",
-			Truncations:     map[TruncationReason][]int{StringTooLong: {9}},
+			Truncations:     map[object.TruncationReason][]int{object.StringLength: {9}},
 		},
 		{
 			Name:            "string-max-length-truncation-leading-to-same-map-keys",
 			MaxStringLength: 1,
 			Input:           map[string]string{"k1": "v11", "k222": "v2222", "k33333": "v333333", "k4444444": "v44444444", "k555555555": "v5555555555"},
 			Output:          map[string]any{"k": "v"},
-			Truncations: map[TruncationReason][]int{
-				StringTooLong: {2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+			Truncations: map[object.TruncationReason][]int{
+				object.StringLength: {2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
 			},
 		},
 		{
@@ -647,20 +559,20 @@ func TestEncoderLimits(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 		encodeTimer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
-		encoder, err := newEncoder(EncoderConfig{
-			Pinner:           &pinner,
-			Timer:            encodeTimer,
-			MaxObjectDepth:   maxValueDepth,
-			MaxStringSize:    maxStringLength,
-			MaxContainerSize: maxContainerLength,
+		encoder, err := NewEncoder(object.EncoderConfig{
+			Pinner:            &pinner,
+			Timer:             encodeTimer,
+			MaxContainerDepth: maxValueDepth,
+			MaxStringLength:   maxStringLength,
+			MaxContainerSize:  maxContainerLength,
 		})
 
 		require.NoError(t, err)
 
 		encoded := &bindings.WAFObject{}
 		encoded, err = encoder.Encode(tc.Input)
-		t.Run(tc.Name+"/assert", func(t *testing.T) {
-			require.Equal(t, tc.Truncations, sortValues(encoder.truncations))
+		t.Run(tc.Name, func(t *testing.T) {
+			require.Equal(t, tc.Truncations, sortValues(encoder.Truncations()))
 
 			if tc.EncodeError != nil {
 				require.Error(t, err, "expected an encoding error when encoding %v", tc.EncodeError)
@@ -679,10 +591,6 @@ func TestEncoderLimits(t *testing.T) {
 
 			require.NoError(t, err, "unexpected error when decoding: %v", err)
 			require.Equal(t, tc.Output, val, "expected %v, got %v", tc.Output, val)
-		})
-
-		t.Run(tc.Name+"/run", func(t *testing.T) {
-			wafTest(t, encoded)
 		})
 	}
 }
@@ -872,9 +780,9 @@ func TestEncoderTypeTree(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+		encoder, _ := NewEncoder(object.NewUnlimitedEncoderConfig(&pinner))
 		encoded, err := encoder.Encode(tc.Input)
-		t.Run(tc.Name+"/assert", func(t *testing.T) {
+		t.Run(tc.Name, func(t *testing.T) {
 			if tc.Error != nil {
 				require.Error(t, err, "expected an encoding error when encoding %v", tc.Input)
 				require.Equal(t, tc.Error, err)
@@ -884,65 +792,7 @@ func TestEncoderTypeTree(t *testing.T) {
 			require.NoError(t, err, "unexpected error when encoding: %v", err)
 			assertEqualType(t, tc.Output, encoded)
 		})
-
-		t.Run(tc.Name+"/run", func(t *testing.T) {
-			wafTest(t, encoded)
-		})
 	}
-}
-
-// This test needs a working encoder to function properly, as it first encodes the objects before decoding them
-func TestDecoder(t *testing.T) {
-	t.Run("Errors", func(t *testing.T) {
-		var pinner runtime.Pinner
-		defer pinner.Unpin()
-
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
-		objBuilder := func(value any) *bindings.WAFObject {
-			encoded, err := encoder.Encode(value)
-			require.NoError(t, err, "Encoding object failed")
-			return encoded
-		}
-
-		for _, tc := range []struct {
-			Name          string
-			ExpectedValue map[string][]string
-		}{
-			{
-				Name:          "empty",
-				ExpectedValue: nil,
-			},
-			{
-				Name: "one-empty-entry",
-				ExpectedValue: map[string][]string{
-					"afasdfafs": nil,
-				},
-			},
-			{
-				Name: "one-filled-entry",
-				ExpectedValue: map[string][]string{
-					"afasdfafs": {"rule1", "rule2"},
-				},
-			},
-			{
-				Name: "multiple-entries",
-				ExpectedValue: map[string][]string{
-					"afasdfafs": {"rule1", "rule2"},
-					"sfdsafdsa": {"rule3", "rule4"},
-				},
-			},
-		} {
-			t.Run(tc.Name, func(t *testing.T) {
-				input := tc.ExpectedValue
-				if input == nil {
-					input = map[string][]string{} // So it encodes to an empty map, not nil.
-				}
-				val, err := decodeErrors(objBuilder(input))
-				require.NoErrorf(t, err, "Error decoding the object: %v", err)
-				require.Equal(t, tc.ExpectedValue, val)
-			})
-		}
-	})
 }
 
 func TestResolvePointer(t *testing.T) {

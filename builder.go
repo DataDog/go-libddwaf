@@ -11,6 +11,8 @@ import (
 	"runtime"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v4/object"
+	"github.com/DataDog/go-libddwaf/v4/object/reflect"
 )
 
 // Builder manages an evolving WAF configuration over time. Its lifecycle is
@@ -72,9 +74,9 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
-	encoder, err := newEncoder(newUnlimitedEncoderConfig(&pinner))
+	encoder, err := reflect.NewEncoder(object.NewUnlimitedEncoderConfig(&pinner))
 	if err != nil {
-		return Diagnostics{}, fmt.Errorf("could not create encoder: %w", err)
+		return Diagnostics{}, fmt.Errorf("could not create Encoder: %w", err)
 	}
 
 	frag, err := encoder.Encode(fragment)

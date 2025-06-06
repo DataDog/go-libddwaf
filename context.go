@@ -14,6 +14,8 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/pin"
+	"github.com/DataDog/go-libddwaf/v4/object"
+	"github.com/DataDog/go-libddwaf/v4/object/reflect"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
@@ -35,7 +37,7 @@ type Context struct {
 	mutex sync.Mutex
 
 	// truncations provides details about truncations that occurred while encoding address data for the WAF execution.
-	truncations map[TruncationReason][]int
+	truncations map[object.TruncationReason][]int
 
 	// pinner is used to retain Go data that is being passed to the WAF as part of
 	// [RunAddressData.Persistent] until the [Context.Close] method results in the context being
@@ -59,6 +61,10 @@ type RunAddressData struct {
 	// TimerKey is the key used to track the time spent in the WAF for this run.
 	// If left empty, a new timer with unlimited budget is started.
 	TimerKey timer.Key
+
+	// NewEncoder is a function that creates a new Encoder for this run. If left empty, the default
+	// Encoder is used: [reflect.NewEncoder].
+	NewEncoder object.NewEncoder
 }
 
 func (d RunAddressData) isEmpty() bool {
@@ -102,6 +108,10 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 		return Result{}, waferrors.ErrTimeout
 	}
 
+	if addressData.NewEncoder == nil {
+		addressData.NewEncoder = reflect.NewEncoder
+	}
+
 	runTimer, err := addressData.newTimer(context.Timer)
 	if err != nil {
 		return Result{}, err
@@ -118,17 +128,17 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	wafEncodeTimer.Start()
 	defer wafEncodeTimer.Stop()
 
-	persistentData, err := context.encodeOneAddressType(&context.pinner, addressData.Persistent, wafEncodeTimer)
+	persistentData, err := context.encodeOneAddressType(&context.pinner, addressData.NewEncoder, addressData.Persistent, wafEncodeTimer)
 	if err != nil {
 		return Result{}, err
 	}
 
 	// The WAF releases ephemeral address data at the max of each run call, so we need not keep the Go
 	// values live beyond that in the same way we need for persistent data. We hence use a separate
-	// encoder.
+	// Encoder.
 	var ephemeralPinner runtime.Pinner
 	defer ephemeralPinner.Unpin()
-	ephemeralData, err := context.encodeOneAddressType(&ephemeralPinner, addressData.Ephemeral, wafEncodeTimer)
+	ephemeralData, err := context.encodeOneAddressType(&ephemeralPinner, addressData.NewEncoder, addressData.Ephemeral, wafEncodeTimer)
 	if err != nil {
 		return Result{}, err
 	}
@@ -188,26 +198,26 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // encodeOneAddressType encodes the given addressData values and returns the corresponding WAF
 // object and its refs. If the addressData is empty, it returns nil for the WAF object and an empty
 // ref pool.
-// At this point, if the encoder does not timeout, the only error we can get is an error in case the
+// At this point, if the Encoder does not timeout, the only error we can get is an error in case the
 // top level object is a nil map, but this  behaviour is expected since either persistent or
 // ephemeral addresses are allowed to be null one at a time. In this case, Encode will return nil,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
-func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[string]any, timer timer.Timer) (*bindings.WAFObject, error) {
+func (context *Context) encodeOneAddressType(pinner pin.Pinner, newEncoder object.NewEncoder, addressData map[string]any, timer timer.Timer) (*bindings.WAFObject, error) {
 	if addressData == nil {
 		return nil, nil
 	}
 
-	encoder, err := newEncoder(newEncoderConfig(pinner, timer))
+	encoder, err := newEncoder(object.NewEncoderConfig(pinner, timer))
 	if err != nil {
-		return nil, fmt.Errorf("could not create encoder: %w", err)
+		return nil, fmt.Errorf("could not create Encoder: %w", err)
 	}
 
 	data, _ := encoder.Encode(addressData)
-	if len(encoder.truncations) > 0 {
+	if len(encoder.Truncations()) > 0 {
 		context.mutex.Lock()
 		defer context.mutex.Unlock()
 
-		context.truncations = merge(context.truncations, encoder.truncations)
+		context.truncations = merge(context.truncations, encoder.Truncations())
 	}
 
 	if timer.Exhausted() {
@@ -335,7 +345,7 @@ func (context *Context) Close() {
 // The key is the truncation reason: either because the object was too deep, the arrays where to large or the strings were too long.
 // The value is a slice of integers, each integer being the original size of the object that was truncated.
 // In case of the [ObjectTooDeep] reason, the original size can only be approximated because of recursive objects.
-func (context *Context) Truncations() map[TruncationReason][]int {
+func (context *Context) Truncations() map[object.TruncationReason][]int {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 

@@ -24,6 +24,8 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/lib"
+	"github.com/DataDog/go-libddwaf/v4/object"
+	"github.com/DataDog/go-libddwaf/v4/object/reflect"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/stretchr/testify/require"
@@ -211,16 +213,16 @@ func newDefaultHandle(rule any) (*Handle, *Diagnostics, error) {
 	return builder.Build(), &diag, nil
 }
 
-func maxWafValueEncoder(cfg EncoderConfig) map[string]any {
+func maxWafValueEncoder(cfg object.EncoderConfig) map[string]any {
 	rnd := rand.New(rand.NewSource(33))
 	buf := make([]byte, bindings.MaxStringLength)
 	rnd.Read(buf)
 	fullstr := string(buf)
 
-	return maxWafValueRec(&cfg, fullstr, cfg.MaxObjectDepth)
+	return maxWafValueRec(&cfg, fullstr, cfg.MaxContainerDepth)
 }
 
-func maxWafValueRec(cfg *EncoderConfig, str string, depth int) map[string]any {
+func maxWafValueRec(cfg *object.EncoderConfig, str string, depth int) map[string]any {
 	data := make(map[string]any, cfg.MaxContainerSize)
 
 	if depth == 0 {
@@ -242,10 +244,10 @@ func TestTimeout(t *testing.T) {
 	require.NotNil(t, waf)
 
 	largeValue := map[string]any{
-		"my.input": maxWafValueEncoder(EncoderConfig{
-			MaxContainerSize: 64,
-			MaxObjectDepth:   2,
-			MaxStringSize:    512,
+		"my.input": maxWafValueEncoder(object.EncoderConfig{
+			MaxContainerSize:  64,
+			MaxContainerDepth: 2,
+			MaxStringLength:   512,
 		}),
 	}
 
@@ -288,7 +290,7 @@ func TestTimeout(t *testing.T) {
 		require.NotZero(t, res.TimerStats[DurationTimeKey])
 	})
 
-	t.Run("timeout-persistent-encoder", func(t *testing.T) {
+	t.Run("timeout-persistent-Encoder", func(t *testing.T) {
 		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)
@@ -300,7 +302,7 @@ func TestTimeout(t *testing.T) {
 		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
 	})
 
-	t.Run("timeout-ephemeral-encoder", func(t *testing.T) {
+	t.Run("timeout-ephemeral-Encoder", func(t *testing.T) {
 		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)
@@ -1231,9 +1233,9 @@ func TestTruncationInformation(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Equal(t, map[TruncationReason][]int{
-		StringTooLong:     {bindings.MaxStringLength + extra + 2, bindings.MaxStringLength + extra},
-		ContainerTooLarge: {bindings.MaxContainerSize + extra + 2, bindings.MaxContainerSize + extra},
+	require.Equal(t, map[object.TruncationReason][]int{
+		object.StringLength:  {bindings.MaxStringLength + extra + 2, bindings.MaxStringLength + extra},
+		object.ContainerSize: {bindings.MaxContainerSize + extra + 2, bindings.MaxContainerSize + extra},
 	}, ctx.truncations)
 }
 
@@ -1247,12 +1249,12 @@ func BenchmarkEncoder(b *testing.B) {
 	defer pinner.Unpin()
 
 	for _, l := range []int{1024, 4096, 8192, 16384} {
-		encoder, _ := newEncoder(EncoderConfig{
-			Pinner:           &pinner,
-			MaxObjectDepth:   10,
-			MaxStringSize:    1 * 1024 * 1024,
-			MaxContainerSize: 100,
-			Timer:            encodeTimer,
+		encoder, _ := reflect.NewEncoder(object.EncoderConfig{
+			Pinner:            &pinner,
+			MaxContainerDepth: 10,
+			MaxStringLength:   1 * 1024 * 1024,
+			MaxContainerSize:  100,
+			Timer:             encodeTimer,
 		})
 		b.Run(fmt.Sprintf("%d", l), func(b *testing.B) {
 			b.ReportAllocs()

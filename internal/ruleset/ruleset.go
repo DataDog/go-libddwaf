@@ -8,12 +8,12 @@ package ruleset
 import (
 	"bytes"
 	"compress/gzip"
-	_ "embed"
+	_ "embed" // For go:embed
 	"runtime"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/json"
-) // For go:embed
+	"github.com/DataDog/go-libddwaf/v4/object/json"
+)
 
 //go:embed recommended.json.gz
 var defaultRuleset []byte
