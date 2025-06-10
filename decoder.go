@@ -143,7 +143,11 @@ func decodeStringArray(obj *bindings.WAFObject) ([]string, error) {
 		return nil, waferrors.ErrNilObjectPtr
 	}
 
-	var strArr []string
+	if obj.NbEntries == 0 {
+		return nil, nil
+	}
+
+	strArr := make([]string, 0, obj.NbEntries)
 	for i := uint64(0); i < obj.NbEntries; i++ {
 		objElem := unsafe.CastWithOffset[bindings.WAFObject](obj.Value, i)
 		if objElem.Type != bindings.WAFStringType {
