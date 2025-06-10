@@ -27,8 +27,11 @@ jobs:
         with:
           app-id: ${{ vars.DD_K9_LIBRARY_GO_APP_ID }}
           private-key: ${{ secrets.DD_K9_LIBRARY_GO_APP_PRIVATE_KEY }}
+          owner: DataDog
+          repositories: appsec-event-rules
+          permission-contents: read
       - name: Update Default Ruleset
-        run: go run -C _tools/ruleset-updater run . -output=${{ github.workspace }}/internal/ruleset/recommended.json.gz
+        run: go -C _tools/ruleset-updater run . -output=${{ github.workspace }}/internal/ruleset/recommended.json.gz
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
       - name: Detect Mutation
