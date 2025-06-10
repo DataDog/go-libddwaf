@@ -28,6 +28,15 @@ jobs:
         run: sudo apt update && sudo apt install -y build-essential
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
+      - name: Generate a GitHub token
+        id: generate-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ vars.DD_K9_LIBRARY_GO_APP_ID }}
+          private-key: ${{ secrets.DD_K9_LIBRARY_GO_APP_PRIVATE_KEY }}
+          owner: DataDog
+          repositories: appsec-event-rules
+          permission-contents: read
       - name: go test
         shell: bash
         run: ./.github/workflows/ci.sh
@@ -35,4 +44,4 @@ jobs:
           DD_APPSEC_WAF_LOG_LEVEL: ${{ matrix.waf-log-level }}
           # We need a GITHUB_TOKEN in order to access the latest release of the AppSec rules from
           # the DataDog/appsec-rules repository.
-          GITHUB_TOKEN: ${{ secrets.ACCESS_RULES_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
