@@ -86,6 +86,13 @@ const (
 // It is highly advised to use the methods on the object to manipulate it and not set the fields manually.
 type WAFObject = bindings.WAFObject
 
+// Expose the maximum default limits for the encoder to be used by custom encoders.
+const (
+	MaxStringLength   = bindings.MaxStringLength
+	MaxContainerDepth = bindings.MaxContainerDepth
+	MaxContainerSize  = bindings.MaxContainerSize
+)
+
 // Encodable represent a type that can encode itself into a WAFObject.
 // The encodable is responsible for using the [pin.Pinner]
 // object passed in the [EncoderConfig] to pin the data referenced by the encoded [bindings.WAFObject].
@@ -127,9 +134,9 @@ func newEncoderConfig(pinner pin.Pinner, timer timer.Timer) EncoderConfig {
 	return EncoderConfig{
 		Pinner:           pinner,
 		Timer:            timer,
-		MaxContainerSize: bindings.MaxContainerSize,
-		MaxStringSize:    bindings.MaxStringLength,
-		MaxObjectDepth:   bindings.MaxContainerDepth,
+		MaxContainerSize: MaxContainerSize,
+		MaxStringSize:    MaxStringLength,
+		MaxObjectDepth:   MaxContainerDepth,
 	}
 }
 
