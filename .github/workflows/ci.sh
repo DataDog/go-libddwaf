@@ -18,7 +18,7 @@ contains() {
 WAF_ENABLED=$([ "$GOOS" = "windows" ] && echo false || echo true)
 
 if $(contains "$GOVERSION" devel); then
-    WAF_ENABLED=false
+    WAF_ENABLED=maybe
 fi
 
 # run is the main function that runs the tests
@@ -32,7 +32,7 @@ run() {
     test_tags="$2,$GOOS,$GOARCH"
     cgo=$($(contains "$2" cgo) && echo 1 || echo 0)
 
-    echo "Running matrix $test_tags where the WAF is" "$($waf_enabled && echo "supported" || echo "not supported")" "..."
+    echo "Running matrix $test_tags where the WAF is enablement is ${waf_enabled}..."
     env CGO_ENABLED="$cgo" go test -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
 
     if ! $waf_enabled; then

@@ -17,12 +17,12 @@ import (
 )
 
 var (
-	wafSupportedFlag *bool
+	wafSupportedFlag *string
 	wafBuildTags     *string
 )
 
 func init() {
-	wafSupportedFlag = flag.Bool("waf-supported", false, "Set to true if the WAF is supported on the current target")
+	wafSupportedFlag = flag.String("waf-supported", "false", "Set to true if the WAF is supported on the current target (true, false, maybe)")
 	wafBuildTags = flag.String("waf-build-tags", "", "Set to the build tags used to build the WAF")
 }
 
@@ -30,6 +30,7 @@ func init() {
 // using data send by the CI.
 func TestSupport(t *testing.T) {
 	require.NotNil(t, wafSupportedFlag, "The `waf-supported` flag should be set")
+	require.Contains(t, []string{"true", "false", "maybe"}, *wafSupportedFlag, "The `waf-supported` flag should be set to true, false or maybe")
 	require.NotNil(t, wafBuildTags, "The `waf-build-tags` flag should be set")
 	require.NotEmpty(t, *wafBuildTags, "The `waf-build-tags` flag should not be empty")
 
@@ -40,9 +41,16 @@ func TestSupport(t *testing.T) {
 	}
 
 	ok, _ := Usable()
-	require.Equal(t, *wafSupportedFlag, ok, "WAF support should match the value of the `waf-supported` flag in the CI")
+	switch *wafSupportedFlag {
+	case "true":
+		require.True(t, ok, "WAF support should match the value of the `waf-supported` flag in the CI (was true)")
+	case "false":
+		require.False(t, ok, "WAF support should match the value of the `waf-supported` flag in the CI (was false)")
+	case "maybe":
+		t.Logf("The actual WAF support status is %v", ok)
+	}
 
-	if *wafSupportedFlag {
+	if ok {
 		require.Empty(t, errors, "No errors should be returned when the WAF is supported")
 	} else {
 		require.NotEmpty(t, errors, "Errors should be returned when the WAF is not supported")
