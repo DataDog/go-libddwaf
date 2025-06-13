@@ -71,7 +71,7 @@ func decodeDiagnostics(obj *bindings.WAFObject) (Diagnostics, error) {
 		case "rules_data":
 			diags.RulesData, err = decodeFeature(objElem)
 		case "exclusion_data":
-			diags.RulesData, err = decodeFeature(objElem)
+			diags.ExclusionData, err = decodeFeature(objElem)
 		case "rules_override":
 			diags.RulesOverrides, err = decodeFeature(objElem)
 		case "processors":
