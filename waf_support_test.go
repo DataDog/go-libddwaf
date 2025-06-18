@@ -11,6 +11,7 @@ import (
 	"flag"
 	"testing"
 
+	"github.com/DataDog/go-libddwaf/v4/internal/log"
 	"github.com/DataDog/go-libddwaf/v4/internal/support"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/stretchr/testify/require"
@@ -52,6 +53,7 @@ func TestSupport(t *testing.T) {
 
 	if ok {
 		require.Empty(t, errors, "No errors should be returned when the WAF is supported")
+		require.NotZero(t, log.CallbackFunctionPointer(), "The log callback function pointer should not be zero when the WAF is supported")
 	} else {
 		require.NotEmpty(t, errors, "Errors should be returned when the WAF is not supported")
 	}
