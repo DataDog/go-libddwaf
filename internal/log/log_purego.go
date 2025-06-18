@@ -16,17 +16,16 @@ import (
 )
 
 var (
-	once            sync.Once
+	once = sync.OnceValue(func() uintptr {
+		return purego.NewCallback(ddwafLogCallbackFn)
+	})
 	functionPointer uintptr
 )
 
 // CallbackFunctionPointer returns a pointer to the log callback function which
 // can be used with libddwaf.
 func CallbackFunctionPointer() uintptr {
-	once.Do(func() {
-		functionPointer = purego.NewCallback(ddwafLogCallbackFn)
-	})
-	return functionPointer
+	return once()
 }
 
 func ddwafLogCallbackFn(level Level, fnPtr, filePtr *byte, line uint, msgPtr *byte, _ uint64) {
