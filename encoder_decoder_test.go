@@ -618,8 +618,9 @@ func TestEncoderLimits(t *testing.T) {
 				Ignored     string `json:"-"`
 				Transparent string `json:",omitempty"`
 				Renamed     string `json:"field"`
-			}{Ignored: "1", Transparent: "2", Renamed: "3"},
-			Output: map[string]any{"Transparent": "2", "field": "3"},
+				LiteralDash string `json:"-,"`
+			}{Ignored: "1", Transparent: "2", Renamed: "3", LiteralDash: "4"},
+			Output: map[string]any{"Transparent": "2", "field": "3", "-": "4"},
 		},
 		{
 			Name: "xml-tagged",

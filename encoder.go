@@ -316,15 +316,18 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 		if !ok {
 			continue
 		}
+		if tag == "-" {
+			// Explicitly ignored, note that only "-" causes the field to be ignored,
+			// any qualifier ("-,omitempty" or event "-,") will cause the field to be
+			// actually named "-" instead of being ignored.
+			return "", false
+		}
 		contentTypeTag = true
 		tag, _, _ = strings.Cut(tag, ",")
 		switch tag {
 		case "":
 			// Nothing to do
 			continue
-		case "-":
-			// Explicitly ignored
-			return "", false
 		default:
 			return tag, true
 		}
