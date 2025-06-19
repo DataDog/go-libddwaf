@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build !cgo && (darwin || freebsd) && !datadog.no_waf && !go1.26
+//go:build (linux || darwin) && (amd64 || arm64) && !go1.26 && !datadog.no_waf && !cgo && appsec
 
 package log
 
@@ -16,17 +16,16 @@ import (
 )
 
 var (
-	once            sync.Once
+	once = sync.OnceValue(func() uintptr {
+		return purego.NewCallback(ddwafLogCallbackFn)
+	})
 	functionPointer uintptr
 )
 
 // CallbackFunctionPointer returns a pointer to the log callback function which
 // can be used with libddwaf.
 func CallbackFunctionPointer() uintptr {
-	once.Do(func() {
-		functionPointer = purego.NewCallback(ddwafLogCallbackFn)
-	})
-	return functionPointer
+	return once()
 }
 
 func ddwafLogCallbackFn(level Level, fnPtr, filePtr *byte, line uint, msgPtr *byte, _ uint64) {
