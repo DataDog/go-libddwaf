@@ -32,7 +32,7 @@ jobs:
         go-version: ${{ fromJson(needs.go-versions-matrix.outputs.json) }}
         include:
           # Test with DD_APPSEC_WAF_LOG_LEVEL (only latest go version)
-          - go-version: oldstable
+          - go-version: stable
             waf-log-level: TRACE
     name: ${{ matrix.runs-on }} ${{ matrix.go-version }}${{ matrix.waf-log-level && format(' (DD_APPSEC_WAF_LOG_LEVEL={0})', matrix.waf-log-level) || '' }}
     runs-on: ${{ matrix.runs-on }}
