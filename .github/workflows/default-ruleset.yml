@@ -11,8 +11,8 @@ jobs:
   update:
     runs-on: ubuntu-latest
     name: Update
-    outputs:
-      mutation-happened: ${{ steps.detect.outputs.mutation-happened }}
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -21,7 +21,7 @@ jobs:
         with:
           go-version: oldstable
           cache-dependency-path: _tools/ruleset-updater/go.mod
-      - name: Generate a GitHub token
+      - name: Generate a GitHub token (DataDog/appsec-event-rules)
         id: generate-token
         uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
         with:
@@ -55,13 +55,15 @@ jobs:
           git fetch origin "${branch}"
         env:
           VERSION: ${{ steps.ruleset.outputs.version }}
-      - name: Generate a GitHub token
+      - name: Generate a GitHub token (${{ github.repository_owner }}/go-libddwaf)
         if: fromJson(steps.detect.outputs.mutation-happened)
         id: generate-token-pr
         uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
         with:
           app-id: ${{ vars.DD_K9_LIBRARY_GO_APP_ID }}
           private-key: ${{ secrets.DD_K9_LIBRARY_GO_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: go-libddwaf
       # We use ghcommit to create signed commits directly using the GitHub API
       - name: Create Commit on PR Branch
         if: fromJson(steps.detect.outputs.mutation-happened)
