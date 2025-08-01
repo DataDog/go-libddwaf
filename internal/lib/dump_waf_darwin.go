@@ -123,5 +123,9 @@ func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 		}
 	}
 
+	if !found {
+		return "", nil, fmt.Errorf("fd %d not found in /dev/fd", fd)
+	}
+
 	return "/dev/fd/" + strconv.Itoa(int(fd)), closer, nil
 }
