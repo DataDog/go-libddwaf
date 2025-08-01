@@ -36,6 +36,7 @@ func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
+	// Create a shared memory file descriptor using shm_open so we can use it to run dlopen(/proc/self/fd/<fd>).
 	fd, _, errno := purego.SyscallN(addr,
 		unsafe.PtrToUintptr(unsafe.Cstring(&pinner, shmAddress)),
 		uintptr(unix.O_CREAT|unix.O_EXCL|unix.O_RDWR),
@@ -45,7 +46,7 @@ func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 		return "", nil, fmt.Errorf("error creating shared memory fd: %w", unix.Errno(errno))
 	}
 
-	closer := func() error {
+	shmUnlink := func() error {
 		symbol, err := purego.Dlsym(purego.RTLD_DEFAULT, "shm_unlink")
 		if err != nil {
 			return fmt.Errorf("error finding shm_unlink symbol: %w", err)
@@ -60,6 +61,8 @@ func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 
 		return nil
 	}
+
+	closer := shmUnlink
 
 	defer func() {
 		if err != nil {
@@ -81,12 +84,28 @@ func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 		return "", nil, fmt.Errorf("error reading gzip data: %w", err)
 	}
 
+	// Grow the shared memory file descriptor to the size of the WAF library.
+	if err := unix.Ftruncate(int(fd), int64(len(src))); err != nil {
+		return "", nil, fmt.Errorf("error truncating shared memory fd: %w", err)
+	}
+
+	// Map the shared memory file descriptor to a memory region.
 	dst, err := unix.Mmap(int(fd), 0, len(src), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("error mapping memory for shared memory fd: %w", err)
+	}
+
+	// Change the closer function to unmap the memory and unlink the shared memory instead of just unlinking it.
+	closer = func() error {
+		return errors.Join(unix.Munmap(dst), shmUnlink())
 	}
 
 	copy(dst, src)
+
+	// Ensure that the data is written to the shared memory file descriptor synchronously.
+	if err := unix.Msync(dst, unix.MS_SYNC); err != nil {
+		return "", nil, fmt.Errorf("error syncing memory for shared memory fd: %w", err)
+	}
 
 	return "/proc/self/fd/" + strconv.Itoa(int(fd)), closer, nil
 }
