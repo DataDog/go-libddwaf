@@ -40,8 +40,8 @@ func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 	// Create a shared memory file descriptor using shm_open so we can use it to run dlopen(/proc/self/fd/<fd>).
 	fd, _, errno := purego.SyscallN(addr,
 		unsafe.PtrToUintptr(unsafe.Cstring(&pinner, shmAddress)),
-		uintptr(unix.O_CREAT|unix.O_EXCL|unix.O_RDWR),
-		uintptr(0o600),
+		uintptr(unix.O_CREAT|unix.O_RDWR),
+		uintptr(unix.S_IRWXU|unix.S_IRWXG|unix.S_IRWXO), // rwx for user, group, and others
 	)
 	if fd < 0 {
 		return "", nil, fmt.Errorf("error creating shared memory fd: %w", unix.Errno(errno))
@@ -107,8 +107,6 @@ func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 	if err := unix.Msync(dst, unix.MS_SYNC); err != nil {
 		return "", nil, fmt.Errorf("error syncing memory for shared memory fd: %w", err)
 	}
-
-	exec.Command("ls", "/dev/fd").Run()
 
 	return "/dev/fd/" + strconv.Itoa(int(fd)), closer, nil
 }
