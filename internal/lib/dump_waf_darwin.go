@@ -27,7 +27,7 @@ const shmAddress = "/libddwaf"
 // It creates a file descriptor in memory and writes the embedded WAF library to it. Then it returns the path the /proc/self/fd/<fd> path
 // to the file. This trick makes us able to load the library without having to write it to disk.
 // Hence, making go-libddwaf work on full read-only filesystems.
-func DumpEmbeddedWAF() (path string, closer func() error, err error) {
+func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 	addr, err := purego.Dlsym(purego.RTLD_DEFAULT, "shm_open")
 	if err != nil {
 		return "", nil, fmt.Errorf("error finding shm_open symbol: %w", err)
@@ -45,7 +45,7 @@ func DumpEmbeddedWAF() (path string, closer func() error, err error) {
 		return "", nil, fmt.Errorf("error creating shared memory fd: %w", unix.Errno(errno))
 	}
 
-	closer = func() error {
+	closer := func() error {
 		symbol, err := purego.Dlsym(purego.RTLD_DEFAULT, "shm_unlink")
 		if err != nil {
 			return fmt.Errorf("error finding shm_unlink symbol: %w", err)
