@@ -10,30 +10,46 @@ package lib
 import (
 	"bytes"
 	"compress/gzip"
-	_ "embed"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"runtime"
+	"strconv"
+
+	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/ebitengine/purego"
+	"golang.org/x/sys/unix"
 )
 
-// DumpEmbeddedWAF for darwin platform.
-// DumpEmbeddedWAF creates a temporary file with the embedded WAF library content and returns the path to the file,
-// a closer function and an error. This is the only way to make all implementations of DumpEmbeddedWAF consistent
-// across all platforms.
+// DumpEmbeddedWAF for darwin systems.
+// It creates a file descriptor in memory and writes the embedded WAF library to it. Then it returns the path the /proc/self/fd/<fd> path
+// to the file. This trick makes us able to load the library without having to write it to disk.
+// Hence, making go-libddwaf work on full read-only filesystems.
 func DumpEmbeddedWAF() (path string, closer func() error, err error) {
-	file, err := os.CreateTemp("", "libddwaf-*.dylib")
+	addr, err := purego.Dlsym(purego.RTLD_DEFAULT, "shm_open")
 	if err != nil {
-		return "", nil, fmt.Errorf("error creating temp file: %w", err)
+		return "", nil, fmt.Errorf("error finding shm_open symbol: %w", err)
 	}
 
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	fd, _, errno := purego.SyscallN(addr,
+		unsafe.PtrToUintptr(unsafe.Cstring(&pinner, "/libddwaf")),
+		uintptr(unix.O_CREAT|unix.O_EXCL|unix.O_RDWR),
+		uintptr(0o600),
+	)
+	if fd < 0 {
+		return "", nil, fmt.Errorf("error creating shared memory fd: %w", unix.Errno(errno))
+	}
+
+	file := os.NewFile(fd, "/proc/self/fd/"+strconv.Itoa(int(fd)))
+
 	defer func() {
-		if err != nil {
+		if file != nil && err != nil {
 			if closeErr := file.Close(); closeErr != nil {
 				err = errors.Join(err, fmt.Errorf("error closing file: %w", closeErr))
-			}
-			if rmErr := os.Remove(file.Name()); rmErr != nil {
-				err = errors.Join(err, fmt.Errorf("error removing file: %w", rmErr))
 			}
 		}
 	}()
@@ -44,7 +60,7 @@ func DumpEmbeddedWAF() (path string, closer func() error, err error) {
 	}
 
 	if _, err := io.Copy(file, gr); err != nil {
-		return "", nil, fmt.Errorf("error copying gzip content to file: %w", err)
+		return "", nil, fmt.Errorf("error copying gzip content to shm: %w", err)
 	}
 
 	if err := gr.Close(); err != nil {
@@ -52,6 +68,16 @@ func DumpEmbeddedWAF() (path string, closer func() error, err error) {
 	}
 
 	return file.Name(), func() error {
-		return errors.Join(file.Close(), os.Remove(file.Name()))
+		symbol, err := purego.Dlsym(purego.RTLD_DEFAULT, "shm_unlink")
+		if err != nil {
+			return fmt.Errorf("error finding shm_unlink symbol: %w", err)
+		}
+
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+		errno := purego.SyscallN(symbol, unsafe.PtrToUintptr(unsafe.Cstring(&pinner, "/libddwaf")))
+		if errno != 0 {
+			return fmt.Errorf("error unlinking shared memory fd: %w", unix.Errno(errno))
+		}
 	}, nil
 }
