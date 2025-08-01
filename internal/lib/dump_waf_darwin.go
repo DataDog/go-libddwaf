@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"runtime"
 	"strconv"
 
@@ -21,7 +22,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const shmAddress = "/libddwaf"
+const shmAddress = "libddwaf"
 
 // DumpEmbeddedWAF for darwin systems.
 // It creates a file descriptor in memory and writes the embedded WAF library to it. Then it returns the path the /proc/self/fd/<fd> path
@@ -105,6 +106,21 @@ func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 	// Ensure that the data is written to the shared memory file descriptor synchronously.
 	if err := unix.Msync(dst, unix.MS_SYNC); err != nil {
 		return "", nil, fmt.Errorf("error syncing memory for shared memory fd: %w", err)
+	}
+
+	entries, err := os.ReadDir("/dev/fd")
+	if err != nil {
+		return "", nil, fmt.Errorf("error reading /dev/fd directory: %w", err)
+	}
+
+	// Check if the fd is present in /dev/fd.
+	found := false
+	for _, entry := range entries {
+		fmt.Println(entry.Name())
+		if entry.Name() == strconv.Itoa(int(fd)) {
+			found = true
+			break
+		}
 	}
 
 	return "/dev/fd/" + strconv.Itoa(int(fd)), closer, nil
