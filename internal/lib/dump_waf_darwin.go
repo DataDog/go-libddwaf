@@ -77,9 +77,11 @@ func DumpEmbeddedWAF() (path string, closer func() error, err error) {
 
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
-		errno := purego.SyscallN(symbol, unsafe.PtrToUintptr(unsafe.Cstring(&pinner, shmAddress)))
+		_, _, errno := purego.SyscallN(symbol, unsafe.PtrToUintptr(unsafe.Cstring(&pinner, shmAddress)))
 		if errno != 0 {
 			return fmt.Errorf("error unlinking shared memory fd: %w", unix.Errno(errno))
 		}
+
+		return nil
 	}, nil
 }
