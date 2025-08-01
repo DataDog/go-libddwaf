@@ -107,5 +107,5 @@ func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 		return "", nil, fmt.Errorf("error syncing memory for shared memory fd: %w", err)
 	}
 
-	return "/proc/self/fd/" + strconv.Itoa(int(fd)), closer, nil
+	return "/dev/fd/" + strconv.Itoa(int(fd)), closer, nil
 }
