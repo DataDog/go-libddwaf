@@ -22,6 +22,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const shmAddress = "/libddwaf"
+
 // DumpEmbeddedWAF for darwin systems.
 // It creates a file descriptor in memory and writes the embedded WAF library to it. Then it returns the path the /proc/self/fd/<fd> path
 // to the file. This trick makes us able to load the library without having to write it to disk.
@@ -36,7 +38,7 @@ func DumpEmbeddedWAF() (path string, closer func() error, err error) {
 	defer pinner.Unpin()
 
 	fd, _, errno := purego.SyscallN(addr,
-		unsafe.PtrToUintptr(unsafe.Cstring(&pinner, "/libddwaf")),
+		unsafe.PtrToUintptr(unsafe.Cstring(&pinner, shmAddress)),
 		uintptr(unix.O_CREAT|unix.O_EXCL|unix.O_RDWR),
 		uintptr(0o600),
 	)
@@ -75,7 +77,7 @@ func DumpEmbeddedWAF() (path string, closer func() error, err error) {
 
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
-		errno := purego.SyscallN(symbol, unsafe.PtrToUintptr(unsafe.Cstring(&pinner, "/libddwaf")))
+		errno := purego.SyscallN(symbol, unsafe.PtrToUintptr(unsafe.Cstring(&pinner, shmAddress)))
 		if errno != 0 {
 			return fmt.Errorf("error unlinking shared memory fd: %w", unix.Errno(errno))
 		}
