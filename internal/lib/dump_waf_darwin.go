@@ -12,8 +12,6 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"runtime"
 	"strconv"
 
@@ -46,30 +44,7 @@ func DumpEmbeddedWAF() (path string, closer func() error, err error) {
 		return "", nil, fmt.Errorf("error creating shared memory fd: %w", unix.Errno(errno))
 	}
 
-	file := os.NewFile(fd, "/proc/self/fd/"+strconv.Itoa(int(fd)))
-
-	defer func() {
-		if file != nil && err != nil {
-			if closeErr := file.Close(); closeErr != nil {
-				err = errors.Join(err, fmt.Errorf("error closing file: %w", closeErr))
-			}
-		}
-	}()
-
-	gr, err := gzip.NewReader(bytes.NewReader(libddwaf))
-	if err != nil {
-		return "", nil, fmt.Errorf("error creating gzip reader: %w", err)
-	}
-
-	if _, err := io.Copy(file, gr); err != nil {
-		return "", nil, fmt.Errorf("error copying gzip content to shm: %w", err)
-	}
-
-	if err := gr.Close(); err != nil {
-		return "", nil, fmt.Errorf("error closing gzip reader: %w", err)
-	}
-
-	return file.Name(), func() error {
+	closer := func() error {
 		symbol, err := purego.Dlsym(purego.RTLD_DEFAULT, "shm_unlink")
 		if err != nil {
 			return fmt.Errorf("error finding shm_unlink symbol: %w", err)
@@ -83,5 +58,29 @@ func DumpEmbeddedWAF() (path string, closer func() error, err error) {
 		}
 
 		return nil
-	}, nil
+	}
+
+	defer func() {
+		if err != nil {
+			if rmErr := closer(); rmErr != nil {
+				err = errors.Join(err, fmt.Errorf("error removing %s: %w", shmAddress, rmErr))
+			}
+		}
+	}()
+
+	dst, err := unix.Mmap(fd, 0, len(libddwaf), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	if err != nil {
+		return "", nil, err
+	}
+
+	gr, err := gzip.NewReader(bytes.NewReader(libddwaf))
+	if err != nil {
+		return "", nil, fmt.Errorf("error creating gzip reader: %w", err)
+	}
+
+	defer gr.Close()
+
+	copy(dst, gr)
+
+	return "/proc/self/fd/" + strconv.Itoa(int(fd)), closer, nil
 }
