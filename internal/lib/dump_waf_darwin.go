@@ -13,7 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"os/exec"
 	"runtime"
 	"strconv"
 
@@ -108,24 +108,7 @@ func DumpEmbeddedWAF() (_ string, _ func() error, err error) {
 		return "", nil, fmt.Errorf("error syncing memory for shared memory fd: %w", err)
 	}
 
-	entries, err := os.ReadDir("/dev/fd")
-	if err != nil {
-		return "", nil, fmt.Errorf("error reading /dev/fd directory: %w", err)
-	}
-
-	// Check if the fd is present in /dev/fd.
-	found := false
-	for _, entry := range entries {
-		fmt.Println(entry.Name())
-		if entry.Name() == strconv.Itoa(int(fd)) {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return "", nil, fmt.Errorf("fd %d not found in /dev/fd", fd)
-	}
+	exec.Command("ls", "/dev/fd").Run()
 
 	return "/dev/fd/" + strconv.Itoa(int(fd)), closer, nil
 }
