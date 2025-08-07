@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -25,34 +24,34 @@ const (
 func Dlopen(path string, flags int) (uintptr, error) {
 	DebugLogSlow("Dlopen(%q, 0x%x)", path, flags)
 	handle, err := purego.Dlopen(path, flags)
-	DebugLogSlow("Dlopen(%q, 0x%x) = %p, %v", path, flags, unsafe.Pointer(handle), err)
+	DebugLogSlow("Dlopen(%q, 0x%x) = 0x%x, %v", path, flags, handle, err)
 	return handle, err
 }
 
 func Dlsym(handle uintptr, name string) (uintptr, error) {
-	DebugLogSlow("Dlsym(%p, %q)", unsafe.Pointer(handle), name)
+	DebugLogSlow("Dlsym(0x%x, %q)", handle, name)
 	ptr, err := purego.Dlsym(handle, name)
-	DebugLogSlow("Dlsym(%p, %q) = %p, %v", unsafe.Pointer(handle), name, unsafe.Pointer(ptr), err)
+	DebugLogSlow("Dlsym(0x%x, %q) = 0x%x, %v", handle, name, ptr, err)
 	return ptr, err
 }
 
 func Dlclose(handle uintptr) error {
-	handlePtr := unsafe.Pointer(handle)
-	DebugLogSlow("Dlclose(%p)", handlePtr)
+	handlePtr := handle
+	DebugLogSlow("Dlclose(0x%x)", handlePtr)
 	err := purego.Dlclose(handle)
-	DebugLogSlow("Dlclose(%p) = %v", handlePtr, err)
+	DebugLogSlow("Dlclose(0x%x) = %v", handlePtr, err)
 	return err
 }
 
 func SyscallN(fn uintptr, args ...uintptr) (uintptr, uintptr, uintptr) {
 	var argsStr string
 	for _, arg := range args {
-		argsStr += fmt.Sprintf(", %p", unsafe.Pointer(arg))
+		argsStr += fmt.Sprintf(", 0x%x", arg)
 	}
 
-	DebugLogSlow("SyscallN(%p%s)", unsafe.Pointer(fn), argsStr)
+	DebugLogSlow("SyscallN(0x%x%s)", fn, argsStr)
 	ret, f, e := purego.SyscallN(fn, args...)
-	DebugLogSlow("SyscallN(%p%s) = %p, %p, %v", unsafe.Pointer(fn), argsStr, unsafe.Pointer(ret), unsafe.Pointer(f), unsafe.Pointer(e))
+	DebugLogSlow("SyscallN(0x%x%s) = 0x%x, 0x%x, 0x%x", fn, argsStr, ret, f, e)
 	return ret, f, e
 }
 
