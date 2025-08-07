@@ -32,12 +32,17 @@ type WAFLib struct {
 // The caller is responsible for calling wafDl.Close on the returned object once they
 // are done with it so that associated resources can be released.
 func NewWAFLib() (dl *WAFLib, err error) {
+	purego.DebugLogSlow("lib.DumpEmbeddedWAF()")
 	path, closer, err := lib.DumpEmbeddedWAF()
+	purego.DebugLogSlow("lib.DumpEmbeddedWAF() = %q, %v", path, err)
 	if err != nil {
 		return nil, fmt.Errorf("dump embedded WAF: %w", err)
 	}
 	defer func() {
-		if rmErr := closer(); rmErr != nil {
+		purego.DebugLogSlow("dylib closer()")
+		rmErr := closer()
+		purego.DebugLogSlow("dylib closer() = %v", err)
+		if rmErr != nil {
 			err = errors.Join(err, fmt.Errorf("error removing %s: %w", path, rmErr))
 		}
 	}()

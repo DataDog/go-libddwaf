@@ -23,24 +23,24 @@ const (
 )
 
 func Dlopen(path string, flags int) (uintptr, error) {
-	debug_log("Dlopen(%q, 0x%x)", path, flags)
+	DebugLogSlow("Dlopen(%q, 0x%x)", path, flags)
 	handle, err := purego.Dlopen(path, flags)
-	debug_log("Dlopen(%q, 0x%x) = %p, %v", path, flags, unsafe.Pointer(handle), err)
+	DebugLogSlow("Dlopen(%q, 0x%x) = %p, %v", path, flags, unsafe.Pointer(handle), err)
 	return handle, err
 }
 
 func Dlsym(handle uintptr, name string) (uintptr, error) {
-	debug_log("Dlsym(%p, %q)", unsafe.Pointer(handle), name)
+	DebugLogSlow("Dlsym(%p, %q)", unsafe.Pointer(handle), name)
 	ptr, err := purego.Dlsym(handle, name)
-	debug_log("Dlsym(%p, %q) = %p, %v", unsafe.Pointer(handle), name, unsafe.Pointer(ptr), err)
+	DebugLogSlow("Dlsym(%p, %q) = %p, %v", unsafe.Pointer(handle), name, unsafe.Pointer(ptr), err)
 	return ptr, err
 }
 
 func Dlclose(handle uintptr) error {
 	handlePtr := unsafe.Pointer(handle)
-	debug_log("Dlclose(%p)", handlePtr)
+	DebugLogSlow("Dlclose(%p)", handlePtr)
 	err := purego.Dlclose(handle)
-	debug_log("Dlclose(%p) = %v", handlePtr, err)
+	DebugLogSlow("Dlclose(%p) = %v", handlePtr, err)
 	return err
 }
 
@@ -50,9 +50,9 @@ func SyscallN(fn uintptr, args ...uintptr) (uintptr, uintptr, uintptr) {
 		argsStr += fmt.Sprintf(", %p", unsafe.Pointer(arg))
 	}
 
-	debug_log("SyscallN(%p%s)", unsafe.Pointer(fn), argsStr)
+	DebugLogSlow("SyscallN(%p%s)", unsafe.Pointer(fn), argsStr)
 	ret, f, e := purego.SyscallN(fn, args...)
-	debug_log("SyscallN(%p%s) = %p, %p, %v", unsafe.Pointer(fn), argsStr, unsafe.Pointer(ret), unsafe.Pointer(f), unsafe.Pointer(e))
+	DebugLogSlow("SyscallN(%p%s) = %p, %p, %v", unsafe.Pointer(fn), argsStr, unsafe.Pointer(ret), unsafe.Pointer(f), unsafe.Pointer(e))
 	return ret, f, e
 }
 
@@ -62,7 +62,7 @@ var (
 	start time.Time
 )
 
-func debug_log(format string, args ...any) {
+func DebugLogSlow(format string, args ...any) {
 	once.Do(func() {
 		var err error
 		filepath := filepath.Join(os.Getenv("HOME"), fmt.Sprintf("libddwaf-purego.%v.log", os.Getpid()))
