@@ -43,7 +43,7 @@ func NewWAFLib() (dl *WAFLib, err error) {
 	}()
 
 	var handle uintptr
-	if handle, err = purego.Dlopen(path, purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
+	if handle, err = purego.Dlopen(path, purego.RTLD_LOCAL|purego.RTLD_NOW); err != nil {
 		return nil, fmt.Errorf("load a dynamic library file: %w", err)
 	}
 
