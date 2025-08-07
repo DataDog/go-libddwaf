@@ -39,7 +39,7 @@ func DumpEmbeddedWAF() (_ string, closer func() error, err error) {
 	for i := 0; i < nbAttempts; i++ {
 		if fp, err = os.Open(path); os.IsNotExist(err) {
 			// The file does not exist, try to create it.
-			if fp, err = os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_EXCL, 0o600); os.IsExist(err) {
+			if fp, err = os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_EXCL, 0o700); os.IsExist(err) {
 				// It was created by another process, try to open it again.
 				continue
 			}
