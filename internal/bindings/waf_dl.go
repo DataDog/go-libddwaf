@@ -15,8 +15,8 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v4/internal/lib"
 	"github.com/DataDog/go-libddwaf/v4/internal/log"
+	"github.com/DataDog/go-libddwaf/v4/internal/purego"
 	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
-	"github.com/ebitengine/purego"
 )
 
 // WAFLib is the type wrapper for all C calls to the waf

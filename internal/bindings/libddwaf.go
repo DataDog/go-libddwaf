@@ -7,7 +7,7 @@
 
 package bindings
 
-import "github.com/ebitengine/purego"
+import "github.com/DataDog/go-libddwaf/v4/internal/purego"
 
 type wafSymbols struct {
 	builderInit              uintptr
