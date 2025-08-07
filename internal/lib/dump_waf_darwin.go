@@ -86,6 +86,16 @@ func DumpEmbeddedWAF() (_ string, closer func() error, err error) {
 			return "", nil, fmt.Errorf("error rlocking file %s: %w", path, err)
 		}
 
+		if fileinfo, err := fp.Stat(); err != nil && fileinfo.Size() < len(libddwaf) {
+			// The file is not written yet, so we need to unlock it and try again.
+			if err = unlock(fp); err != nil {
+				return "", nil, fmt.Errorf("error unlocking file %s: %w", path, err)
+			}
+
+			fp.Close()
+			continue
+		}
+
 		closer = func() error {
 			return errors.Join(unlock(fp), fp.Close())
 		}
