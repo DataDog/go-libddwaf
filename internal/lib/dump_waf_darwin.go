@@ -51,7 +51,11 @@ func DumpEmbeddedWAF() (path string, closer func() error, err error) {
 		return "", nil, fmt.Errorf("error closing gzip reader: %w", err)
 	}
 
+	if err := file.Close(); err != nil {
+		return "", nil, fmt.Errorf("error closing dylib file: %w", err)
+	}
+
 	return file.Name(), func() error {
-		return errors.Join(file.Close(), os.Remove(file.Name()))
+		return os.Remove(file.Name())
 	}, nil
 }
