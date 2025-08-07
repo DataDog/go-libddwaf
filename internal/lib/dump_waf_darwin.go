@@ -19,14 +19,14 @@ import (
 	"syscall"
 )
 
-const libddwafDylibName = "libddwaf.dylib"
+const libddwafDylibName = "libddwaf-%s.dylib"
 
 // DumpEmbeddedWAF for darwin platform.
 // DumpEmbeddedWAF creates a temporary file with the embedded WAF library content and returns the path to the file,
 // a closer function and an error. This is the only way to make all implementations of DumpEmbeddedWAF consistent
 // across all platforms.
 func DumpEmbeddedWAF() (_ string, closer func() error, err error) {
-	path := filepath.Join(os.TempDir(), libddwafDylibName)
+	path := filepath.Join(os.TempDir(), fmt.Sprintf(libddwafDylibName, EmbeddedWAFVersion))
 	var fp *os.File
 	const nbAttempts = 20
 
