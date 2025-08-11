@@ -34,8 +34,6 @@ type Handle struct {
 
 	// Instance of the WAF
 	cHandle bindings.WAFHandle
-
-	wafLib *bindings.WAFLib
 }
 
 // wrapHandle wraps the provided C handle into a [Handle]. The caller is
@@ -43,7 +41,7 @@ type Handle struct {
 // [Handle] has a reference count of 1, so callers need not call [Handle.retain]
 // on it.
 func wrapHandle(cHandle bindings.WAFHandle) *Handle {
-	handle := &Handle{cHandle: cHandle, wafLib: atomicWafLib.Load()}
+	handle := &Handle{cHandle: cHandle}
 	handle.refCounter.Store(1) // We count the handle itself in the counter
 	return handle
 }
@@ -57,7 +55,7 @@ func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error)
 		return nil, fmt.Errorf("handle was released")
 	}
 
-	cContext := handle.wafLib.ContextInit(handle.cHandle)
+	cContext := gWafLib.ContextInit(handle.cHandle)
 	if cContext == 0 {
 		handle.Close() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
 		return nil, fmt.Errorf("could not get C context")
@@ -71,7 +69,6 @@ func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error)
 	return &Context{
 		handle:      handle,
 		cContext:    cContext,
-		wafLib:      handle.wafLib,
 		Timer:       rootTimer,
 		truncations: make(map[TruncationReason][]int, 3),
 	}, nil
@@ -80,13 +77,13 @@ func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error)
 // Addresses returns the list of addresses the WAF has been configured to monitor based on the input
 // ruleset.
 func (handle *Handle) Addresses() []string {
-	return handle.wafLib.KnownAddresses(handle.cHandle)
+	return gWafLib.KnownAddresses(handle.cHandle)
 }
 
 // Actions returns the list of actions the WAF has been configured to monitor based on the input
 // ruleset.
 func (handle *Handle) Actions() []string {
-	return handle.wafLib.KnownActions(handle.cHandle)
+	return gWafLib.KnownActions(handle.cHandle)
 }
 
 // Close decrements the reference counter of this [Handle], possibly allowing it to be destroyed
@@ -98,7 +95,7 @@ func (handle *Handle) Close() {
 		return
 	}
 
-	handle.wafLib.Destroy(handle.cHandle)
+	gWafLib.Destroy(handle.cHandle)
 	handle.cHandle = 0 // Makes it easy to spot use-after-free/double-free issues
 }
 
