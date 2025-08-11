@@ -30,6 +30,7 @@ type Context struct {
 	handle *Handle // Instance of the WAF
 
 	cContext bindings.WAFContext // The C ddwaf_context pointer
+	wafLib   *bindings.WAFLib    // The handle to the WAF library
 
 	// mutex protecting the use of cContext which is not thread-safe and truncations
 	mutex sync.Mutex
@@ -225,12 +226,12 @@ func (context *Context) run(persistentData, ephemeralData *bindings.WAFObject, r
 
 	var result bindings.WAFObject
 	pinner.Pin(&result)
-	defer wafLib.ObjectFree(&result)
+	defer context.wafLib.ObjectFree(&result)
 
 	// The value of the timeout cannot exceed 2^55
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
 	timeout := uint64(runTimer.SumRemaining().Microseconds()) & 0x008FFFFFFFFFFFFF
-	ret := wafLib.Run(context.cContext, persistentData, ephemeralData, &result, timeout)
+	ret := context.wafLib.Run(context.cContext, persistentData, ephemeralData, &result, timeout)
 
 	decodeTimer := runTimer.MustLeaf(DecodeTimeKey)
 	decodeTimer.Start()
@@ -324,7 +325,7 @@ func (context *Context) Close() {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
-	wafLib.ContextDestroy(context.cContext)
+	context.wafLib.ContextDestroy(context.cContext)
 	defer context.handle.Close() // Reduce the reference counter of the Handle.
 	context.cContext = 0         // Makes it easy to spot use-after-free/double-free issues
 

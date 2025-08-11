@@ -22,6 +22,7 @@ import (
 // type are safe to call with a nil receiver.
 type Builder struct {
 	handle        bindings.WAFBuilder
+	wafLib        *bindings.WAFLib
 	defaultLoaded bool
 }
 
@@ -35,6 +36,8 @@ func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builde
 		return nil, err
 	}
 
+	wafLib := atomicWafLib.Load()
+
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 	hdl := wafLib.BuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
@@ -43,7 +46,7 @@ func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builde
 		return nil, errors.New("failed to initialize the WAF builder")
 	}
 
-	return &Builder{handle: hdl}, nil
+	return &Builder{handle: hdl, wafLib: wafLib}, nil
 }
 
 // Close releases all resources associated with this builder.
@@ -51,7 +54,7 @@ func (b *Builder) Close() {
 	if b == nil || b.handle == 0 {
 		return
 	}
-	wafLib.BuilderDestroy(b.handle)
+	b.wafLib.BuilderDestroy(b.handle)
 	b.handle = 0
 }
 
@@ -122,9 +125,9 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) addOrUpdateConfig(path string, cfg *bindings.WAFObject) (Diagnostics, error) {
 	var diagnosticsWafObj bindings.WAFObject
-	defer wafLib.ObjectFree(&diagnosticsWafObj)
+	defer b.wafLib.ObjectFree(&diagnosticsWafObj)
 
-	res := wafLib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
+	res := b.wafLib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
 
 	var diags Diagnostics
 	if !diagnosticsWafObj.IsInvalid() {
@@ -150,7 +153,7 @@ func (b *Builder) RemoveConfig(path string) bool {
 		return false
 	}
 
-	return wafLib.BuilderRemoveConfig(b.handle, path)
+	return b.wafLib.BuilderRemoveConfig(b.handle, path)
 }
 
 // ConfigPaths returns the list of currently loaded configuration paths.
@@ -159,7 +162,7 @@ func (b *Builder) ConfigPaths(filter string) []string {
 		return nil
 	}
 
-	return wafLib.BuilderGetConfigPaths(b.handle, filter)
+	return b.wafLib.BuilderGetConfigPaths(b.handle, filter)
 }
 
 // Build creates a new [Handle] instance that uses the current configuration.
@@ -171,7 +174,7 @@ func (b *Builder) Build() *Handle {
 		return nil
 	}
 
-	hdl := wafLib.BuilderBuildInstance(b.handle)
+	hdl := b.wafLib.BuilderBuildInstance(b.handle)
 	if hdl == 0 {
 		return nil
 	}

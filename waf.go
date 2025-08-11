@@ -8,6 +8,7 @@ package libddwaf
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v4/internal/support"
@@ -17,9 +18,11 @@ import (
 // aren't supported by macOS.
 var (
 	// libddwaf's dynamic library handle and entrypoints
-	wafLib *bindings.WAFLib
-	// libddwaf's dlopen error if any
-	wafLoadErr  error
+	atomicWafLib atomic.Pointer[bindings.WAFLib]
+	// libddwaf's dlopen error if any. The pointer will be `nil` until `Load` is
+	// called, and is guaranteed to be non-`nil` after that.
+	atomicWafLoadErr atomic.Pointer[error]
+
 	openWafOnce sync.Once
 )
 
@@ -41,14 +44,18 @@ func Load() (bool, error) {
 	}
 
 	openWafOnce.Do(func() {
-		wafLib, wafLoadErr = bindings.NewWAFLib()
-		if wafLoadErr != nil {
+		lib, err := bindings.NewWAFLib()
+		atomicWafLoadErr.Store(&err)
+		if err != nil {
+			atomicWafLib.Store(nil)
 			return
 		}
-		wafVersion = wafLib.GetVersion()
+		atomicWafLib.Store(lib)
+
+		wafVersion = lib.GetVersion()
 	})
 
-	return wafLib != nil, wafLoadErr
+	return atomicWafLib.Load() != nil, *atomicWafLoadErr.Load()
 }
 
 var wafVersion string
@@ -75,6 +82,11 @@ func Version() string {
 func Usable() (bool, error) {
 	wafSupportErrors := errors.Join(support.WafSupportErrors()...)
 	wafManuallyDisabledErr := support.WafManuallyDisabledError()
+	var wafLoadErr error
 
-	return (wafLib != nil || wafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil, errors.Join(wafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
+	if ptr := atomicWafLoadErr.Load(); ptr != nil {
+		wafLoadErr = *ptr
+	}
+
+	return (atomicWafLib.Load() != nil || wafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil, errors.Join(wafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
 }

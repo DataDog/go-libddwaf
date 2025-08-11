@@ -29,7 +29,7 @@ func TestWafObject(t *testing.T) {
 	_, err := Load()
 	require.NoError(t, err)
 
-	lib := wafLib.Handle()
+	lib := atomicWafLib.Load().Handle()
 
 	t.Run("invalid", func(t *testing.T) {
 		var actual bindings.WAFObject
