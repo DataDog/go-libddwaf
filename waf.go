@@ -16,10 +16,15 @@ import (
 // Globally dlopen() libddwaf only once because several dlopens (eg. in tests)
 // aren't supported by macOS.
 var (
-	// libddwaf's dynamic library handle and entrypoints
-	wafLib *bindings.WAFLib
-	// libddwaf's dlopen error if any
-	wafLoadErr  error
+	// libddwaf's dynamic library handle and entrypoints. This is only safe to
+	// read after calling [Load] or having acquired [gMu].
+	gWafLib *bindings.WAFLib
+	// libddwaf's dlopen error if any. This is only safe to read after calling
+	// [Load] or having acquired [gMu].
+	gWafLoadErr error
+	// Protects the global variables above.
+	gMu sync.Mutex
+
 	openWafOnce sync.Once
 )
 
@@ -41,14 +46,19 @@ func Load() (bool, error) {
 	}
 
 	openWafOnce.Do(func() {
-		wafLib, wafLoadErr = bindings.NewWAFLib()
-		if wafLoadErr != nil {
+		// Acquire the global state mutex so we don't have a race condition with
+		// [Usable] here.
+		gMu.Lock()
+		defer gMu.Unlock()
+
+		gWafLib, gWafLoadErr = bindings.NewWAFLib()
+		if gWafLoadErr != nil {
 			return
 		}
-		wafVersion = wafLib.GetVersion()
+		wafVersion = gWafLib.GetVersion()
 	})
 
-	return wafLib != nil, wafLoadErr
+	return gWafLib != nil, gWafLoadErr
 }
 
 var wafVersion string
@@ -76,5 +86,9 @@ func Usable() (bool, error) {
 	wafSupportErrors := errors.Join(support.WafSupportErrors()...)
 	wafManuallyDisabledErr := support.WafManuallyDisabledError()
 
-	return (wafLib != nil || wafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil, errors.Join(wafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
+	// Acquire the global state mutex as we are not calling [Load] here, so we
+	// need to explicitly avoid a race condition with it.
+	gMu.Lock()
+	defer gMu.Unlock()
+	return (gWafLib != nil || gWafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil, errors.Join(gWafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
 }

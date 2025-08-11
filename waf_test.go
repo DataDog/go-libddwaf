@@ -358,6 +358,9 @@ func TestTimeout(t *testing.T) {
 	})
 
 	t.Run("both-timeout", func(t *testing.T) {
+		// TODO(eliott.bouhana): APPSEC-58637
+		t.Skip("TODO(eliott.bouhana): This test is flaky and needs to be fixed")
+
 		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey, raspTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)

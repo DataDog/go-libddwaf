@@ -37,7 +37,7 @@ func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builde
 
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
-	hdl := wafLib.BuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
+	hdl := gWafLib.BuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
 
 	if hdl == 0 {
 		return nil, errors.New("failed to initialize the WAF builder")
@@ -51,7 +51,7 @@ func (b *Builder) Close() {
 	if b == nil || b.handle == 0 {
 		return
 	}
-	wafLib.BuilderDestroy(b.handle)
+	gWafLib.BuilderDestroy(b.handle)
 	b.handle = 0
 }
 
@@ -122,9 +122,9 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) addOrUpdateConfig(path string, cfg *bindings.WAFObject) (Diagnostics, error) {
 	var diagnosticsWafObj bindings.WAFObject
-	defer wafLib.ObjectFree(&diagnosticsWafObj)
+	defer gWafLib.ObjectFree(&diagnosticsWafObj)
 
-	res := wafLib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
+	res := gWafLib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
 
 	var diags Diagnostics
 	if !diagnosticsWafObj.IsInvalid() {
@@ -150,7 +150,7 @@ func (b *Builder) RemoveConfig(path string) bool {
 		return false
 	}
 
-	return wafLib.BuilderRemoveConfig(b.handle, path)
+	return gWafLib.BuilderRemoveConfig(b.handle, path)
 }
 
 // ConfigPaths returns the list of currently loaded configuration paths.
@@ -159,7 +159,7 @@ func (b *Builder) ConfigPaths(filter string) []string {
 		return nil
 	}
 
-	return wafLib.BuilderGetConfigPaths(b.handle, filter)
+	return gWafLib.BuilderGetConfigPaths(b.handle, filter)
 }
 
 // Build creates a new [Handle] instance that uses the current configuration.
@@ -171,7 +171,7 @@ func (b *Builder) Build() *Handle {
 		return nil
 	}
 
-	hdl := wafLib.BuilderBuildInstance(b.handle)
+	hdl := gWafLib.BuilderBuildInstance(b.handle)
 	if hdl == 0 {
 		return nil
 	}
