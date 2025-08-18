@@ -25,7 +25,7 @@ jobs:
   smoke-tests:
     if: "!contains(github.event.pull_request.labels.*.name, 'skip-smoke-tests')"
     name: Smoke Tests
-    uses: DataDog/dd-trace-go/.github/workflows/smoke-tests.yml@main
+    uses: DataDog/dd-trace-go/.github/workflows/smoke-tests.yml@9987c40fded9bb795b7ac0e11e5ed93dc8aa94a3 # main
     with:
       ref: main
       go-libddwaf-ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
