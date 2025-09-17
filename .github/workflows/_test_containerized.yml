@@ -29,8 +29,8 @@ jobs:
         image:
           # Standard golang images
           - golang:{0}-alpine
+          - golang:{0}-trixie
           - golang:{0}-bookworm
-          - golang:{0}-bullseye
         go-version:
           - ${{ needs.go-versions.outputs.stable }}
           - ${{ needs.go-versions.outputs.oldstable }}
@@ -41,23 +41,8 @@ jobs:
             waf-log-level: TRACE
     name: ${{ matrix.arch }} ${{ format(matrix.image, matrix.go-version) }} go${{ matrix.go-version }}${{ matrix.waf-log-level && format(' (DD_APPSEC_WAF_LOG_LEVEL={0})', matrix.waf-log-level) || '' }}
     # We use ARM runners when needed to avoid the performance hit of QEMU
-    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'arm-4core-linux' }}
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     steps:
-      # Docker is not present on early-access ARM runners
-      - name: Prepare ARM Runner
-        if: matrix.arch == 'arm64'
-        run: |-
-          for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove -y $pkg || echo "Not present: $pkg"; done
-
-          sudo apt update
-          sudo apt install -y ca-certificates curl
-          sudo install -m 0755 -d /etc/apt/keyrings
-          sudo curl -fsSL "https://download.docker.com/linux/ubuntu/gpg" -o /etc/apt/keyrings/docker.asc
-          sudo chmod a+r /etc/apt/keyrings/docker.asc
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list
-          sudo apt update
-          sudo apt install -y docker-ce docker-ce-cli containerd.io
-
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
         with:
