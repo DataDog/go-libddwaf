@@ -56,4 +56,6 @@ func (*WAFLib) Run(WAFContext, *WAFObject, *WAFObject, *WAFObject, uint64) WAFRe
 	return WAFErrInternal
 }
 
+func (waf *WAFLib) ObjectFromJSON(obj *WAFObject, json []byte) bool { return false }
+
 func (*WAFLib) Handle() uintptr { return 0 }
