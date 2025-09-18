@@ -37,8 +37,8 @@ jobs:
     name: ${{ matrix.runs-on }} ${{ matrix.go-version }}${{ matrix.waf-log-level && format(' (DD_APPSEC_WAF_LOG_LEVEL={0})', matrix.waf-log-level) || '' }}
     runs-on: ${{ matrix.runs-on }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
