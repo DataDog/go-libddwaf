@@ -297,8 +297,8 @@ func TestBuilder(t *testing.T) {
 		require.NotEmpty(t, res.Events)
 		require.Equal(t,
 			map[string]any{"block_request": map[string]any{
-				"grpc_status_code": "10",
-				"status_code":      "403",
+				"grpc_status_code": uint64(10),
+				"status_code":      uint64(403),
 				"type":             "auto",
 			}},
 			res.Actions,

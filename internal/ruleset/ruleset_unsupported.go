@@ -9,11 +9,10 @@ package ruleset
 
 import (
 	"errors"
-	"runtime"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 )
 
-func DefaultRuleset(pinner *runtime.Pinner) (bindings.WAFObject, error) {
+func DefaultRuleset() (bindings.WAFObject, error) {
 	return bindings.WAFObject{}, errors.New("the default ruleset is not available on unsupported platforms")
 }

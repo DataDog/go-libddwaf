@@ -22,7 +22,7 @@ func TestDefaultRuleset(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
-	rs, err := DefaultRuleset(&pinner)
+	rs, err := DefaultRuleset()
 	require.NoError(t, err)
 	require.NotNil(t, rs)
 
