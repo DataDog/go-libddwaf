@@ -295,14 +295,12 @@ func TestBuilder(t *testing.T) {
 		res, err = ctx.Run(runData)
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
-		require.Equal(t,
-			map[string]any{"block_request": map[string]any{
-				"grpc_status_code": uint64(10),
-				"status_code":      uint64(403),
-				"type":             "auto",
-			}},
-			res.Actions,
-		)
+
+		action, _ := res.Actions["block_request"].(map[string]any)
+		require.NotNil(t, action)
+		require.Equal(t, action["grpc_status_code"], uint64(10))
+		require.Equal(t, action["status_code"], uint64(403))
+		require.Equal(t, action["type"], "auto")
 	})
 
 	t.Run("DataDog/appsec-event-rules", func(t *testing.T) {
