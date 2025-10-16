@@ -41,7 +41,9 @@ jobs:
         id: detect
         run: |-
           git add .
-          git diff --staged --patch --exit-code || echo "mutation-happened=true" >> "${GITHUB_OUTPUT}"
+          mutated='false'
+          git diff --staged --patch --exit-code || mutated='true'
+          echo "mutation-happened=${mutated}" >> "${GITHUB_OUTPUT}"
 
       ##########################################################################
       # Creating a PR with the changes if there are any
