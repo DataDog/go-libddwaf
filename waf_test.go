@@ -26,6 +26,7 @@ import (
 	"github.com/DataDog/go-libddwaf/v4/internal/lib"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1285,4 +1286,58 @@ func BenchmarkEncoder(b *testing.B) {
 			}
 		})
 	}
+}
+
+func TestProcessorOverrides(t *testing.T) {
+	rules := `{
+	"processor_overrides": [
+		{
+			"target": [{ "id": "extract-content" }],
+			"scanners": {
+				"include": [
+					{ "id": "test-scanner-001" },
+					{ "id": "test-scanner-custom-001" }
+				],
+				"exclude": []
+			}
+		}
+	],
+	"scanners": [
+		{
+			"id": "test-scanner-custom-001",
+			"name": "Custom scanner",
+			"key": {
+				"operator": "match_regex",
+				"parameters": {
+					"regex": "\\btestcard\\b",
+					"options": { "case_sensitive": false, "min_length": 2 }
+				}
+			},
+			"value": {
+				"operator": "match_regex",
+				"parameters": {
+					"regex": "\\b1234567890\\b",
+					"options": { "case_sensitive": false, "min_length": 5 }
+				}
+			},
+			"tags": { "type": "card", "category": "testcategory" }
+		}
+	]
+}`
+
+	builder, err := NewBuilder("", "")
+	require.NoError(t, err)
+
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal([]byte(rules), &parsed))
+	diag, err := builder.AddOrUpdateConfig("/", parsed)
+	require.NoError(t, err)
+	assert.Equal(t, &Feature{
+		Errors:   nil,
+		Warnings: nil,
+		Error:    "",
+		Loaded:   []string{"index:0"},
+		Failed:   nil,
+		Skipped:  nil,
+	}, diag.ProcessorOverrides)
 }

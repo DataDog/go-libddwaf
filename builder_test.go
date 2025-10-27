@@ -10,6 +10,7 @@ package libddwaf
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"maps"
 	"net/http"
 	"os"
@@ -317,7 +318,10 @@ func TestBuilder(t *testing.T) {
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(t, http.StatusOK, resp.StatusCode, "failed to get latest release of DataDog/appsec-event-rules: %s\n%s", resp.Status, func() string {
+			body, _ := io.ReadAll(resp.Body)
+			return string(body)
+		}())
 
 		var release struct {
 			TagName string `json:"tag_name"`
