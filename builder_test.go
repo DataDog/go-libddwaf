@@ -317,7 +317,7 @@ func TestBuilder(t *testing.T) {
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(t, http.StatusOK, resp.StatusCode, "failed to get latest release of DataDog/appsec-event-rules: %s", resp.Status)
 
 		var release struct {
 			TagName string `json:"tag_name"`

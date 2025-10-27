@@ -33,3 +33,23 @@ func TestDecodeDiagnosticsExclusionData(t *testing.T) {
 	require.NotNil(t, diags.ExclusionData)
 	require.Contains(t, diags.ExclusionData.Loaded, "id1")
 }
+
+func TestDecodeProcessorOverrides(t *testing.T) {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	encoder, err := newEncoder(newUnlimitedEncoderConfig(&pinner))
+	require.NoError(t, err)
+
+	obj, err := encoder.Encode(map[string]any{
+		"processor_overrides": map[string]any{
+			"loaded": []any{"id1"},
+		},
+	})
+	require.NoError(t, err)
+
+	diags, err := decodeDiagnostics(obj)
+	require.NoError(t, err)
+	require.NotNil(t, diags.ProcessorOverrides)
+	require.Contains(t, diags.ProcessorOverrides.Loaded, "id1")
+}
