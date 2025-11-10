@@ -663,6 +663,13 @@ func TestActions(t *testing.T) {
 			for _, aType := range expectedActionsTypes {
 				require.Contains(t, res.Actions, aType)
 			}
+			if action, ok := res.Actions["block_request"]; ok {
+				actionMap, ok := action.(map[string]any)
+				require.True(t, ok)
+				securityResponseID, ok := actionMap["security_response_id"].(string)
+				require.True(t, ok)
+				require.NotEmpty(t, securityResponseID)
+			}
 		}
 	}
 
