@@ -301,6 +301,7 @@ func TestBuilder(t *testing.T) {
 		require.Equal(t, action["grpc_status_code"], uint64(10))
 		require.Equal(t, action["status_code"], uint64(403))
 		require.Equal(t, action["type"], "auto")
+		require.NotEmpty(t, action["security_response_id"])
 	})
 
 	t.Run("DataDog/appsec-event-rules", func(t *testing.T) {
