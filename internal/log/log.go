@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // Level replicates the definition of `DDWAF_LOG_LEVEL` from `ddwaf.h`.
@@ -65,33 +66,34 @@ func (l Level) String() string {
 	}
 }
 
-var filter *regexp.Regexp
-
-func logMessage(level Level, function, file string, line uint, message string) {
-	entry := fmt.Sprintf("[%s] libddwaf @ %s:%d (%s): %s", level, file, line, function, message)
-
-	if filter != nil && !filter.MatchString(entry) {
-		return
-	}
-
-	log.Println(entry)
-}
-
 const EnvVarLogLevel = "DD_APPSEC_WAF_LOG_LEVEL"
 
-func init() {
+// getFilter lazily initializes and returns the log filter regexp.
+// This is thread-safe and the initialization happens only once.
+var getFilter = sync.OnceValue(func() *regexp.Regexp {
 	const envVarFilter = "DD_APPSEC_WAF_LOG_FILTER"
 
 	if val := os.Getenv(EnvVarLogLevel); val == "" {
 		// No log level configured, don't even attempt parsing the regexp.
-		return
+		return nil
 	}
 
 	if val := os.Getenv(envVarFilter); val != "" {
-		var err error
-		filter, err = regexp.Compile(val)
+		filter, err := regexp.Compile(val)
 		if err != nil {
 			log.Fatalf("invalid %s value: %v", envVarFilter, err)
 		}
+		return filter
 	}
+	return nil
+})
+
+func logMessage(level Level, function, file string, line uint, message string) {
+	entry := fmt.Sprintf("[%s] libddwaf @ %s:%d (%s): %s", level, file, line, function, message)
+
+	if filter := getFilter(); filter != nil && !filter.MatchString(entry) {
+		return
+	}
+
+	log.Println(entry)
 }

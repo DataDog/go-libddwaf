@@ -6,7 +6,7 @@
 package libddwaf
 
 import (
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 )
 
 // Load loads libddwaf's dynamic library. The dynamic library is opened only

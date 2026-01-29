@@ -10,7 +10,7 @@ package log
 import (
 	"sync"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v5/internal/unsafe"
 
 	"github.com/ebitengine/purego"
 )

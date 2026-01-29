@@ -81,6 +81,12 @@ func NativeToUintptr[T any](x T) uintptr {
 	return *(*uintptr)(unsafe.Pointer(&x))
 }
 
+// NativeToUint64 converts a native value to uint64 via reinterpretation.
+// Useful for encoding float64 values into WAFObject data.
+func NativeToUint64[T any](x T) uint64 {
+	return *(*uint64)(unsafe.Pointer(&x))
+}
+
 // UintToNative is a helper used retrieve Go values from an uintptr encoded
 // value from a WafObject
 func UintptrToNative[T any](x uintptr) T {

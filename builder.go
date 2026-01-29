@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/ruleset"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/ruleset"
 )
 
 // Builder manages an evolving WAF configuration over time. Its lifecycle is
@@ -30,14 +30,14 @@ type Builder struct {
 // up-to-date view of the current coniguration with low overhead. Returns nil if
 // an error occurs when initializing the builder. The caller is responsible for
 // calling [Builder.Close] when the builder is no longer needed.
-func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builder, error) {
+//
+// v2: Builder no longer takes obfuscator configuration parameters.
+func NewBuilder() (*Builder, error) {
 	if ok, err := Load(); !ok {
 		return nil, err
 	}
 
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-	hdl := bindings.Lib.BuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
+	hdl := bindings.Lib.BuilderInit()
 
 	if hdl == 0 {
 		return nil, errors.New("failed to initialize the WAF builder")
@@ -66,7 +66,7 @@ const defaultRecommendedRulesetPath = "::/go-libddwaf/default/recommended.json"
 // receiving [Builder], and returns the [Diagnostics] produced in the process.
 func (b *Builder) AddDefaultRecommendedRuleset() (Diagnostics, error) {
 	defaultRuleset, err := ruleset.DefaultRuleset()
-	defer bindings.Lib.ObjectFree(&defaultRuleset)
+	defer bindings.Lib.ObjectDestroy(&defaultRuleset, bindings.Lib.DefaultAllocator())
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("failed to load default recommended ruleset: %w", err)
 	}
@@ -120,7 +120,7 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) addOrUpdateConfig(path string, cfg *bindings.WAFObject) (Diagnostics, error) {
 	var diagnosticsWafObj bindings.WAFObject
-	defer bindings.Lib.ObjectFree(&diagnosticsWafObj)
+	defer bindings.Lib.ObjectDestroy(&diagnosticsWafObj, bindings.Lib.DefaultAllocator())
 
 	res := bindings.Lib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
 

@@ -11,79 +11,263 @@ package libddwaf
 import (
 	"runtime"
 	"testing"
+	"unsafe"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 
-	"github.com/ebitengine/purego"
 	"github.com/stretchr/testify/require"
 )
 
-func getSymbol(t *testing.T, lib uintptr, symbol string) uintptr {
-	sym, err := purego.Dlsym(lib, symbol)
-	require.NoError(t, err)
-	return sym
-}
-
-func TestWafObject(t *testing.T) {
+// TestWafObjectSize verifies that our WAFObject struct matches the v2 16-byte size
+func TestWafObjectSize(t *testing.T) {
 	_, err := Load()
 	require.NoError(t, err)
 
-	lib := bindings.Lib.Handle()
+	// v2: WAFObject must be exactly 16 bytes
+	require.Equal(t, 16, int(unsafe.Sizeof(bindings.WAFObject{})), "WAFObject must be 16 bytes")
+
+	// v2: WAFObjectKV must be exactly 32 bytes (key + value, both 16 bytes)
+	require.Equal(t, 32, int(unsafe.Sizeof(bindings.WAFObjectKV{})), "WAFObjectKV must be 32 bytes")
+}
+
+// TestWafObjectSetAndGet tests that our Go methods correctly encode and decode values
+func TestWafObjectSetAndGet(t *testing.T) {
+	_, err := Load()
+	require.NoError(t, err)
 
 	t.Run("invalid", func(t *testing.T) {
-		var actual bindings.WAFObject
-		expected := bindings.WAFObject{
-			Type: bindings.WAFInvalidType,
-		}
-		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_invalid"), unsafe.PtrToUintptr(&actual))
-		require.NotEqualValues(t, 0, r1)
-		require.Equal(t, expected, actual)
+		var obj bindings.WAFObject
+		obj.SetInvalid()
+		require.True(t, obj.IsInvalid())
+		require.Equal(t, bindings.WAFInvalidType, obj.Type())
+	})
+
+	t.Run("nil", func(t *testing.T) {
+		var obj bindings.WAFObject
+		obj.SetNil()
+		require.True(t, obj.IsNil())
+		require.Equal(t, bindings.WAFNilType, obj.Type())
+	})
+
+	t.Run("bool_true", func(t *testing.T) {
+		var obj bindings.WAFObject
+		obj.SetBool(true)
+		require.True(t, obj.IsBool())
+		require.Equal(t, bindings.WAFBoolType, obj.Type())
+		val, err := obj.BoolValue()
+		require.NoError(t, err)
+		require.True(t, val)
+	})
+
+	t.Run("bool_false", func(t *testing.T) {
+		var obj bindings.WAFObject
+		obj.SetBool(false)
+		require.True(t, obj.IsBool())
+		val, err := obj.BoolValue()
+		require.NoError(t, err)
+		require.False(t, val)
 	})
 
 	t.Run("int", func(t *testing.T) {
-		var actual bindings.WAFObject
-		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_signed"), unsafe.PtrToUintptr(&actual), 42)
-		require.NotEqualValues(t, 0, r1)
-		require.EqualValues(t, 42, actual.Value)
-		require.EqualValues(t, bindings.WAFIntType, actual.Type)
+		var obj bindings.WAFObject
+		obj.SetInt(42)
+		require.True(t, obj.IsInt())
+		require.Equal(t, bindings.WAFIntType, obj.Type())
+		val, err := obj.IntValue()
+		require.NoError(t, err)
+		require.EqualValues(t, 42, val)
+	})
+
+	t.Run("int_negative", func(t *testing.T) {
+		var obj bindings.WAFObject
+		obj.SetInt(-12345)
+		require.True(t, obj.IsInt())
+		val, err := obj.IntValue()
+		require.NoError(t, err)
+		require.EqualValues(t, -12345, val)
 	})
 
 	t.Run("uint", func(t *testing.T) {
-		var actual bindings.WAFObject
-		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_unsigned"), unsafe.PtrToUintptr(&actual), 42)
-		require.NotEqualValues(t, 0, r1)
-		require.EqualValues(t, 42, actual.Value)
-		require.EqualValues(t, bindings.WAFUintType, actual.Type)
+		var obj bindings.WAFObject
+		obj.SetUint(42)
+		require.True(t, obj.IsUint())
+		require.Equal(t, bindings.WAFUintType, obj.Type())
+		val, err := obj.UIntValue()
+		require.NoError(t, err)
+		require.EqualValues(t, 42, val)
 	})
 
-	t.Run("string", func(t *testing.T) {
+	t.Run("float", func(t *testing.T) {
+		var obj bindings.WAFObject
+		obj.SetFloat(3.14159)
+		require.True(t, obj.IsFloat())
+		require.Equal(t, bindings.WAFFloatType, obj.Type())
+		val, err := obj.FloatValue()
+		require.NoError(t, err)
+		require.InDelta(t, 3.14159, val, 0.00001)
+	})
+
+	t.Run("small_string", func(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		var actual bindings.WAFObject
-		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual), unsafe.PtrToUintptr(unsafe.Cstring(&pinner, "toto")))
-		require.NotEqualValues(t, 0, r1)
-		require.Equal(t, "toto", unsafe.Gostring(unsafe.Cast[byte](actual.Value)))
-		require.EqualValues(t, bindings.WAFStringType, actual.Type)
+		var obj bindings.WAFObject
+		// Small string <= 14 bytes should use small string optimization
+		obj.SetString(&pinner, "hello")
+		require.True(t, obj.IsString())
+		require.Equal(t, bindings.WAFSmallStringType, obj.Type())
+		val, err := obj.StringValue()
+		require.NoError(t, err)
+		require.Equal(t, "hello", val)
 	})
 
-	t.Run("padding", func(t *testing.T) {
+	t.Run("regular_string", func(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		var actual [3]bindings.WAFObject
-		r1, _, _ := purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual[0]), unsafe.PtrToUintptr(unsafe.Cstring(&pinner, "toto1")))
-		require.NotEqualValues(t, 0, r1)
-		require.Equal(t, "toto1", unsafe.Gostring(unsafe.Cast[byte](actual[0].Value)))
-		require.EqualValues(t, bindings.WAFStringType, actual[0].Type)
-		r1, _, _ = purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual[1]), unsafe.PtrToUintptr(unsafe.Cstring(&pinner, "toto2")))
-		require.NotEqualValues(t, 0, r1)
-		require.Equal(t, "toto2", unsafe.Gostring(unsafe.Cast[byte](actual[1].Value)))
-		require.EqualValues(t, bindings.WAFStringType, actual[1].Type)
-		r1, _, _ = purego.SyscallN(getSymbol(t, lib, "ddwaf_object_string"), unsafe.PtrToUintptr(&actual[2]), unsafe.PtrToUintptr(unsafe.Cstring(&pinner, "toto3")))
-		require.NotEqualValues(t, 0, r1)
-		require.Equal(t, "toto3", unsafe.Gostring(unsafe.Cast[byte](actual[2].Value)))
-		require.EqualValues(t, bindings.WAFStringType, actual[2].Type)
+		var obj bindings.WAFObject
+		// String > 14 bytes should use regular string type
+		longStr := "this is a long string that exceeds 14 bytes"
+		obj.SetString(&pinner, longStr)
+		require.True(t, obj.IsString())
+		require.Equal(t, bindings.WAFStringType, obj.Type())
+		val, err := obj.StringValue()
+		require.NoError(t, err)
+		require.Equal(t, longStr, val)
+	})
+
+	t.Run("empty_string", func(t *testing.T) {
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		var obj bindings.WAFObject
+		obj.SetString(&pinner, "")
+		require.True(t, obj.IsString())
+		val, err := obj.StringValue()
+		require.NoError(t, err)
+		require.Equal(t, "", val)
+	})
+}
+
+// TestWafObjectArrayPadding tests that arrays of WAFObjects work correctly
+func TestWafObjectArrayPadding(t *testing.T) {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	var objects [3]bindings.WAFObject
+
+	objects[0].SetString(&pinner, "first")
+	objects[1].SetInt(42)
+	objects[2].SetBool(true)
+
+	// Verify each object is properly set
+	require.True(t, objects[0].IsString())
+	str, err := objects[0].StringValue()
+	require.NoError(t, err)
+	require.Equal(t, "first", str)
+
+	require.True(t, objects[1].IsInt())
+	i, err := objects[1].IntValue()
+	require.NoError(t, err)
+	require.EqualValues(t, 42, i)
+
+	require.True(t, objects[2].IsBool())
+	b, err := objects[2].BoolValue()
+	require.NoError(t, err)
+	require.True(t, b)
+}
+
+// TestWafObjectKVPadding tests that arrays of WAFObjectKV work correctly
+func TestWafObjectKVPadding(t *testing.T) {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	var kvs [2]bindings.WAFObjectKV
+
+	kvs[0].Key.SetString(&pinner, "key1")
+	kvs[0].Val.SetInt(100)
+
+	kvs[1].Key.SetString(&pinner, "key2")
+	kvs[1].Val.SetString(&pinner, "value2")
+
+	// Verify first KV pair
+	key1, err := kvs[0].Key.StringValue()
+	require.NoError(t, err)
+	require.Equal(t, "key1", key1)
+
+	val1, err := kvs[0].Val.IntValue()
+	require.NoError(t, err)
+	require.EqualValues(t, 100, val1)
+
+	// Verify second KV pair
+	key2, err := kvs[1].Key.StringValue()
+	require.NoError(t, err)
+	require.Equal(t, "key2", key2)
+
+	val2, err := kvs[1].Val.StringValue()
+	require.NoError(t, err)
+	require.Equal(t, "value2", val2)
+}
+
+// TestWafObjectContainers tests array and map container functionality
+func TestWafObjectContainers(t *testing.T) {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	t.Run("array", func(t *testing.T) {
+		var arr bindings.WAFObject
+		items := arr.SetArray(&pinner, 3)
+		require.Len(t, items, 3)
+
+		items[0].SetInt(1)
+		items[1].SetInt(2)
+		items[2].SetInt(3)
+		arr.SetArraySize(3)
+
+		require.True(t, arr.IsArray())
+		require.Equal(t, bindings.WAFArrayType, arr.Type())
+
+		size, err := arr.ArraySize()
+		require.NoError(t, err)
+		require.EqualValues(t, 3, size)
+
+		values, err := arr.ArrayValues()
+		require.NoError(t, err)
+		require.Len(t, values, 3)
+
+		for i, v := range values {
+			val, err := v.IntValue()
+			require.NoError(t, err)
+			require.EqualValues(t, i+1, val)
+		}
+	})
+
+	t.Run("map", func(t *testing.T) {
+		var m bindings.WAFObject
+		kvs := m.SetMap(&pinner, 2)
+		require.Len(t, kvs, 2)
+
+		kvs[0].Key.SetString(&pinner, "a")
+		kvs[0].Val.SetInt(1)
+		kvs[1].Key.SetString(&pinner, "b")
+		kvs[1].Val.SetInt(2)
+		m.SetMapSize(2)
+
+		require.True(t, m.IsMap())
+		require.Equal(t, bindings.WAFMapType, m.Type())
+
+		size, err := m.MapSize()
+		require.NoError(t, err)
+		require.EqualValues(t, 2, size)
+
+		entries, err := m.MapEntries()
+		require.NoError(t, err)
+		require.Len(t, entries, 2)
+
+		// Verify map can be converted to Go map
+		goMap, err := m.MapValue()
+		require.NoError(t, err)
+		require.EqualValues(t, 1, goMap["a"])
+		require.EqualValues(t, 2, goMap["b"])
 	})
 }

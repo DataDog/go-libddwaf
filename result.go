@@ -8,7 +8,7 @@ package libddwaf
 import (
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v5/timer"
 )
 
 // Result stores the multiple values returned by a call to [Context.Run].

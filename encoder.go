@@ -14,10 +14,10 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/pin"
-	"github.com/DataDog/go-libddwaf/v4/timer"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/pin"
+	"github.com/DataDog/go-libddwaf/v5/timer"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 type EncoderConfig struct {
@@ -35,11 +35,11 @@ type EncoderConfig struct {
 
 // encoder encodes Go values into wafObjects. Only the subset of Go types representable into wafObjects
 // will be encoded while ignoring the rest of it.
-// The encoder allocates the memory required for new wafObjects into the Go memory, which must be kept
-// referenced for their lifetime in the C world. This lifetime depends on the ddwaf function being used with.
-// the encoded result. The Go references of the allocated wafObjects, along with every Go pointer they may
-// reference now or in the future, are stored and referenced in the `cgoRefs` field. The user MUST leverage
-// `keepAlive()` with it according to its ddwaf use-case.
+// The encoder allocates memory for wafObjects in Go memory, which must remain referenced for their
+// lifetime in the C world. This lifetime depends on the ddwaf function being used with the encoded result.
+// The encoder's config.Pinner is used to pin Go pointers that the C library will reference, ensuring they
+// aren't moved or collected by the garbage collector. Users must ensure the pinner remains valid until
+// the C library is done with the encoded data.
 type encoder struct {
 	config EncoderConfig
 
@@ -86,6 +86,10 @@ const (
 // It is highly advised to use the methods on the object to manipulate it and not set the fields manually.
 type WAFObject = bindings.WAFObject
 
+// WAFObjectKV is a key-value pair used in v2 maps.
+// Maps are now arrays of {key, value} pairs where both are full WAFObjects.
+type WAFObjectKV = bindings.WAFObjectKV
+
 // Encodable represent a type that can encode itself into a WAFObject.
 // The encodable is responsible for using the [pin.Pinner]
 // object passed in the [EncoderConfig] to pin the data referenced by the encoded [bindings.WAFObject].
@@ -111,13 +115,13 @@ func newEncoder(config EncoderConfig) (*encoder, error) {
 		config.Timer, _ = timer.NewTimer(timer.WithUnlimitedBudget())
 	}
 	if config.MaxContainerSize < 0 {
-		return nil, fmt.Errorf("container max size must be greater than 0")
+		return nil, fmt.Errorf("invalid max container size: %d (must be >= 0)", config.MaxContainerSize)
 	}
 	if config.MaxStringSize < 0 {
-		return nil, fmt.Errorf("string max size must be greater than 0")
+		return nil, fmt.Errorf("invalid max string size: %d (must be >= 0)", config.MaxStringSize)
 	}
 	if config.MaxObjectDepth < 0 {
-		return nil, fmt.Errorf("object max depth must be greater than 0")
+		return nil, fmt.Errorf("invalid max object depth: %d (must be >= 0)", config.MaxObjectDepth)
 	}
 
 	return &encoder{config: config}, nil
@@ -163,26 +167,26 @@ func (encoder *encoder) Encode(data any) (*bindings.WAFObject, error) {
 	return wo, err
 }
 
-var nullableTypeKinds = map[reflect.Kind]struct{}{
-	reflect.Interface:     {},
-	reflect.Pointer:       {},
-	reflect.UnsafePointer: {},
-	reflect.Map:           {},
-	reflect.Slice:         {},
-	reflect.Func:          {},
-	reflect.Chan:          {},
-}
-
 var (
 	jsonNumberType = reflect.TypeFor[json.Number]()
 	byteArrayType  = reflect.TypeFor[[]byte]()
 )
 
+// isNullableKind returns true if the given kind can be nil.
+func isNullableKind(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Interface, reflect.Pointer, reflect.UnsafePointer,
+		reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
+		return true
+	default:
+		return false
+	}
+}
+
 // isValueNil check if the value is nullable and if it is actually nil
 // we cannot directly use value.IsNil() because it panics on non-pointer values
 func isValueNil(value reflect.Value) bool {
-	_, nullable := nullableTypeKinds[value.Kind()]
-	return nullable && value.IsNil()
+	return isNullableKind(value.Kind()) && value.IsNil()
 }
 
 func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, depth int) error {
@@ -368,7 +372,8 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 		capacity = encoder.config.MaxContainerSize
 	}
 
-	objArray := obj.SetMap(encoder.config.Pinner, uint64(capacity))
+	// v2: Maps use WAFObjectKV pairs
+	kvArray := obj.SetMap(encoder.config.Pinner, uint64(capacity))
 	for i := 0; i < nbFields; i++ {
 		if encoder.config.Timer.Exhausted() {
 			return
@@ -387,20 +392,20 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 			continue
 		}
 
-		objElem := &objArray[length]
-		// If the Map key is of unsupported type, skip it
-		encoder.encodeMapKeyFromString(fieldName, objElem)
+		kv := &kvArray[length]
+		// Set the key as a string
+		encoder.encodeMapKeyString(fieldName, &kv.Key)
 
-		if err := encoder.encode(value.Field(i), objElem, depth); err != nil {
+		if err := encoder.encode(value.Field(i), &kv.Val, depth); err != nil {
 			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
-			objElem.SetInvalid()
+			kv.Val.SetInvalid()
 		}
 
 		length++
 	}
 
 	// Set the length to the final number of successfully encoded elements
-	obj.NbEntries = uint64(length)
+	obj.SetMapSize(uint16(length))
 }
 
 // encodeMap takes a reflect.Value and a wafObject pointer and iterates on the map elements and returns
@@ -413,7 +418,8 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, 
 		capacity = encoder.config.MaxContainerSize
 	}
 
-	objArray := obj.SetMap(encoder.config.Pinner, uint64(capacity))
+	// v2: Maps use WAFObjectKV pairs
+	kvArray := obj.SetMap(encoder.config.Pinner, uint64(capacity))
 
 	length := 0
 	for iter := value.MapRange(); iter.Next(); {
@@ -426,27 +432,26 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, 
 			break
 		}
 
-		objElem := &objArray[length]
-		if err := encoder.encodeMapKey(iter.Key(), objElem); err != nil {
+		kv := &kvArray[length]
+		if err := encoder.encodeMapKey(iter.Key(), &kv.Key); err != nil {
 			continue
 		}
 
-		if err := encoder.encode(iter.Value(), objElem, depth); err != nil {
+		if err := encoder.encode(iter.Value(), &kv.Val, depth); err != nil {
 			// We still need to keep the map key, so we can't discard the full object, instead, we make the value a noop
-			objElem.SetInvalid()
+			kv.Val.SetInvalid()
 		}
 
 		length++
 	}
 
 	// Fix the size because we skipped map entries
-	obj.NbEntries = uint64(length)
+	obj.SetMapSize(uint16(length))
 }
 
-// encodeMapKey takes a reflect.Value and a wafObject and returns a wafObject ready to be considered a map entry. We use
-// the function cgoRefPool.AllocWafMapKey to store the key in the wafObject. But first we need to grab the real
-// underlying value by recursing through the pointer and interface values.
-func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WAFObject) error {
+// encodeMapKey takes a reflect.Value and encodes it as a map key WAFObject.
+// v2: Keys are now full WAFObjects (typically strings).
+func (encoder *encoder) encodeMapKey(value reflect.Value, keyObj *bindings.WAFObject) error {
 	value, kind := resolvePointer(value)
 
 	var keyStr string
@@ -461,20 +466,20 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, obj *bindings.WAFObjec
 		return waferrors.ErrInvalidMapKey
 	}
 
-	encoder.encodeMapKeyFromString(keyStr, obj)
+	encoder.encodeMapKeyString(keyStr, keyObj)
 	return nil
 }
 
-// encodeMapKeyFromString takes a string and a wafObject and sets the map key attribute on the wafObject to the supplied
-// string. The key may be truncated if it exceeds the maximum string size allowed by the encoder.
-func (encoder *encoder) encodeMapKeyFromString(keyStr string, obj *bindings.WAFObject) {
+// encodeMapKeyString encodes a string as a map key WAFObject.
+// v2: Keys are full WAFObjects, so we set it as a string.
+func (encoder *encoder) encodeMapKeyString(keyStr string, keyObj *bindings.WAFObject) {
 	size := len(keyStr)
 	if size > encoder.config.MaxStringSize {
 		keyStr = keyStr[:encoder.config.MaxStringSize]
 		encoder.addTruncation(StringTooLong, size)
 	}
 
-	obj.SetMapKey(encoder.config.Pinner, keyStr)
+	keyObj.SetString(encoder.config.Pinner, keyStr)
 }
 
 // encodeArray takes a reflect.Value and a wafObject pointer and iterates on the elements and returns
@@ -516,8 +521,8 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject
 		currIndex++
 	}
 
-	// Fix the size because we skipped map entries
-	obj.NbEntries = uint64(currIndex)
+	// Fix the size because we skipped entries
+	obj.SetArraySize(uint16(currIndex))
 }
 
 func (encoder *encoder) addTruncation(reason TruncationReason, size int) {
@@ -587,7 +592,7 @@ func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
 // provided a self-referencing pointer.
 func resolvePointer(obj reflect.Value) (reflect.Value, reflect.Kind) {
 	kind := obj.Kind()
-	for limit := 8; limit > 0 && kind == reflect.Pointer || kind == reflect.Interface; limit-- {
+	for limit := 8; limit > 0 && (kind == reflect.Pointer || kind == reflect.Interface); limit-- {
 		if obj.IsNil() {
 			return obj, kind
 		}

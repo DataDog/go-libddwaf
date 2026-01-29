@@ -6,7 +6,7 @@ It consists of 2 separate entities: the bindings for the calls to libddwaf, and 
 An example usage would be:
 
 ```go
-import waf "github.com/DataDog/go-libddwaf/v4"
+import waf "github.com/DataDog/go-libddwaf/v5"
 
 //go:embed
 var ruleset []byte
@@ -18,11 +18,12 @@ func main() {
         panic(err)
     }
 
-    builder, err := waf.NewBuilder("", "")
+    // v2: NewBuilder no longer takes obfuscator regex parameters
+    builder, err := waf.NewBuilder()
     if err != nil {
         panic(err)
     }
-    _, err := builder.AddOrUpdateConfig(parsedRuleset)
+    _, err := builder.AddOrUpdateConfig("/rules", parsedRuleset)
     if err != nil {
         panic(err)
     }
@@ -33,14 +34,31 @@ func main() {
     }
     defer wafHandle.Close()
 
-    wafCtx := wafHandle.NewContext(timer.WithUnlimitedBudget(), timer.WithComponent("waf", "rasp"))
+    wafCtx, err := wafHandle.NewContext(timer.WithUnlimitedBudget(), timer.WithComponent("waf", "rasp"))
+    if err != nil {
+        panic(err)
+    }
     defer wafCtx.Close()
 
-    matches, actions := wafCtx.Run(RunAddressData{
-        Persistent: map[string]any{
+    // v2: Use Data field instead of Persistent
+    result, err := wafCtx.Run(waf.RunAddressData{
+        Data: map[string]any{
             "server.request.path_params": "/rfiinc.txt",
         },
-		TimerKey: "waf",
+        TimerKey: "waf",
+    })
+
+    // v2: For ephemeral data, use SubContext
+    subCtx, err := wafCtx.SubContext()
+    if err != nil {
+        panic(err)
+    }
+    defer subCtx.Close()
+
+    result, err = subCtx.Run(waf.RunAddressData{
+        Data: map[string]any{
+            "server.request.body": "ephemeral data",
+        },
     })
 }
 ```
@@ -107,8 +125,9 @@ flowchart LR
 
 When passing Go values to the WAF, it is necessary to make sure that memory remains valid and does
 not move until the WAF no longer has any pointers to it. We do this by using a `runtime.Pinner`.
-Persistent address data is added to a `Context`-associated `runtime.Pinner`; while ephemeral address
-data is managed by a transient `runtime.Pinner` that only exists for the duration of the call.
+Data passed to a root `Context` is added to a `Context`-associated `runtime.Pinner`; while data
+passed to a `SubContext` (for ephemeral evaluation) is managed by a transient `runtime.Pinner` that
+only exists for the duration of the call.
 
 ### Typical call to Run()
 
