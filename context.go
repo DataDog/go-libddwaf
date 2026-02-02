@@ -168,6 +168,10 @@ func (context *Context) SubContext() (*Context, error) {
 // have been able to match some rules and generate events or actions before the error was reached;
 // especially when the error is [waferrors.ErrTimeout].
 func (context *Context) Run(addressData RunAddressData) (res Result, err error) {
+	if context.cContext == 0 {
+		return Result{}, waferrors.ErrContextClosed
+	}
+
 	if addressData.isEmpty() {
 		return Result{}, nil
 	}
@@ -409,11 +413,11 @@ func (context *Context) Close() *Context {
 		// Destroy subcontext only
 		bindings.Lib.SubcontextDestroy(context.cSubcontext)
 		context.cSubcontext = 0
-		context.pinner.Unpin()
 	} else {
 		bindings.Lib.ContextDestroy(context.cContext)
 	}
 
+	// Root context: full cleanup
 	context.cContext = 0   // makes it easy to spot use-after-free/double-free issues
 	context.pinner.Unpin() // The pinned data is no longer needed, explicitly release
 	return nil
