@@ -19,33 +19,40 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/ffi"
-	"github.com/DataDog/go-libddwaf/v4/timer"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/timer"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 
 	"github.com/stretchr/testify/require"
 )
 
-func wafTest(t *testing.T, obj *bindings.WAFObject) {
-	// Pass the encoded value to the WAF to make sure it doesn't return an error
-	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
+func wafTest(t *testing.T, obj *WAFObject) {
+	t.Helper()
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
 	require.NoError(t, err)
-	defer waf.Close()
-	wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+	t.Cleanup(func() { waf.Close() })
+	wafCtx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
-	defer wafCtx.Close()
-	_, err = wafCtx.Run(RunAddressData{
-		Persistent: map[string]any{"my.input": obj},
-		Ephemeral:  map[string]any{"my.other.input": obj},
+	t.Cleanup(func() { wafCtx.Close() })
+
+	_, err = wafCtx.Run(context.Background(), RunAddressData{
+		Data: map[string]any{"my.input": obj},
+	})
+	require.NoError(t, err)
+
+	subCtx, err := wafCtx.SubContext(context.Background())
+	require.NoError(t, err)
+	t.Cleanup(func() { subCtx.Close() })
+	_, err = subCtx.Run(context.Background(), RunAddressData{
+		Data: map[string]any{"my.other.input": obj},
 	})
 	require.NoError(t, err)
 }
 
 type abs int64
 
-func (p abs) Encode(config EncoderConfig, obj *bindings.WAFObject, depth int) (map[TruncationReason][]int, error) {
+func (p abs) Encode(config EncoderConfig, obj *WAFObject, depth int) (map[TruncationReason][]int, error) {
 	i := p
 	if i < 0 {
 		i = -i
@@ -57,13 +64,13 @@ func (p abs) Encode(config EncoderConfig, obj *bindings.WAFObject, depth int) (m
 
 type truncator struct{}
 
-func (t *truncator) Encode(_ EncoderConfig, _ *bindings.WAFObject, _ int) (map[TruncationReason][]int, error) {
+func (t *truncator) Encode(_ EncoderConfig, _ *WAFObject, _ int) (map[TruncationReason][]int, error) {
 	return map[TruncationReason][]int{StringTooLong: {1}}, nil
 }
 
 type errorer struct{}
 
-func (t *errorer) Encode(_ EncoderConfig, _ *bindings.WAFObject, _ int) (map[TruncationReason][]int, error) {
+func (t *errorer) Encode(_ EncoderConfig, _ *WAFObject, _ int) (map[TruncationReason][]int, error) {
 	return nil, waferrors.ErrUnsupportedValue
 }
 
@@ -75,7 +82,7 @@ func TestEncodable(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+		encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 		encoded, err := encoder.Encode(&input)
 
 		require.NoError(t, err, "unexpected error when encoding: %v", err)
@@ -90,7 +97,7 @@ func TestEncodable(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+		encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 		_, err := encoder.Encode(&input)
 		require.NoError(t, err, "unexpected error when encoding: %v", err)
 
@@ -103,10 +110,40 @@ func TestEncodable(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+		encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 		_, err := encoder.Encode(&input)
 		require.Error(t, err, "expected an error when encoding: %v", err)
 		require.ErrorIs(t, err, waferrors.ErrUnsupportedValue)
+	})
+}
+
+func TestNewEncoderConfig(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		cfg := newEncoderConfig(&pinner)
+
+		require.Same(t, &pinner, cfg.Pinner)
+		require.Nil(t, cfg.Timer)
+		require.Equal(t, bindings.MaxContainerSize, cfg.MaxContainerSize)
+		require.Equal(t, bindings.MaxStringLength, cfg.MaxStringSize)
+		require.Equal(t, bindings.MaxContainerDepth, cfg.MaxObjectDepth)
+	})
+
+	t.Run("with timer and unlimited limits", func(t *testing.T) {
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		tm, err := timer.NewTimer(timer.WithBudget(time.Second))
+		require.NoError(t, err)
+
+		cfg := newEncoderConfig(&pinner, WithTimer(tm), WithUnlimitedLimits())
+
+		require.Same(t, tm, cfg.Timer)
+		require.Equal(t, math.MaxInt, cfg.maxContainerSize())
+		require.Equal(t, math.MaxInt, cfg.maxStringSize())
+		require.Equal(t, math.MaxInt, cfg.maxObjectDepth())
 	})
 }
 
@@ -416,7 +453,7 @@ func TestEncodeDecode(t *testing.T) {
 			var pinner runtime.Pinner
 			defer pinner.Unpin()
 
-			encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+			encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 			encoded, err := encoder.Encode(tc.Input)
 
 			t.Run("equal", func(t *testing.T) {
@@ -618,7 +655,7 @@ func TestEncoderLimits(t *testing.T) {
 				Ignored     string `json:"-"`
 				Transparent string `json:",omitempty"`
 				Renamed     string `json:"field"`
-				LiteralDash string `json:"-,"`
+				LiteralDash string `json:"-,"` //nolint:staticcheck // testing literal dash field name
 			}{Ignored: "1", Transparent: "2", Renamed: "3", LiteralDash: "4"},
 			Output: map[string]any{"Transparent": "2", "field": "3", "-": "4"},
 		},
@@ -651,14 +688,14 @@ func TestEncoderLimits(t *testing.T) {
 		encoder, err := newEncoder(EncoderConfig{
 			Pinner:           &pinner,
 			Timer:            encodeTimer,
-			MaxObjectDepth:   maxValueDepth,
-			MaxStringSize:    maxStringLength,
-			MaxContainerSize: maxContainerLength,
+			MaxObjectDepth:   uint16(maxValueDepth),
+			MaxStringSize:    uint16(maxStringLength),
+			MaxContainerSize: uint16(maxContainerLength),
 		})
 
 		require.NoError(t, err)
 
-		encoded := &bindings.WAFObject{}
+		var encoded *WAFObject
 		encoded, err = encoder.Encode(tc.Input)
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
 			require.Equal(t, tc.Truncations, sortValues(encoder.truncations))
@@ -693,19 +730,45 @@ type typeTree struct {
 	children []typeTree
 }
 
-func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WAFObject) {
-	require.Equal(t, expected._type, actual.Type, "expected type %v, got type %v", expected._type, actual.Type)
+func assertEqualType(t *testing.T, expected typeTree, actual *WAFObject) {
+	actualType := actual.raw().Type()
+	expectedType := expected._type
+
+	// Small strings (<=14 bytes) use WAFSmallStringType via inline storage.
+	// Treat WAFSmallStringType as equivalent to WAFStringType for comparison.
+	if expectedType == bindings.WAFStringType && actualType == bindings.WAFSmallStringType {
+		actualType = bindings.WAFStringType
+	}
+
+	require.Equal(t, expectedType, actualType, "expected type %v, got type %v", expected._type, actual.raw().Type())
 
 	if expected._type != bindings.WAFMapType && expected._type != bindings.WAFArrayType {
 		return
 	}
 
-	if uint64(len(expected.children)) != actual.NbEntries {
-		t.Fatalf("expected len %v, got len %v", len(expected.children), actual.NbEntries)
+	var actualSize int
+	if expected._type == bindings.WAFArrayType {
+		size, _ := actual.ArraySize()
+		actualSize = int(size)
+	} else {
+		size, _ := actual.MapSize()
+		actualSize = int(size)
 	}
 
-	for i := range expected.children {
-		assertEqualType(t, expected.children[i], ffi.CastWithOffset[bindings.WAFObject](actual.Value, uint64(i)))
+	if len(expected.children) != actualSize {
+		t.Fatalf("expected len %v, got len %v", len(expected.children), actualSize)
+	}
+
+	if expected._type == bindings.WAFArrayType {
+		items, _ := actual.ArrayValues()
+		for i := range expected.children {
+			assertEqualType(t, expected.children[i], &items[i])
+		}
+	} else {
+		entries, _ := actual.MapEntries()
+		for i := range expected.children {
+			assertEqualType(t, expected.children[i], entries[i].Value())
+		}
 	}
 }
 
@@ -873,7 +936,7 @@ func TestEncoderTypeTree(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+		encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 		encoded, err := encoder.Encode(tc.Input)
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
 			if tc.Error != nil {
@@ -898,8 +961,8 @@ func TestDecoder(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
-		objBuilder := func(value any) *bindings.WAFObject {
+		encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+		objBuilder := func(value any) *WAFObject {
 			encoded, err := encoder.Encode(value)
 			require.NoError(t, err, "Encoding object failed")
 			return encoded
@@ -966,8 +1029,9 @@ func TestResolvePointer(t *testing.T) {
 
 func TestDepthOf(t *testing.T) {
 	t.Run("is safe with self-referecing structs", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*10)
-		defer cancel()
+		tmr, err := timer.NewTimer(timer.WithBudget(10 * time.Millisecond))
+		require.NoError(t, err)
+		tmr.Start()
 
 		type selfReferencing struct {
 			Array []any
@@ -975,8 +1039,8 @@ func TestDepthOf(t *testing.T) {
 		obj := selfReferencing{Array: make([]any, 1)}
 		obj.Array[0] = &obj // Obj now has a field that indirectly references itself
 
-		depth, err := depthOf(ctx, reflect.ValueOf(obj))
+		depth, depthErr := depthOf(tmr, reflect.ValueOf(obj))
 		require.Greater(t, depth, 0)
-		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.ErrorIs(t, depthErr, waferrors.ErrTimeout)
 	})
 }

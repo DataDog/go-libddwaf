@@ -1,12 +1,12 @@
 # go-libddwaf
 
 This project's goal is to produce a higher level API for the go bindings to [libddwaf](https://github.com/DataDog/libddwaf): DataDog in-app WAF.
-It consists of 2 separate entities: the bindings for the calls to libddwaf, and the encoder which job is to convert _any_ go value to its libddwaf object representation.
+It consists of 2 separate entities: the bindings for the calls to libddwaf, and the encoder whose job is to convert _any_ go value to its libddwaf object representation.
 
 An example usage would be:
 
 ```go
-import waf "github.com/DataDog/go-libddwaf/v4"
+import waf "github.com/DataDog/go-libddwaf/v5"
 
 //go:embed
 var ruleset []byte
@@ -18,43 +18,94 @@ func main() {
         panic(err)
     }
 
-    builder, err := waf.NewBuilder("", "")
+    // v2: NewBuilder no longer takes obfuscator regex parameters
+    builder, err := waf.NewBuilder()
     if err != nil {
         panic(err)
     }
-    _, err := builder.AddOrUpdateConfig(parsedRuleset)
+    _, err := builder.AddOrUpdateConfig("/rules", parsedRuleset)
     if err != nil {
         panic(err)
     }
 
-    wafHandle := builder.Build()
-    if wafHandle == nil {
-        panic("WAF handle is nil")
+    wafHandle, err := builder.Build()
+    if err != nil {
+        panic(err)
     }
     defer wafHandle.Close()
 
-    wafCtx := wafHandle.NewContext(timer.WithUnlimitedBudget(), timer.WithComponent("waf", "rasp"))
+    wafCtx, err := wafHandle.NewContext(context.Background(), timer.WithUnlimitedBudget(), timer.WithComponent("waf", "rasp"))
+    if err != nil {
+        panic(err)
+    }
     defer wafCtx.Close()
 
-    matches, actions := wafCtx.Run(RunAddressData{
-        Persistent: map[string]any{
+    // v2: Use Data field instead of Persistent
+    result, err := wafCtx.Run(context.Background(), waf.RunAddressData{
+        Data: map[string]any{
             "server.request.path_params": "/rfiinc.txt",
         },
-		TimerKey: "waf",
+        TimerKey: "waf",
+    })
+
+    // v2: For ephemeral data, use SubContext
+    subCtx, err := wafCtx.SubContext(context.Background())
+    if err != nil {
+        panic(err)
+    }
+    defer subCtx.Close()
+
+    result, err = subCtx.Run(context.Background(), waf.RunAddressData{
+        Data: map[string]any{
+            "server.request.body": "ephemeral data",
+        },
     })
 }
 ```
 
-The API documentation details can be found on [pkg.go.dev](https://pkg.go.dev/github.com/DataDog/go-libddwaf/v4).
+The API documentation details can be found on [pkg.go.dev](https://pkg.go.dev/github.com/DataDog/go-libddwaf/v5).
 
-Originally this project was only here to provide CGO Wrappers to the calls to libddwaf.
-But with the appearance of `ddwaf_object` tree like structure,
-but also with the intention to build CGO-less bindings, this project size has grown to be a fully integrated brick in the DataDog tracer structure.
-Which in turn made it necessary to document the project, to maintain it in an orderly fashion.
+## Upgrading from v4 to v5
+
+go-libddwaf v5 tracks libddwaf v2 and includes a few breaking API changes:
+
+- `NewBuilder()` no longer takes obfuscator regex arguments; obfuscation now lives in builder config via `AddOrUpdateConfig(..., "obfuscator/config", ...)`
+- `RunAddressData` now uses a single `Data` field instead of `Persistent` and `Ephemeral`
+- ephemeral evaluation now goes through `SubContext()`
+- `Context.Run`, `Handle.NewContext`, and `Context.SubContext` now require a `context.Context`
+- `Builder.Build()` now returns `(*Handle, error)`
+
+```go
+// v4
+builder, _ := waf.NewBuilder("keyRegex", "valueRegex")
+ctx.Run(waf.RunAddressData{Persistent: data, Ephemeral: ephemeral})
+
+// v5
+builder, err := waf.NewBuilder()
+builder.AddOrUpdateConfig("obfuscator/config", map[string]any{
+    "key_regex": keyRegex,
+    "value_regex": valueRegex,
+})
+wafHandle, err := builder.Build()
+ctx.Run(context.Background(), waf.RunAddressData{Data: data})
+
+subCtx, err := ctx.SubContext(context.Background())
+defer subCtx.Close()
+subCtx.Run(context.Background(), waf.RunAddressData{Data: ephemeral})
+```
+
+For the upstream libddwaf v2 migration details and release notes, prefer the canonical docs in the libddwaf repository:
+
+- https://github.com/DataDog/libddwaf/blob/master/docs/upgrading/UPGRADING-v2.0.md
+- https://github.com/DataDog/libddwaf/blob/master/docs/changelog/CHANGELOG-v2.0.0.md
+
+Originally this project only provided CGO wrappers for calls to libddwaf.
+With the appearance of the `ddwaf_object` tree-like structure and the goal of building CGO-less bindings, it has grown into an integrated component of the DataDog tracer.
+That made it necessary to document the project and keep it maintainable.
 
 ## Supported platforms
 
-This library currently support the following platform doublets:
+This library currently supports the following platform pairs:
 
 | OS    | Arch    |
 | ----- | ------- |
@@ -63,10 +114,10 @@ This library currently support the following platform doublets:
 | OSX   | amd64   |
 | OSX   | arm64   |
 
-This means that when the platform is not supported, top-level functions will return a `WafDisabledError` error including the purpose of it.
+This means that when the platform is not supported, top-level functions will return a `WafDisabledError` explaining why.
 
 Note that:
-* Linux support include for glibc and musl variants
+* Linux support includes glibc and musl variants
 * OSX under 10.9 is not supported
 * A build tag named `datadog.no_waf` can be manually added to force the WAF to be disabled.
 
@@ -107,8 +158,9 @@ flowchart LR
 
 When passing Go values to the WAF, it is necessary to make sure that memory remains valid and does
 not move until the WAF no longer has any pointers to it. We do this by using a `runtime.Pinner`.
-Persistent address data is added to a `Context`-associated `runtime.Pinner`; while ephemeral address
-data is managed by a transient `runtime.Pinner` that only exists for the duration of the call.
+Data passed to a root `Context` is added to a `Context`-associated `runtime.Pinner`; while data
+passed to a `SubContext` (for ephemeral evaluation) is managed by a transient `runtime.Pinner` that
+only exists for the duration of the call.
 
 ### Typical call to Run()
 

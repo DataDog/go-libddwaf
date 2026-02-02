@@ -9,38 +9,47 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"sync/atomic"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/ruleset"
+	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
+	"github.com/DataDog/go-libddwaf/v5/internal/ruleset"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
-// Builder manages an evolving WAF configuration over time. Its lifecycle is
-// typically tied to that of a remote configuration client, as its purpose is to
-// keep an up-to-date view of the current coniguration with low overhead. This
-// type is not safe for concurrent use, and users should protect it with a mutex
-// or similar when sharing it across multiple goroutines. All methods of this
-// type are safe to call with a nil receiver.
+// Builder manages an evolving WAF configuration.
+// Builder is not thread-safe. Concurrent use panics under `ci` builds.
 type Builder struct {
-	handle        bindings.WAFBuilder
+	handle        wafBindings.WAFBuilder
 	defaultLoaded bool
+	inUse         atomic.Bool // detects concurrent use under ci builds
 }
 
-// NewBuilder creates a new [Builder] instance. Its lifecycle is typically tied
-// to that of a remote configuration client, as its purpose is to keep an
-// up-to-date view of the current coniguration with low overhead. Returns nil if
-// an error occurs when initializing the builder. The caller is responsible for
-// calling [Builder.Close] when the builder is no longer needed.
-func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builder, error) {
+// acquire marks the builder as in use. Panics under ci builds if already in
+// use, indicating a concurrent use violation.
+func (b *Builder) acquire() {
+	if !b.inUse.CompareAndSwap(false, true) {
+		invariant.Assert(false, "Builder used concurrently")
+	}
+}
+
+func (b *Builder) release() {
+	b.inUse.Store(false)
+}
+
+// NewBuilder creates a new [Builder] instance.
+// The caller must call [Builder.Close] when it is no longer needed.
+func NewBuilder() (*Builder, error) {
 	if ok, err := Load(); !ok {
-		return nil, err
+		if err != nil {
+			return nil, fmt.Errorf("failed to load WAF library while creating builder: %w", err)
+		}
+		return nil, errors.New("failed to load WAF library while creating builder")
 	}
 
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-	hdl := bindings.Lib.BuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
-
+	hdl := wafBindings.Lib.BuilderInit()
 	if hdl == 0 {
-		return nil, errors.New("failed to initialize the WAF builder")
+		return nil, waferrors.ErrBuilderInitFailed
 	}
 
 	return &Builder{handle: hdl}, nil
@@ -51,7 +60,7 @@ func (b *Builder) Close() {
 	if b == nil || b.handle == 0 {
 		return
 	}
-	bindings.Lib.BuilderDestroy(b.handle)
+	wafBindings.Lib.BuilderDestroy(b.handle)
 	b.handle = 0
 }
 
@@ -65,13 +74,16 @@ const defaultRecommendedRulesetPath = "::/go-libddwaf/default/recommended.json"
 // AddDefaultRecommendedRuleset adds the default recommended ruleset to the
 // receiving [Builder], and returns the [Diagnostics] produced in the process.
 func (b *Builder) AddDefaultRecommendedRuleset() (Diagnostics, error) {
+	b.acquire()
+	defer b.release()
+
 	defaultRuleset, err := ruleset.DefaultRuleset()
-	defer bindings.Lib.ObjectFree(&defaultRuleset)
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("failed to load default recommended ruleset: %w", err)
 	}
+	defer wafBindings.Lib.ObjectDestroy(&defaultRuleset, wafBindings.Lib.DefaultAllocator())
 
-	diag, err := b.addOrUpdateConfig(defaultRecommendedRulesetPath, &defaultRuleset)
+	diag, err := b.addOrUpdateConfig(defaultRecommendedRulesetPath, wrapWAFObjectPtr(&defaultRuleset))
 	if err == nil {
 		b.defaultLoaded = true
 	}
@@ -92,6 +104,9 @@ func (b *Builder) RemoveDefaultRecommendedRuleset() bool {
 // AddOrUpdateConfig adds or updates a configuration fragment to this [Builder].
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, error) {
+	b.acquire()
+	defer b.release()
+
 	if b == nil || b.handle == 0 {
 		return Diagnostics{}, errBuilderClosed
 	}
@@ -103,14 +118,14 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
-	encoder, err := newEncoder(newUnlimitedEncoderConfig(&pinner))
+	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("could not create encoder: %w", err)
 	}
 
 	frag, err := encoder.Encode(fragment)
 	if err != nil {
-		return Diagnostics{}, fmt.Errorf("could not encode the config fragment into a WAF object; %w", err)
+		return Diagnostics{}, fmt.Errorf("could not encode the config fragment into a WAF object: %w", err)
 	}
 
 	return b.addOrUpdateConfig(path, frag)
@@ -118,11 +133,11 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 
 // addOrUpdateConfig adds or updates a configuration fragment to this [Builder].
 // Returns the [Diagnostics] produced by adding or updating this configuration.
-func (b *Builder) addOrUpdateConfig(path string, cfg *bindings.WAFObject) (Diagnostics, error) {
-	var diagnosticsWafObj bindings.WAFObject
-	defer bindings.Lib.ObjectFree(&diagnosticsWafObj)
+func (b *Builder) addOrUpdateConfig(path string, cfg *WAFObject) (Diagnostics, error) {
+	var diagnosticsWafObj WAFObject
+	defer wafBindings.Lib.ObjectDestroy(diagnosticsWafObj.raw(), wafBindings.Lib.DefaultAllocator())
 
-	res := bindings.Lib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
+	res := wafBindings.Lib.BuilderAddOrUpdateConfig(b.handle, path, cfg.raw(), diagnosticsWafObj.raw())
 
 	var diags Diagnostics
 	if !diagnosticsWafObj.IsInvalid() {
@@ -144,35 +159,44 @@ func (b *Builder) addOrUpdateConfig(path string, cfg *bindings.WAFObject) (Diagn
 // RemoveConfig removes the configuration associated with the given path from
 // this [Builder]. Returns true if the removal was successful.
 func (b *Builder) RemoveConfig(path string) bool {
+	b.acquire()
+	defer b.release()
+
 	if b == nil || b.handle == 0 {
 		return false
 	}
 
-	return bindings.Lib.BuilderRemoveConfig(b.handle, path)
+	return wafBindings.Lib.BuilderRemoveConfig(b.handle, path)
 }
 
 // ConfigPaths returns the list of currently loaded configuration paths.
-func (b *Builder) ConfigPaths(filter string) []string {
+func (b *Builder) ConfigPaths(filter string) ([]string, error) {
+	b.acquire()
+	defer b.release()
+
 	if b == nil || b.handle == 0 {
-		return nil
+		return nil, errBuilderClosed
 	}
 
-	return bindings.Lib.BuilderGetConfigPaths(b.handle, filter)
+	return wafBindings.Lib.BuilderGetConfigPaths(b.handle, filter)
 }
 
 // Build creates a new [Handle] instance that uses the current configuration.
-// Returns nil if an error occurs when building the handle. The caller is
-// responsible for calling [Handle.Close] when the handle is no longer needed.
-// This function may return nil.
-func (b *Builder) Build() *Handle {
+// Returns an error if the builder is not initialized or the C library fails to
+// build the handle. The caller is responsible for calling [Handle.Close] when
+// the handle is no longer needed.
+func (b *Builder) Build() (*Handle, error) {
+	b.acquire()
+	defer b.release()
+
 	if b == nil || b.handle == 0 {
-		return nil
+		return nil, waferrors.ErrBuilderInitFailed
 	}
 
-	hdl := bindings.Lib.BuilderBuildInstance(b.handle)
+	hdl := wafBindings.Lib.BuilderBuildInstance(b.handle)
 	if hdl == 0 {
-		return nil
+		return nil, errors.New("BuilderBuildInstance returned null")
 	}
 
-	return wrapHandle(hdl)
+	return wrapHandle(hdl), nil
 }

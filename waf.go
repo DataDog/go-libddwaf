@@ -6,8 +6,14 @@
 package libddwaf
 
 import (
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"sync"
+
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 )
+
+var loadOnce = sync.OnceValues(func() (bool, error) {
+	return bindings.Load()
+})
 
 // Load loads libddwaf's dynamic library. The dynamic library is opened only
 // once by the first call to this function and internally stored globally.
@@ -21,8 +27,12 @@ import (
 // an error value. An error might still be returned even though the WAF load was
 // successful: in such cases the error is indicative that some non-critical
 // features are not available; but the WAF may still be used.
+//
+// On macOS, subsequent calls return the cached result from the first call.
+// This is intentional: macOS does not support dlopen-ing the same library
+// twice in the same process lifetime.
 func Load() (bool, error) {
-	return bindings.Load()
+	return loadOnce()
 }
 
 // Version returns the version returned by libddwaf.

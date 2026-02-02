@@ -6,12 +6,12 @@
 package bindings
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
 
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
-	"github.com/pkg/errors"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 func newPanicError(in any, err error) *waferrors.PanicError {
@@ -33,7 +33,7 @@ func tryCall[T any](f func() T) (res T, err error) {
 
 		switch actual := r.(type) {
 		case error:
-			err = errors.WithStack(actual)
+			err = actual
 		case string:
 			err = errors.New(actual)
 		default:

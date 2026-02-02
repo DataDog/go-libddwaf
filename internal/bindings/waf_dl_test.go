@@ -14,7 +14,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/lib"
+	"github.com/DataDog/go-libddwaf/v5/internal/lib"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,25 +35,21 @@ func testVerifyELFHeader(t *testing.T) {
 	path, closer, err := lib.DumpEmbeddedWAF()
 	require.NoError(t, err)
 
-	defer func() {
-		_ = closer()
-	}()
+	defer closer()
 
 	elfFile, err := elf.Open(path)
 	require.NoError(t, err)
 
 	switch runtime.GOARCH {
 	case "amd64":
-		require.Equal(t, elf.EM_X86_64, elfFile.Machine, "Wrong architecture")
+		require.Equal(t, elf.EM_X86_64, elfFile.Machine)
 	case "arm64":
-		require.Equal(t, elf.EM_AARCH64, elfFile.Machine, "Wrong architecture")
+		require.Equal(t, elf.EM_AARCH64, elfFile.Machine)
 	default:
 		panic(fmt.Sprintf("unexpected GOARCH=%s", runtime.GOARCH))
 	}
 
-	require.Equal(t, elf.ET_DYN, elfFile.Type, "Is not a shared library")
-
-	//TODO(eliott.bouhana) add more checks
+	require.Equal(t, elf.ET_DYN, elfFile.Type)
 }
 
 // testVerifyMachOHeader is here to ease the debug cases that will likely need
@@ -62,23 +58,19 @@ func testVerifyMachOHeader(t *testing.T) {
 	path, closer, err := lib.DumpEmbeddedWAF()
 	require.NoError(t, err)
 
-	defer func() {
-		_ = closer()
-	}()
+	defer closer()
 
 	machOFile, err := macho.Open(path)
 	require.NoError(t, err)
 
 	switch runtime.GOARCH {
 	case "amd64":
-		require.Equal(t, macho.CpuAmd64, machOFile.Cpu, "Wrong architecture")
+		require.Equal(t, macho.CpuAmd64, machOFile.Cpu)
 	case "arm64":
-		require.Equal(t, macho.CpuArm64, machOFile.Cpu, "Wrong architecture")
+		require.Equal(t, macho.CpuArm64, machOFile.Cpu)
 	default:
 		panic(fmt.Sprintf("unexpected GOARCH=%s", runtime.GOARCH))
 	}
 
-	require.Equal(t, macho.TypeDylib, machOFile.Type, "Is not a shared library")
-
-	//TODO(eliott.bouhana) add more checks
+	require.Equal(t, macho.TypeDylib, machOFile.Type)
 }

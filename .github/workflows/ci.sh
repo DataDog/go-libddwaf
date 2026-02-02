@@ -44,6 +44,14 @@ run() {
         env "GOEXPERIMENT=cgocheck2" CGO_ENABLED=1 go test -race -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
     fi
 
+    # Run with race detector on purego (non-CGO) configurations.
+    # This catches data races in Go-side code that the CGO race run may miss.
+    # Skipped on Windows where -race support in purego builds is limited.
+    if $waf_enabled && [ "$cgo" != "1" ] && [ "$GOOS" != "windows" ]; then
+        echo "Running again with race detector enabled (purego)..."
+        env CGO_ENABLED=0 go test -race -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+    fi
+
     echo "Running again $nproc times in parralel"
     env CGO_ENABLED="$cgo" go test -shuffle=on -parallel $((nproc / 4 + 1)) -count="$nproc" -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
 }

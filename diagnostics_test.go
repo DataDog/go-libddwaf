@@ -18,7 +18,7 @@ func TestDecodeDiagnosticsExclusionData(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
-	encoder, err := newEncoder(newUnlimitedEncoderConfig(&pinner))
+	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 	require.NoError(t, err)
 
 	obj, err := encoder.Encode(map[string]any{
@@ -38,7 +38,7 @@ func TestDecodeProcessorOverrides(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
-	encoder, err := newEncoder(newUnlimitedEncoderConfig(&pinner))
+	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 	require.NoError(t, err)
 
 	obj, err := encoder.Encode(map[string]any{

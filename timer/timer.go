@@ -13,18 +13,18 @@ import (
 type Key string
 
 // Timer is the default interface for all timers. NewTimer will provide you with a Timer.
-// Keep in mind that they are NOT thread-safe and once Stop() is called, the Timer cannot be restarted.
+// Keep in mind that they are thread-safe and once Stop() is called, the Timer cannot be restarted.
 type Timer interface {
 	// Start starts the timer and returns the start time.
 	// If the timer was already started, it returns the previous start time.
 	// If the timer was started without specifying a budget, it will inherit the budget from its parent when calling Start().
 	// if the timer has no parent and no budget was specified, the call creating the timer (either NewTreeTimer or NewTimer) will return an error asking to specify a budget (which can be unlimited).
-	// Start is NOT thread-safe
+	// Start is thread-safe
 	Start() time.Time
 
 	// Stop ends the timer and returns the time spent on the timer as Spent() would.
 	// Stop will trigger the computation of sum timers if the timer is part of a tree. See NodeTimer for more information.
-	// Stop is NOT thread-safe
+	// Stop is thread-safe
 	Stop() time.Duration
 
 	// Spent returns the current time spent between Start() and Stop() or between Start() and now if the timer is still running.
@@ -44,7 +44,7 @@ type Timer interface {
 
 	// Timed is a convenience function that starts the timer, calls the provided function and stops the timer.
 	// Timed is panic-safe and will stop the timer even if the function panics.
-	// Timed is NOT thread-safe
+	// Timed is thread-safe
 	Timed(timedFunc func(timer Timer)) time.Duration
 }
 
@@ -66,7 +66,8 @@ type SumTimer interface {
 	SumExhausted() bool
 }
 
-// NodeTimer is the interface for tree timers. NewTreeTimer will provide you with a NodeTimer.
+// NodeTimer is a tree timer. This interface is not meant to be implemented
+// outside of this package.
 // NodeTimer can have children (NodeTimer or Timer) and will compute the sum of their spent time each time a children timer calls its Stop() method.
 // To add children to a NodeTimer, you have to specify component names when creating the timer with the WithComponent and WithComponents options.
 // The component names must be unique and cannot be empty. The component names are used to identify the children timers.
@@ -77,15 +78,18 @@ type SumTimer interface {
 // - SumSpent() -> Spent()
 // - SumRemaining() -> Remaining()
 // - SumExhausted() -> Exhausted()
-// Keep in mind that the timer itself (only Start and Stop) is NOT thread-safe and once Stop() is called, the NodeTimer cannot be restarted.
+// Keep in mind that the timer itself (only Start and Stop) is thread-safe and once Stop() is called, the NodeTimer cannot be restarted.
 type NodeTimer interface {
 	Timer
 	SumTimer
 
-	// NewNode creates a new NodeTimer with the given name and options. The given name must match one of the component name of the parent timer.
+	// NewNode creates a new NodeTimer with the given name and options.
+	// NewNode itself is safe to call concurrently with other NewNode/NewLeaf
+	// invocations on the same parent timer; the returned NodeTimer inherits
+	// the same thread-safe Start/Stop semantics.
+	// The given name must match one of the component name of the parent timer.
 	// A node timer is required to have at least one component. If no component is provided, it will return an error asking you to use NewLeaf instead.
 	// If no budget is provided, it will inherit the budget from its parent when calling Start().
-	// NewNode is thread-safe
 	NewNode(name Key, options ...Option) (NodeTimer, error)
 
 	// NewLeaf creates a new Timer with the given name and options. The given name must match one of the component name of the parent timer.

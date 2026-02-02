@@ -6,23 +6,29 @@
 package timer
 
 import (
+	"sync"
 	"time"
 )
 
 // clock is a simple cache for time.Now() to hopefully avoid some expensive calls to REALTIME part of time.Now()
 type clock struct {
+	mu          sync.Mutex
 	lastRequest time.Time
 }
 
-func newTimeCache() clock {
-	return clock{
+func newTimeCache() *clock {
+	return &clock{
 		lastRequest: time.Now(),
 	}
 }
 
 func (ct *clock) now() time.Time {
-	// If the diff is greater than ~2^32 then the monotonic clock has wrapped around
-	// and time.Since will do a call to time.Now() for us.
-	ct.lastRequest = ct.lastRequest.Add(time.Since(ct.lastRequest))
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+
+	now := time.Now()
+	if now.After(ct.lastRequest) {
+		ct.lastRequest = now
+	}
 	return ct.lastRequest
 }
