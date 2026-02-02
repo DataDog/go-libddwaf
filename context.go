@@ -117,6 +117,10 @@ func (context *Context) SubContext() (*Context, error) {
 		return nil, waferrors.ErrContextClosed
 	}
 
+	if !context.handle.retain() {
+		return nil, fmt.Errorf("WAF handle has been released")
+	}
+
 	// v2: Create subcontext from parent context
 	// If this is already a subcontext, we create from its parent's context
 	parentCContext := context.cContext
@@ -189,7 +193,7 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	wafEncodeTimer.Start()
 	defer wafEncodeTimer.Stop()
 
-	// v2: Data is stored by both contexts and subcontexts across multiple calls.
+	// Data is stored by both contexts and subcontexts across multiple calls.
 	// Use the context's pinner which gets unpinned when the context/subcontext is closed.
 	data, err := context.encodeOneAddressType(&context.pinner, addressData.Data, wafEncodeTimer)
 	if err != nil {
@@ -252,7 +256,7 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // object and its refs. If the addressData is empty, it returns nil for the WAF object and an empty
 // ref pool.
 // At this point, if the encoder does not timeout, the only error we can get is an error in case the
-// top level object is a nil map, but this behaviour is expected since either persistent or
+// top level object is a nil map, but this behavior is expected since either persistent or
 // ephemeral addresses are allowed to be null one at a time. In this case, Encode will return nil,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
 func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[string]any, timer timer.Timer) (*bindings.WAFObject, error) {
@@ -293,9 +297,6 @@ func (context *Context) run(data *bindings.WAFObject, runTimer timer.NodeTimer) 
 	// The value of the timeout cannot exceed 2^55
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
 	timeout := uint64(runTimer.SumRemaining().Microseconds()) & 0x008FFFFFFFFFFFFF
-
-	// v2: Use ContextEval for root contexts, SubcontextEval for subcontexts
-	// Pass 0 for allocator since we're managing memory in Go
 	var ret bindings.WAFReturnCode
 	if context.isSubcontext() {
 		ret = bindings.Lib.SubcontextEval(context.cSubcontext, data, 0, &result, timeout)
@@ -317,7 +318,6 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 		return Result{}, 0, fmt.Errorf("invalid result (expected map, got %s)", result.Type())
 	}
 
-	// v2: Maps are now arrays of WAFObjectKV pairs
 	entries, err := result.MapEntries()
 	if err != nil {
 		return Result{}, 0, err
@@ -397,29 +397,24 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 }
 
 // Close disposes of the underlying context or subcontext.
-//
-// For subcontexts: destroys the subcontext and returns the parent context.
-// For root contexts: destroys the context, releases associated data, and decreases
-// the reference count of the [Handle] which created this [Context].
-//
-// v2: Returns the parent context for subcontexts, nil for root contexts.
+// It destroys the context, releases associated data, and decreases
+// the reference count of the [Handle] created for this [Context].
 func (context *Context) Close() *Context {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
+
+	defer context.handle.Close() // Reduce the reference counter of the Handle.
 
 	if context.isSubcontext() {
 		// Destroy subcontext only
 		bindings.Lib.SubcontextDestroy(context.cSubcontext)
 		context.cSubcontext = 0
 		context.pinner.Unpin()
-		return context.parent
+	} else {
+		bindings.Lib.ContextDestroy(context.cContext)
 	}
 
-	// Root context: full cleanup
-	defer context.handle.Close() // Reduce the reference counter of the Handle.
-	bindings.Lib.ContextDestroy(context.cContext)
-	context.cContext = 0 // Makes it easy to spot use-after-free/double-free issues
-
+	context.cContext = 0   // makes it easy to spot use-after-free/double-free issues
 	context.pinner.Unpin() // The pinned data is no longer needed, explicitly release
 	return nil
 }
