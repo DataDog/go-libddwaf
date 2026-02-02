@@ -640,6 +640,142 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestSubContext(t *testing.T) {
+	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	require.NotNil(t, waf)
+	defer waf.Close()
+
+	t.Run("subcontext-from-subcontext", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+		defer ctx.Close()
+
+		// Create first subcontext
+		subCtx1, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		// Create subcontext from subcontext - should work (uses root context)
+		subCtx2, err := subCtx1.SubContext()
+		require.NoError(t, err)
+
+		// Both should be able to run
+		res, err := subCtx1.Run(RunAddressData{Data: map[string]any{"my.input": "test1"}})
+		require.NoError(t, err)
+		require.NotNil(t, res)
+
+		res, err = subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "test2"}})
+		require.NoError(t, err)
+		require.NotNil(t, res)
+
+		subCtx2.Close()
+		subCtx1.Close()
+	})
+
+	t.Run("subcontext-on-closed-context", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+
+		ctx.Close()
+
+		// Creating subcontext from closed context should fail
+		subCtx, err := ctx.SubContext()
+		require.Error(t, err)
+		require.Nil(t, subCtx)
+	})
+
+	t.Run("multiple-subcontexts", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+		defer ctx.Close()
+
+		// Create multiple subcontexts
+		subCtx1, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		subCtx2, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		subCtx3, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		// All should work independently
+		res1, err := subCtx1.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni-1"}})
+		require.NoError(t, err)
+		require.Len(t, res1.Events, 1)
+
+		res2, err := subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni-2"}})
+		require.NoError(t, err)
+		require.Len(t, res2.Events, 1)
+
+		res3, err := subCtx3.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni-3"}})
+		require.NoError(t, err)
+		require.Len(t, res3.Events, 1)
+
+		subCtx1.Close()
+		subCtx2.Close()
+		subCtx3.Close()
+	})
+
+	t.Run("subcontext-data-isolation", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+		defer ctx.Close()
+
+		// Run data on subcontext
+		subCtx, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		res, err := subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		require.NoError(t, err)
+		require.Len(t, res.Events, 1)
+
+		subCtx.Close()
+
+		// New subcontext should still match (data didn't persist)
+		subCtx2, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		res2, err := subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		require.NoError(t, err)
+		require.Len(t, res2.Events, 1) // Still matches because subcontext data is isolated
+
+		subCtx2.Close()
+	})
+
+	t.Run("subcontext-close-returns-nil", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+
+		subCtx, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		// Close should return nil
+		ret := subCtx.Close()
+		require.Nil(t, ret)
+
+		// Root context close should also return nil
+		nilCtx := ctx.Close()
+		require.Nil(t, nilCtx)
+	})
+
+	t.Run("run-on-closed-subcontext", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+		defer ctx.Close()
+
+		subCtx, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		subCtx.Close()
+
+		// Running on closed subcontext should fail
+		res, err := subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "test"}})
+		require.Error(t, err)
+		require.Empty(t, res.Events)
+	})
+}
+
 func TestActions(t *testing.T) {
 	testActions := func(expectedActions []string, expectedActionsTypes []string) func(t *testing.T) {
 		return func(t *testing.T) {

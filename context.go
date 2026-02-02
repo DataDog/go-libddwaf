@@ -206,8 +206,8 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
-	if context.cContext == 0 {
-		// Context has been closed, returning an empty result...
+	if context.cContext == 0 || (context.parent != nil && context.cSubcontext == 0) {
+		// Context or subcontext has been closed, returning an empty result...
 		return Result{}, waferrors.ErrContextClosed
 	}
 
