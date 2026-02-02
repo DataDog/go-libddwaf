@@ -660,9 +660,9 @@ func TestEncoderLimits(t *testing.T) {
 		encoder, err := newEncoder(EncoderConfig{
 			Pinner:           &pinner,
 			Timer:            encodeTimer,
-			MaxObjectDepth:   maxValueDepth,
-			MaxStringSize:    maxStringLength,
-			MaxContainerSize: maxContainerLength,
+			MaxObjectDepth:   uint16(maxValueDepth),
+			MaxStringSize:    uint16(maxStringLength),
+			MaxContainerSize: uint16(maxContainerLength),
 		})
 
 		require.NoError(t, err)

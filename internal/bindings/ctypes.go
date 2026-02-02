@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	MaxStringLength   = 4096
-	MaxContainerDepth = 20
-	MaxContainerSize  = 256
+	MaxStringLength   uint16 = 4096
+	MaxContainerDepth uint16 = 20
+	MaxContainerSize  uint16 = 256
 )
 
 type WAFReturnCode int32

@@ -12,6 +12,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -218,20 +219,20 @@ func maxWafValueEncoder(cfg EncoderConfig) map[string]any {
 	rnd.Read(buf)
 	fullstr := string(buf)
 
-	return maxWafValueRec(&cfg, fullstr, cfg.MaxObjectDepth)
+	return maxWafValueRec(&cfg, fullstr, int(cfg.MaxObjectDepth))
 }
 
 func maxWafValueRec(cfg *EncoderConfig, str string, depth int) map[string]any {
 	data := make(map[string]any, cfg.MaxContainerSize)
 
 	if depth == 0 {
-		for i := 0; i < cfg.MaxContainerSize; i++ {
+		for i := 0; i < int(cfg.MaxContainerSize); i++ {
 			data[str+strconv.Itoa(i)] = str
 		}
 		return data
 	}
 
-	for i := 0; i < cfg.MaxContainerSize; i++ {
+	for i := 0; i < int(cfg.MaxContainerSize); i++ {
 		data[str+strconv.Itoa(i)] = maxWafValueRec(cfg, str, depth-1)
 	}
 	return data
@@ -1203,8 +1204,8 @@ func TestTruncationInformation(t *testing.T) {
 	_, err = ctx.Run(RunAddressData{
 		Data: map[string]any{
 			"my.input.2": map[string]any{
-				"string_too_long":     strings.Repeat("Z", bindings.MaxStringLength+extra+2),
-				"container_too_large": make([]bool, bindings.MaxContainerSize+extra+2),
+				"string_too_long":     strings.Repeat("Z", int(bindings.MaxStringLength)+extra+2),
+				"container_too_large": make([]bool, int(bindings.MaxContainerSize)+extra+2),
 			},
 		},
 	})
@@ -1218,16 +1219,16 @@ func TestTruncationInformation(t *testing.T) {
 	_, err = subCtx.Run(RunAddressData{
 		Data: map[string]any{
 			"my.input": map[string]any{
-				"string_too_long":     strings.Repeat("Z", bindings.MaxStringLength+extra),
-				"container_too_large": make([]bool, bindings.MaxContainerSize+extra),
+				"string_too_long":     strings.Repeat("Z", int(bindings.MaxStringLength)+extra),
+				"container_too_large": make([]bool, int(bindings.MaxContainerSize)+extra),
 			},
 		},
 	})
 	require.NoError(t, err)
 
 	require.Equal(t, map[TruncationReason][]int{
-		StringTooLong:     {bindings.MaxStringLength + extra + 2},
-		ContainerTooLarge: {bindings.MaxContainerSize + extra + 2},
+		StringTooLong:     {int(bindings.MaxStringLength) + extra + 2},
+		ContainerTooLarge: {int(bindings.MaxContainerSize) + extra + 2},
 	}, ctx.truncations)
 }
 
@@ -1244,7 +1245,7 @@ func BenchmarkEncoder(b *testing.B) {
 		encoder, _ := newEncoder(EncoderConfig{
 			Pinner:           &pinner,
 			MaxObjectDepth:   10,
-			MaxStringSize:    1 * 1024 * 1024,
+			MaxStringSize:    math.MaxUint16,
 			MaxContainerSize: 100,
 			Timer:            encodeTimer,
 		})
