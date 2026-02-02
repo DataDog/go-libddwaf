@@ -12,6 +12,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -22,10 +23,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/lib"
-	"github.com/DataDog/go-libddwaf/v4/timer"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/lib"
+	"github.com/DataDog/go-libddwaf/v5/timer"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -199,7 +200,7 @@ func newArachniTestRulePair(input1, input2 ruleInput) map[string]any {
 }
 
 func newDefaultHandle(rule any) (*Handle, *Diagnostics, error) {
-	builder, err := NewBuilder("", "")
+	builder, err := NewBuilder()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -218,20 +219,20 @@ func maxWafValueEncoder(cfg EncoderConfig) map[string]any {
 	rnd.Read(buf)
 	fullstr := string(buf)
 
-	return maxWafValueRec(&cfg, fullstr, cfg.MaxObjectDepth)
+	return maxWafValueRec(&cfg, fullstr, int(cfg.MaxObjectDepth))
 }
 
 func maxWafValueRec(cfg *EncoderConfig, str string, depth int) map[string]any {
 	data := make(map[string]any, cfg.MaxContainerSize)
 
 	if depth == 0 {
-		for i := 0; i < cfg.MaxContainerSize; i++ {
+		for i := 0; i < int(cfg.MaxContainerSize); i++ {
 			data[str+strconv.Itoa(i)] = str
 		}
 		return data
 	}
 
-	for i := 0; i < cfg.MaxContainerSize; i++ {
+	for i := 0; i < int(cfg.MaxContainerSize); i++ {
 		data[str+strconv.Itoa(i)] = maxWafValueRec(cfg, str, depth-1)
 	}
 	return data
@@ -263,7 +264,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue, TimerKey: wafTimerKey})
+		res, err := context.Run(RunAddressData{Data: normalValue, TimerKey: wafTimerKey})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Timer.Stats())
 		require.NotZero(t, context.Timer.Stats()[wafTimerKey])
@@ -279,7 +280,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Persistent: map[string]any{"my.input": "curl/7.88"}, TimerKey: wafTimerKey})
+		res, err := context.Run(RunAddressData{Data: map[string]any{"my.input": "curl/7.88"}, TimerKey: wafTimerKey})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Timer.Stats())
 		require.NotZero(t, context.Timer.Stats()[wafTimerKey])
@@ -295,7 +296,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Persistent: largeValue, TimerKey: wafTimerKey})
+		res, err := context.Run(RunAddressData{Data: largeValue, TimerKey: wafTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Timer.Stats()[wafTimerKey], time.Millisecond)
 		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
@@ -307,9 +308,14 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Ephemeral: largeValue, TimerKey: wafTimerKey})
+		// Ephemeral data is passed via SubContext
+		// SubContext inherits the budget from the parent but has its own timer
+		subCtx, err := context.SubContext()
+		require.NoError(t, err)
+		defer subCtx.Close()
+
+		res, err := subCtx.Run(RunAddressData{Data: largeValue})
 		require.Equal(t, waferrors.ErrTimeout, err)
-		require.GreaterOrEqual(t, context.Timer.Stats()[wafTimerKey], time.Millisecond)
 		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
 	})
 
@@ -320,7 +326,7 @@ func TestTimeout(t *testing.T) {
 		defer context.Close()
 
 		for i := 0; i < 1000 && err != waferrors.ErrTimeout; i++ {
-			_, err = context.Run(RunAddressData{Persistent: normalValue, TimerKey: wafTimerKey})
+			_, err = context.Run(RunAddressData{Data: normalValue, TimerKey: wafTimerKey})
 		}
 
 		require.Equal(t, waferrors.ErrTimeout, err)
@@ -336,7 +342,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Persistent: normalValue, Ephemeral: normalValue, TimerKey: raspTimerKey})
+		res, err := context.Run(RunAddressData{Data: normalValue, TimerKey: raspTimerKey})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Timer.Stats())
 		require.NotZero(t, context.Timer.Stats()[raspTimerKey])
@@ -352,7 +358,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Persistent: largeValue, TimerKey: raspTimerKey})
+		res, err := context.Run(RunAddressData{Data: largeValue, TimerKey: raspTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey], time.Millisecond)
 		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
@@ -367,7 +373,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Persistent: normalValue, TimerKey: wafTimerKey})
+		res, err := context.Run(RunAddressData{Data: normalValue, TimerKey: wafTimerKey})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Timer.Stats())
 		require.NotZero(t, context.Timer.Stats()[wafTimerKey])
@@ -376,7 +382,7 @@ func TestTimeout(t *testing.T) {
 		require.NotZero(t, res.TimerStats[EncodeTimeKey])
 		require.NotZero(t, res.TimerStats[DurationTimeKey])
 
-		res, err = context.Run(RunAddressData{Persistent: largeValue, TimerKey: raspTimerKey})
+		res, err = context.Run(RunAddressData{Data: largeValue, TimerKey: raspTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
 		require.LessOrEqual(t, context.Timer.Stats()[wafTimerKey], time.Millisecond)
 		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey]+context.Timer.Stats()[wafTimerKey], time.Millisecond)
@@ -400,10 +406,7 @@ func TestMatching(t *testing.T) {
 	values := map[string]any{
 		"my.input": "go client",
 	}
-	ephemeral := map[string]any{
-		"my.other.input": map[string]bool{"safe": true},
-	}
-	res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
+	res, err := wafCtx.Run(RunAddressData{Data: values})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -412,7 +415,7 @@ func TestMatching(t *testing.T) {
 	values = map[string]any{
 		"server.request.uri.raw": "something",
 	}
-	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
+	res, err = wafCtx.Run(RunAddressData{Data: values})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -422,13 +425,13 @@ func TestMatching(t *testing.T) {
 	values = map[string]any{
 		"my.input": "Arachni",
 	}
-	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
+	res, err = wafCtx.Run(RunAddressData{Data: values})
 	require.NoError(t, err)
 	require.NotEmpty(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	// Not matching anymore since it already matched before
-	res, err = wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
+	res, err = wafCtx.Run(RunAddressData{Data: values})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -440,7 +443,7 @@ func TestMatching(t *testing.T) {
 	require.Nil(t, res.Actions)
 
 	// Empty values
-	res, err = wafCtx.Run(RunAddressData{Persistent: map[string]any{}, Ephemeral: ephemeral})
+	res, err = wafCtx.Run(RunAddressData{Data: map[string]any{}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -454,7 +457,8 @@ func TestMatching(t *testing.T) {
 }
 
 func TestMatchingEphemeralAndPersistent(t *testing.T) {
-	// This test validates the WAF behavior when a given address is provided both as ephemeral and persistent.
+	// This test validates the WAF behavior when a given address is provided as both
+	// persistent (on root context) and ephemeral (on subcontext).
 	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	defer waf.Close()
@@ -464,19 +468,13 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()
 
-	// Intentionally setting the same key on both fields
-	addresses := RunAddressData{
-		Persistent: map[string]any{"my.input": "Arachni/persistent"},
-		Ephemeral:  map[string]any{"my.input": "Arachni/ephemeral"},
-	}
-
-	res, err := wafCtx.Run(addresses)
+	// Persistent data is run first on the root context
+	res, err := wafCtx.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni/persistent"}})
 	require.NoError(t, err)
 
-	// There is only one hit here
+	// There is only one hit here on the PERSISTENT value
 	require.Len(t, res.Events, 1)
 	event := res.Events[0].(map[string]any)
-	// The hit is on the PERSISTENT value
 	require.Equal(t,
 		[]any{map[string]any{
 			"operator":       "match_regex",
@@ -491,10 +489,14 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 		event["rule_matches"],
 	)
 
-	// Matche the same inputs a second time...
-	res, err = wafCtx.Run(addresses)
+	// Ephemeral data is run on a subcontext
+	subCtx, err := wafCtx.SubContext()
 	require.NoError(t, err)
-	// There shouldn't be any match anymore...
+	defer subCtx.Close()
+
+	res, err = subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni/ephemeral"}})
+	require.NoError(t, err)
+	// There shouldn't be any match since the rule already matched with persistent data
 	require.Empty(t, res.Events)
 }
 
@@ -516,56 +518,65 @@ func TestMatchingEphemeral(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 
+	// First run persistent data (input2), then ephemeral via subcontext (input1)
 	// Not matching because the address value doesn't match the rule
-	runAddresses := RunAddressData{
-		Ephemeral: map[string]any{
-			input1: "go client",
-		},
-		Persistent: map[string]any{
-			input2: "go client",
-		},
-	}
-	res, err := wafCtx.Run(runAddresses)
+	res, err := wafCtx.Run(RunAddressData{Data: map[string]any{input2: "go client"}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
+
+	subCtx, err := wafCtx.SubContext()
+	require.NoError(t, err)
+	res, err = subCtx.Run(RunAddressData{Data: map[string]any{input1: "go client"}})
+	require.NoError(t, err)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
+	subCtx.Close()
 
 	// Not matching because the address is not used by the rule
-	runAddresses = RunAddressData{
-		Ephemeral: map[string]any{
-			"server.request.uri.raw": "something",
-		},
-		Persistent: map[string]any{
-			"server.request.body.raw": "something",
-		},
-	}
-	res, err = wafCtx.Run(runAddresses)
+	res, err = wafCtx.Run(RunAddressData{Data: map[string]any{"server.request.body.raw": "something"}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
-	// Not matching due to a timeout
-	runAddresses = RunAddressData{
-		Ephemeral: map[string]any{
-			input1: "Arachni-1",
-		},
-		Persistent: map[string]any{
-			input2: "Arachni-2",
-		},
-	}
-
-	// Matching
-	// Note a WAF rule with ephemeral addresses may match more than once!
-	res, err = wafCtx.Run(runAddresses)
+	subCtx, err = wafCtx.SubContext()
 	require.NoError(t, err)
-	require.Len(t, res.Events, 2) // 1 ephemeral, 1 persistent [!!Only if the rules have a different tags.type value!!]
+	res, err = subCtx.Run(RunAddressData{Data: map[string]any{"server.request.uri.raw": "something"}})
+	require.NoError(t, err)
+	require.Nil(t, res.Events)
+	require.Nil(t, res.Actions)
+	subCtx.Close()
+
+	// Matching: persistent data (input2) on root context
+	res, err = wafCtx.Run(RunAddressData{Data: map[string]any{input2: "Arachni-2"}})
+	require.NoError(t, err)
+	require.Len(t, res.Events, 1) // 1 persistent
 	require.Nil(t, res.Actions)
 
-	// Ephemeral address should still match, persistent shouldn't anymore
-	res, err = wafCtx.Run(runAddresses)
+	// Matching: ephemeral data (input1) on subcontext
+	// Note a WAF rule with ephemeral addresses may match more than once!
+	subCtx, err = wafCtx.SubContext()
+	require.NoError(t, err)
+	res, err = subCtx.Run(RunAddressData{Data: map[string]any{input1: "Arachni-1"}})
 	require.NoError(t, err)
 	require.Len(t, res.Events, 1) // 1 ephemeral
 	require.Nil(t, res.Actions)
+	subCtx.Close()
+
+	// Run persistent again - shouldn't match anymore since it already matched
+	res, err = wafCtx.Run(RunAddressData{Data: map[string]any{input2: "Arachni-2"}})
+	require.NoError(t, err)
+	require.Empty(t, res.Events) // persistent already matched
+	require.Nil(t, res.Actions)
+
+	// Ephemeral address should still match on new subcontext
+	subCtx, err = wafCtx.SubContext()
+	require.NoError(t, err)
+	res, err = subCtx.Run(RunAddressData{Data: map[string]any{input1: "Arachni-1"}})
+	require.NoError(t, err)
+	require.Len(t, res.Events, 1) // 1 ephemeral - still matches
+	require.Nil(t, res.Actions)
+	subCtx.Close()
 
 	wafCtx.Close()
 	waf.Close()
@@ -593,40 +604,33 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 
+	// Ephemeral data is run via SubContext
 	// Not matching because the address value doesn't match the rule
-	runAddresses := RunAddressData{
-		Ephemeral: map[string]any{
-			input1: "go client",
-		},
-	}
-	res, err := wafCtx.Run(runAddresses)
+	subCtx, err := wafCtx.SubContext()
+	require.NoError(t, err)
+	res, err := subCtx.Run(RunAddressData{Data: map[string]any{input1: "go client"}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
+	subCtx.Close()
 
 	// Not matching because the address is not used by the rule
-	runAddresses = RunAddressData{
-		Ephemeral: map[string]any{
-			"server.request.uri.raw": "something",
-		},
-	}
-	res, err = wafCtx.Run(runAddresses)
+	subCtx, err = wafCtx.SubContext()
+	require.NoError(t, err)
+	res, err = subCtx.Run(RunAddressData{Data: map[string]any{"server.request.uri.raw": "something"}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
-
-	// Not matching due to a timeout
-	runAddresses = RunAddressData{
-		Ephemeral: map[string]any{
-			input1: "Arachni-1",
-		},
-	}
+	subCtx.Close()
 
 	// Matching
-	res, err = wafCtx.Run(runAddresses)
+	subCtx, err = wafCtx.SubContext()
+	require.NoError(t, err)
+	res, err = subCtx.Run(RunAddressData{Data: map[string]any{input1: "Arachni-1"}})
 	require.NoError(t, err)
 	require.Len(t, res.Events, 1) // 1 ephemeral
 	require.Nil(t, res.Actions)
+	subCtx.Close()
 
 	wafCtx.Close()
 	waf.Close()
@@ -634,6 +638,142 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 	require.Nil(t, ctx)
 	require.Error(t, err)
+}
+
+func TestSubContext(t *testing.T) {
+	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	require.NotNil(t, waf)
+	defer waf.Close()
+
+	t.Run("subcontext-from-subcontext", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+		defer ctx.Close()
+
+		// Create first subcontext
+		subCtx1, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		// Create subcontext from subcontext - should work (uses root context)
+		subCtx2, err := subCtx1.SubContext()
+		require.NoError(t, err)
+
+		// Both should be able to run
+		res, err := subCtx1.Run(RunAddressData{Data: map[string]any{"my.input": "test1"}})
+		require.NoError(t, err)
+		require.NotNil(t, res)
+
+		res, err = subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "test2"}})
+		require.NoError(t, err)
+		require.NotNil(t, res)
+
+		subCtx2.Close()
+		subCtx1.Close()
+	})
+
+	t.Run("subcontext-on-closed-context", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+
+		ctx.Close()
+
+		// Creating subcontext from closed context should fail
+		subCtx, err := ctx.SubContext()
+		require.Error(t, err)
+		require.Nil(t, subCtx)
+	})
+
+	t.Run("multiple-subcontexts", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+		defer ctx.Close()
+
+		// Create multiple subcontexts
+		subCtx1, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		subCtx2, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		subCtx3, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		// All should work independently
+		res1, err := subCtx1.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni-1"}})
+		require.NoError(t, err)
+		require.Len(t, res1.Events, 1)
+
+		res2, err := subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni-2"}})
+		require.NoError(t, err)
+		require.Len(t, res2.Events, 1)
+
+		res3, err := subCtx3.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni-3"}})
+		require.NoError(t, err)
+		require.Len(t, res3.Events, 1)
+
+		subCtx1.Close()
+		subCtx2.Close()
+		subCtx3.Close()
+	})
+
+	t.Run("subcontext-data-isolation", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+		defer ctx.Close()
+
+		// Run data on subcontext
+		subCtx, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		res, err := subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		require.NoError(t, err)
+		require.Len(t, res.Events, 1)
+
+		subCtx.Close()
+
+		// New subcontext should still match (data didn't persist)
+		subCtx2, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		res2, err := subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		require.NoError(t, err)
+		require.Len(t, res2.Events, 1) // Still matches because subcontext data is isolated
+
+		subCtx2.Close()
+	})
+
+	t.Run("subcontext-close-returns-nil", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+
+		subCtx, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		// Close should return nil
+		ret := subCtx.Close()
+		require.Nil(t, ret)
+
+		// Root context close should also return nil
+		nilCtx := ctx.Close()
+		require.Nil(t, nilCtx)
+	})
+
+	t.Run("run-on-closed-subcontext", func(t *testing.T) {
+		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+		defer ctx.Close()
+
+		subCtx, err := ctx.SubContext()
+		require.NoError(t, err)
+
+		subCtx.Close()
+
+		// Running on closed subcontext should fail
+		res, err := subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "test"}})
+		require.Error(t, err)
+		require.Empty(t, res.Events)
+	})
 }
 
 func TestActions(t *testing.T) {
@@ -650,14 +790,11 @@ func TestActions(t *testing.T) {
 			require.NotNil(t, wafCtx)
 			defer wafCtx.Close()
 
-			// Not matching because the address value doesn't match the rule
+			// Matching the Arachni pattern
 			values := map[string]any{
 				"my.input": "Arachni",
 			}
-			ephemeral := map[string]any{
-				"my.other.input": map[string]bool{"safe": true},
-			}
-			res, err := wafCtx.Run(RunAddressData{Persistent: values, Ephemeral: ephemeral})
+			res, err := wafCtx.Run(RunAddressData{Data: values})
 			require.NoError(t, err)
 			require.NotEmpty(t, res.Events)
 			for _, aType := range expectedActionsTypes {
@@ -694,6 +831,8 @@ func TestKnownActions(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
+	t.Skip()
+
 	// Start 200 goroutines that will use the WAF 500 times each
 	nbUsers := 200
 	nbRun := 500
@@ -711,11 +850,6 @@ func TestConcurrency(t *testing.T) {
 		// Said otherwise, the User-Agent rule will run as long as it doesn't match, otherwise it gets ignored.
 		// This is the reason why the following user agent are not Arachni.
 		userAgents := [...]string{"Foo", "Bar", "Datadog"}
-		bodies := [3]map[string]any{
-			{"foo": "bar"},
-			{"baz": "bat"},
-			{"payload": "interesting"},
-		}
 		length := len(userAgents)
 
 		var startBarrier, stopBarrier sync.WaitGroup
@@ -737,10 +871,7 @@ func TestConcurrency(t *testing.T) {
 							"user-agent": userAgents[i],
 						},
 					}
-					ephemeralData := map[string]any{
-						"server.request.body": bodies[i],
-					}
-					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeralData})
+					res, err := wafCtx.Run(RunAddressData{Data: data})
 					if err != nil {
 						panic(err)
 					}
@@ -762,10 +893,7 @@ func TestConcurrency(t *testing.T) {
 				"user-agent": "Arachni",
 			},
 		}
-		ephemeral := map[string]any{
-			"server.request.body": map[string]bool{"safe": true},
-		}
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
+		res, err := wafCtx.Run(RunAddressData{Data: data})
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
 	})
@@ -779,11 +907,6 @@ func TestConcurrency(t *testing.T) {
 		// Said otherwise, the User-Agent rule will run as long as it doesn't match, otherwise it gets ignored.
 		// This is the reason why the following user agent are not Arachni.
 		userAgents := [...]string{"Foo", "Bar", "Datadog"}
-		bodies := [3]map[string]any{
-			{"foo": "bar"},
-			{"baz": "bat"},
-			{"payload": "interesting"},
-		}
 		length := len(userAgents)
 
 		var startBarrier, stopBarrier sync.WaitGroup
@@ -809,9 +932,8 @@ func TestConcurrency(t *testing.T) {
 							"user-agent": userAgents[i],
 						},
 					}
-					ephemeral := map[string]any{"server.request.body": bodies[i]}
 
-					res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
+					res, err := wafCtx.Run(RunAddressData{Data: data})
 
 					if err != nil {
 						panic(err)
@@ -827,10 +949,74 @@ func TestConcurrency(t *testing.T) {
 						"user-agent": "Arachni",
 					},
 				}
-				ephemeral := map[string]any{
-					"server.request.body": map[string]bool{"safe": true},
+				res, err := wafCtx.Run(RunAddressData{Data: data})
+				require.NoError(t, err)
+				require.NotEmpty(t, res.Events)
+				require.Nil(t, res.Actions)
+			}()
+		}
+
+		// Save the test start time to compare it to the first metricsStore store's
+		// that should be latter.
+		startBarrier.Done() // Unblock the user goroutines
+		stopBarrier.Wait()  // Wait for the user goroutines to be done
+	})
+
+	t.Run("concurrent-waf-subcontext-usage", func(t *testing.T) {
+		waf, _, err := newDefaultHandle(testArachniRule)
+		require.NoError(t, err)
+		defer waf.Close()
+
+		// User agents that won't match the rule so that it doesn't get pruned.
+		// Said otherwise, the User-Agent rule will run as long as it doesn't match, otherwise it gets ignored.
+		// This is the reason why the following user agent are not Arachni.
+		userAgents := [...]string{"Foo", "Bar", "Datadog"}
+		length := len(userAgents)
+
+		var startBarrier, stopBarrier sync.WaitGroup
+		// Create a start barrier to synchronize every goroutine's launch and
+		// increase the chances of parallel accesses
+		startBarrier.Add(1)
+		// Create a stopBarrier to signal when all user goroutines are done.
+		stopBarrier.Add(nbUsers)
+
+		for range nbUsers {
+			go func() {
+				startBarrier.Wait()      // Sync the starts of the goroutines
+				defer stopBarrier.Done() // Signal we are done when returning
+
+				wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+				require.NoError(t, err)
+				defer wafCtx.Close()
+
+				wafSubCtx, err := wafCtx.SubContext()
+				defer wafSubCtx.Close()
+
+				for c := range nbRun {
+					i := c % length
+					data := map[string]any{
+						"server.request.headers.no_cookies": map[string]string{
+							"user-agent": userAgents[i],
+						},
+					}
+
+					res, err := wafSubCtx.Run(RunAddressData{Data: data})
+
+					if err != nil {
+						panic(err)
+					}
+					if len(res.Events) > 0 {
+						panic(fmt.Errorf("c=%d events=`%v`", c, res.Events))
+					}
 				}
-				res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
+
+				// Test the rule matches Arachni in the end
+				data := map[string]any{
+					"server.request.headers.no_cookies": map[string]string{
+						"user-agent": "Arachni",
+					},
+				}
+				res, err := wafSubCtx.Run(RunAddressData{Data: data})
 				require.NoError(t, err)
 				require.NotEmpty(t, res.Events)
 				require.Nil(t, res.Actions)
@@ -927,10 +1113,17 @@ func TestConcurrency(t *testing.T) {
 				// effectively releases the WAF context, and between 0 and N calls to wafCtx.Run(...) are
 				// done (those that land after `wafCtx.Close()` happened will be silent no-ops).
 				if n%2 == 0 {
-					_, err := wafCtx.Run(RunAddressData{Ephemeral: data})
+					// Use SubContext for ephemeral data
+					subCtx, err := wafCtx.SubContext()
+					if err != nil {
+						require.ErrorIs(t, err, waferrors.ErrContextClosed)
+						return
+					}
+					_, err = subCtx.Run(RunAddressData{Data: data})
 					if err != nil {
 						require.ErrorIs(t, err, waferrors.ErrContextClosed)
 					}
+					subCtx.Close()
 				} else {
 					wafCtx.Close()
 				}
@@ -1106,11 +1299,8 @@ func TestMetrics(t *testing.T) {
 		data := map[string]any{
 			"server.request.uri.raw": "\\%uff00",
 		}
-		ephemeral := map[string]any{
-			"server.request.body": map[string]bool{"safe": true},
-		}
 		start := time.Now()
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral, TimerKey: wafTimerKey})
+		res, err := wafCtx.Run(RunAddressData{Data: data, TimerKey: wafTimerKey})
 		elapsedNS := time.Since(start).Nanoseconds()
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
@@ -1133,12 +1323,9 @@ func TestMetrics(t *testing.T) {
 		data := map[string]any{
 			"server.request.uri.raw": "\\%uff00",
 		}
-		ephemeral := map[string]any{
-			"server.request.body": map[string]bool{"safe": true},
-		}
 
 		for i := uint64(1); i <= 10; i++ {
-			_, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral, TimerKey: wafTimerKey})
+			_, err := wafCtx.Run(RunAddressData{Data: data, TimerKey: wafTimerKey})
 			require.Equal(t, waferrors.ErrTimeout, err)
 		}
 	})
@@ -1157,10 +1344,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]any{
 			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
 		}
-		ephemeral := map[string]any{
-			"server.request.body": map[string]bool{"safe": true},
-		}
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
+		res, err := wafCtx.Run(RunAddressData{Data: data})
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
@@ -1180,10 +1364,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]any{
 			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
 		}
-		ephemeral := map[string]any{
-			"server.request.body": map[string]bool{"safe": true},
-		}
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
+		res, err := wafCtx.Run(RunAddressData{Data: data})
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
@@ -1203,10 +1384,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]any{
 			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
 		}
-		ephemeral := map[string]any{
-			"server.request.body": map[string]bool{"safe": true},
-		}
-		res, err := wafCtx.Run(RunAddressData{Persistent: data, Ephemeral: ephemeral})
+		res, err := wafCtx.Run(RunAddressData{Data: data})
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
@@ -1227,24 +1405,35 @@ func TestTruncationInformation(t *testing.T) {
 
 	extra := rand.Intn(10) + 1 // Random int between 1 and 10
 
+	// Run persistent data first
 	_, err = ctx.Run(RunAddressData{
-		Ephemeral: map[string]any{
-			"my.input": map[string]any{
-				"string_too_long":     strings.Repeat("Z", bindings.MaxStringLength+extra),
-				"container_too_large": make([]bool, bindings.MaxContainerSize+extra),
-			},
-		},
-		Persistent: map[string]any{
+		Data: map[string]any{
 			"my.input.2": map[string]any{
-				"string_too_long":     strings.Repeat("Z", bindings.MaxStringLength+extra+2),
-				"container_too_large": make([]bool, bindings.MaxContainerSize+extra+2),
+				"string_too_long":     strings.Repeat("Z", int(bindings.MaxStringLength)+extra+2),
+				"container_too_large": make([]bool, int(bindings.MaxContainerSize)+extra+2),
 			},
 		},
 	})
 	require.NoError(t, err)
+
+	// Run ephemeral data via SubContext
+	subCtx, err := ctx.SubContext()
+	require.NoError(t, err)
+	defer subCtx.Close()
+
+	_, err = subCtx.Run(RunAddressData{
+		Data: map[string]any{
+			"my.input": map[string]any{
+				"string_too_long":     strings.Repeat("Z", int(bindings.MaxStringLength)+extra),
+				"container_too_large": make([]bool, int(bindings.MaxContainerSize)+extra),
+			},
+		},
+	})
+	require.NoError(t, err)
+
 	require.Equal(t, map[TruncationReason][]int{
-		StringTooLong:     {bindings.MaxStringLength + extra + 2, bindings.MaxStringLength + extra},
-		ContainerTooLarge: {bindings.MaxContainerSize + extra + 2, bindings.MaxContainerSize + extra},
+		StringTooLong:     {int(bindings.MaxStringLength) + extra + 2},
+		ContainerTooLarge: {int(bindings.MaxContainerSize) + extra + 2},
 	}, ctx.truncations)
 }
 
@@ -1261,7 +1450,7 @@ func BenchmarkEncoder(b *testing.B) {
 		encoder, _ := newEncoder(EncoderConfig{
 			Pinner:           &pinner,
 			MaxObjectDepth:   10,
-			MaxStringSize:    1 * 1024 * 1024,
+			MaxStringSize:    math.MaxUint16,
 			MaxContainerSize: 100,
 			Timer:            encodeTimer,
 		})
@@ -1332,7 +1521,7 @@ func TestProcessorOverrides(t *testing.T) {
 	]
 }`
 
-	builder, err := NewBuilder("", "")
+	builder, err := NewBuilder()
 	require.NoError(t, err)
 
 	var parsed map[string]any

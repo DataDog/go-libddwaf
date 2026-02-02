@@ -8,7 +8,7 @@
 
 package support
 
-import "github.com/DataDog/go-libddwaf/v4/waferrors"
+import "github.com/DataDog/go-libddwaf/v5/waferrors"
 
 func init() {
 	wafManuallyDisabledErr = waferrors.ManuallyDisabledError{}

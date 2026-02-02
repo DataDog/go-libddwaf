@@ -7,13 +7,11 @@ package libddwaf
 
 import (
 	"fmt"
-	"runtime"
 	"sync/atomic"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v4/timer"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/timer"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 // Handle represents an instance of the WAF for a given ruleset. It is obtained
@@ -52,13 +50,14 @@ func wrapHandle(cHandle bindings.WAFHandle) *Handle {
 func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error) {
 	// Handle has been released
 	if !handle.retain() {
-		return nil, fmt.Errorf("handle was released")
+		return nil, fmt.Errorf("WAF handle has been released")
 	}
 
-	cContext := bindings.Lib.ContextInit(handle.cHandle)
+	// v2: Pass default allocator for output objects
+	cContext := bindings.Lib.ContextInit(handle.cHandle, bindings.Lib.DefaultAllocator())
 	if cContext == 0 {
 		handle.Close() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
-		return nil, fmt.Errorf("could not get C context")
+		return nil, fmt.Errorf("failed to initialize WAF context: ddwaf_context_init returned null")
 	}
 
 	rootTimer, err := timer.NewTreeTimer(timerOptions...)
@@ -133,22 +132,6 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 			}
 			return next
 		}
-	}
-}
-
-func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscatorRegex string) *bindings.WAFConfig {
-	return &bindings.WAFConfig{
-		Limits: bindings.WAFConfigLimits{
-			MaxContainerDepth: bindings.MaxContainerDepth,
-			MaxContainerSize:  bindings.MaxContainerSize,
-			MaxStringLength:   bindings.MaxStringLength,
-		},
-		Obfuscator: bindings.WAFConfigObfuscator{
-			KeyRegex:   unsafe.PtrToUintptr(unsafe.Cstring(pinner, keyObfuscatorRegex)),
-			ValueRegex: unsafe.PtrToUintptr(unsafe.Cstring(pinner, valueObfuscatorRegex)),
-		},
-		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
-		FreeFn: 0,
 	}
 }
 

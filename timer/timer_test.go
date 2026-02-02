@@ -11,18 +11,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v5/timer"
 
 	"github.com/stretchr/testify/require"
 )
 
 func hasExpired(t *testing.T, timer timer.Timer, duration time.Duration) {
+	t.Helper()
 	require.Greater(t, timer.Spent(), duration)
 	require.Zero(t, timer.Remaining())
 	require.True(t, timer.Exhausted())
 }
 
 func hasSumExpired(t *testing.T, timer timer.NodeTimer, duration time.Duration) {
+	t.Helper()
 	require.Greater(t, timer.SumSpent(), duration)
 	require.Zero(t, timer.SumRemaining())
 	require.True(t, timer.SumExhausted())

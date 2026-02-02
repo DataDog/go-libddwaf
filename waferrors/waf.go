@@ -12,7 +12,7 @@ import (
 
 var (
 	// ErrContextClosed is returned when an operation is attempted on a
-	// [github.com/DataDog/go-libddwaf/v4.Context] that has already been closed.
+	// [github.com/DataDog/go-libddwaf/v5.Context] that has already been closed.
 	ErrContextClosed = errors.New("closed WAF context")
 
 	// ErrMaxDepthExceeded is returned when the WAF encounters a value that
@@ -55,23 +55,24 @@ const (
 	ErrEmptyRuleAddresses
 )
 
-var errorStrMap = map[RunError]string{
-	ErrInternal:           "internal waf error",
-	ErrInvalidObject:      "invalid waf object",
-	ErrInvalidArgument:    "invalid waf argument",
-	ErrTimeout:            "waf timeout",
-	ErrOutOfMemory:        "out of memory",
-	ErrEmptyRuleAddresses: "empty rule addresses",
-}
-
 // Error returns the string representation of the [RunError].
 func (e RunError) Error() string {
-	description, ok := errorStrMap[e]
-	if !ok {
-		return fmt.Sprintf("unknown waf error %d", e)
+	switch e {
+	case ErrInternal:
+		return "internal waf error"
+	case ErrInvalidObject:
+		return "invalid waf object"
+	case ErrInvalidArgument:
+		return "invalid waf argument"
+	case ErrTimeout:
+		return "waf timeout"
+	case ErrOutOfMemory:
+		return "out of memory"
+	case ErrEmptyRuleAddresses:
+		return "empty rule addresses"
+	default:
+		return fmt.Sprintf("unknown waf error %d", int(e))
 	}
-
-	return description
 }
 
 // ToWafErrorCode converts an error to a WAF error code, returns zero if the

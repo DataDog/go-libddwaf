@@ -11,7 +11,7 @@ package bindings
 import (
 	"errors"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/log"
+	"github.com/DataDog/go-libddwaf/v5/internal/log"
 )
 
 type WAFLib struct{}
@@ -24,7 +24,13 @@ func (*WAFLib) Close() error { return nil }
 
 func (*WAFLib) GetVersion() string { return "" }
 
-func (*WAFLib) BuilderInit(*WAFConfig) WAFBuilder { return 0 }
+// GetDefaultAllocator returns the default allocator used by the library.
+// This is called once at load time; use DefaultAllocator() for the cached value.
+func (*WAFLib) GetDefaultAllocator() WAFAllocator { return 0 }
+
+func (*WAFLib) DefaultAllocator() WAFAllocator { return 0 }
+
+func (*WAFLib) BuilderInit() WAFBuilder { return 0 }
 
 func (*WAFLib) BuilderAddOrUpdateConfig(WAFBuilder, string, *WAFObject, *WAFObject) bool {
 	return false
@@ -46,16 +52,24 @@ func (*WAFLib) KnownAddresses(WAFHandle) []string { return nil }
 
 func (*WAFLib) KnownActions(WAFHandle) []string { return nil }
 
-func (*WAFLib) ContextInit(WAFHandle) WAFContext { return 0 }
+func (*WAFLib) ContextInit(WAFHandle, WAFAllocator) WAFContext { return 0 }
 
-func (*WAFLib) ContextDestroy(WAFContext) {}
-
-func (*WAFLib) ObjectFree(*WAFObject) {}
-
-func (*WAFLib) Run(WAFContext, *WAFObject, *WAFObject, *WAFObject, uint64) WAFReturnCode {
+func (*WAFLib) ContextEval(WAFContext, *WAFObject, WAFAllocator, *WAFObject, uint64) WAFReturnCode {
 	return WAFErrInternal
 }
 
-func (waf *WAFLib) ObjectFromJSON(json []byte) (WAFObject, bool) { return WAFObject{}, false }
+func (*WAFLib) ContextDestroy(WAFContext) {}
+
+func (*WAFLib) SubcontextInit(WAFContext) WAFSubcontext { return 0 }
+
+func (*WAFLib) SubcontextEval(WAFSubcontext, *WAFObject, WAFAllocator, *WAFObject, uint64) WAFReturnCode {
+	return WAFErrInternal
+}
+
+func (*WAFLib) SubcontextDestroy(WAFSubcontext) {}
+
+func (*WAFLib) ObjectDestroy(*WAFObject, WAFAllocator) {}
+
+func (*WAFLib) ObjectFromJSON([]byte, WAFAllocator) (WAFObject, bool) { return WAFObject{}, false }
 
 func (*WAFLib) Handle() uintptr { return 0 }

@@ -13,9 +13,9 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/lib"
-	"github.com/DataDog/go-libddwaf/v4/internal/log"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v5/internal/lib"
+	"github.com/DataDog/go-libddwaf/v5/internal/log"
+	"github.com/DataDog/go-libddwaf/v5/internal/unsafe"
 	"github.com/ebitengine/purego"
 )
 
@@ -25,10 +25,11 @@ import (
 // since purego calls are not type safe
 type WAFLib struct {
 	wafSymbols
-	handle uintptr
+	handle           uintptr
+	defaultAllocator WAFAllocator
 }
 
-// newWAFLib loads the libddwaf shared library and resolves all tge relevant symbols.
+// newWAFLib loads the libddwaf shared library and resolves all the relevant symbols.
 // The caller is responsible for calling wafDl.Close on the returned object once they
 // are done with it so that associated resources can be released.
 func newWAFLib() (dl *WAFLib, err error) {
@@ -55,7 +56,7 @@ func newWAFLib() (dl *WAFLib, err error) {
 		return
 	}
 
-	dl = &WAFLib{symbols, handle}
+	dl = &WAFLib{wafSymbols: symbols, handle: handle}
 
 	// Try calling the waf to make sure everything is fine
 	if _, err = tryCall(dl.GetVersion); err != nil {
@@ -64,6 +65,9 @@ func newWAFLib() (dl *WAFLib, err error) {
 		}
 		return
 	}
+
+	// v2: Get and store the default allocator
+	dl.defaultAllocator = dl.GetDefaultAllocator()
 
 	if val := os.Getenv(log.EnvVarLogLevel); val != "" {
 		logLevel := log.LevelNamed(val)
@@ -84,14 +88,20 @@ func (waf *WAFLib) GetVersion() string {
 	return unsafe.Gostring(unsafe.Cast[byte](waf.syscall(waf.getVersion)))
 }
 
-// BuilderInit initializes a new WAF builder with the provided configuration,
-// which may be nil. Returns nil in case of an error.
-func (waf *WAFLib) BuilderInit(cfg *WAFConfig) WAFBuilder {
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-	pinner.Pin(cfg)
+// GetDefaultAllocator returns the default allocator used by the library.
+// This is called once at load time; use DefaultAllocator() for the cached value.
+func (waf *WAFLib) GetDefaultAllocator() WAFAllocator {
+	return WAFAllocator(waf.syscall(waf.getDefaultAllocator))
+}
 
-	return WAFBuilder(waf.syscall(waf.builderInit, unsafe.PtrToUintptr(cfg)))
+// DefaultAllocator returns the cached default allocator.
+func (waf *WAFLib) DefaultAllocator() WAFAllocator {
+	return waf.defaultAllocator
+}
+
+// BuilderInit initializes a new WAF builder.
+func (waf *WAFLib) BuilderInit() WAFBuilder {
+	return WAFBuilder(waf.syscall(waf.builderInit))
 }
 
 // BuilderAddOrUpdateConfig adds or updates a configuration based on the
@@ -147,12 +157,18 @@ func (waf *WAFLib) BuilderGetConfigPaths(builder WAFBuilder, filter string) []st
 		unsafe.PtrToUintptr(unsafe.StringData(filter)),
 		uintptr(len(filter)),
 	)
-	defer waf.ObjectFree(&paths)
+	defer waf.ObjectDestroy(&paths, waf.defaultAllocator)
 
 	list := make([]string, 0, count)
-	for i := range uint64(count) {
-		obj := unsafe.CastWithOffset[WAFObject](paths.Value, i)
-		path := unsafe.GostringSized(unsafe.Cast[byte](obj.Value), obj.NbEntries)
+	items, err := paths.ArrayValues()
+	if err != nil {
+		return list
+	}
+	for _, item := range items {
+		path, err := item.StringValue()
+		if err != nil {
+			continue
+		}
 		list = append(list, path)
 	}
 	return list
@@ -206,38 +222,91 @@ func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 	return addresses
 }
 
-func (waf *WAFLib) ContextInit(handle WAFHandle) WAFContext {
-	return WAFContext(waf.syscall(waf.contextInit, uintptr(handle)))
+// ContextInit creates a new WAF context.
+// Takes an allocator for output objects created during evaluation.
+func (waf *WAFLib) ContextInit(handle WAFHandle, outputAlloc WAFAllocator) WAFContext {
+	return WAFContext(waf.syscall(waf.contextInit, uintptr(handle), uintptr(outputAlloc)))
+}
+
+// ContextEval performs a matching operation on the provided data.
+//
+// Parameters:
+//   - context: WAF context for this evaluation
+//   - data: Map of addresses to values for evaluation (will be stored by context)
+//   - alloc: Allocator used to free the data after context destruction (can be 0 to not free)
+//   - result: Output object for events, actions, duration, timeout, attributes
+//   - timeout: Maximum time budget in microseconds
+func (waf *WAFLib) ContextEval(context WAFContext, data *WAFObject, alloc WAFAllocator, result *WAFObject, timeout uint64) WAFReturnCode {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	pinner.Pin(data)
+	pinner.Pin(result)
+
+	return WAFReturnCode(waf.syscall(waf.contextEval,
+		uintptr(context),
+		unsafe.PtrToUintptr(data),
+		uintptr(alloc),
+		unsafe.PtrToUintptr(result),
+		uintptr(timeout),
+	))
 }
 
 func (waf *WAFLib) ContextDestroy(context WAFContext) {
 	waf.syscall(waf.contextDestroy, uintptr(context))
 }
 
-func (waf *WAFLib) ObjectFree(obj *WAFObject) {
+// SubcontextInit creates a subcontext from a parent context for ephemeral data evaluation.
+func (waf *WAFLib) SubcontextInit(context WAFContext) WAFSubcontext {
+	return WAFSubcontext(waf.syscall(waf.subcontextInit, uintptr(context)))
+}
+
+// SubcontextEval performs a matching operation on the provided data within a subcontext.
+//
+// Parameters:
+//   - subcontext: WAF subcontext for this evaluation
+//   - data: Map of addresses to values for evaluation
+//   - alloc: Allocator used to free the data after subcontext destruction (can be 0 to not free)
+//   - result: Output object for events, actions, duration, timeout, attributes
+//   - timeout: Maximum time budget in microseconds
+func (waf *WAFLib) SubcontextEval(subcontext WAFSubcontext, data *WAFObject, alloc WAFAllocator, result *WAFObject, timeout uint64) WAFReturnCode {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	pinner.Pin(data)
+	pinner.Pin(result)
+
+	return WAFReturnCode(waf.syscall(waf.subcontextEval,
+		uintptr(subcontext),
+		unsafe.PtrToUintptr(data),
+		uintptr(alloc),
+		unsafe.PtrToUintptr(result),
+		uintptr(timeout),
+	))
+}
+
+// SubcontextDestroy destroys a subcontext and frees data passed to it.
+func (waf *WAFLib) SubcontextDestroy(subcontext WAFSubcontext) {
+	waf.syscall(waf.subcontextDestroy, uintptr(subcontext))
+}
+
+// ObjectDestroy frees the memory contained within the object using the provided allocator.
+// The allocator should be the same one that was used to allocate the object's contents,
+// or the default allocator if the object was created by the WAF library.
+func (waf *WAFLib) ObjectDestroy(obj *WAFObject, alloc WAFAllocator) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 	pinner.Pin(obj)
 
-	waf.syscall(waf.objectFree, unsafe.PtrToUintptr(obj))
-}
-
-func (waf *WAFLib) Run(context WAFContext, persistentData, ephemeralData *WAFObject, result *WAFObject, timeout uint64) WAFReturnCode {
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-
-	pinner.Pin(persistentData)
-	pinner.Pin(ephemeralData)
-	pinner.Pin(result)
-
-	return WAFReturnCode(waf.syscall(waf.run, uintptr(context), unsafe.PtrToUintptr(persistentData), unsafe.PtrToUintptr(ephemeralData), unsafe.PtrToUintptr(result), uintptr(timeout)))
+	waf.syscall(waf.objectDestroy, unsafe.PtrToUintptr(obj), uintptr(alloc))
 }
 
 func (waf *WAFLib) Handle() uintptr {
 	return waf.handle
 }
 
-func (waf *WAFLib) ObjectFromJSON(json []byte) (WAFObject, bool) {
+// ObjectFromJSON parses JSON into a WAFObject.
+func (waf *WAFLib) ObjectFromJSON(json []byte, alloc WAFAllocator) (WAFObject, bool) {
 	var (
 		obj    WAFObject
 		pinner runtime.Pinner
@@ -247,7 +316,12 @@ func (waf *WAFLib) ObjectFromJSON(json []byte) (WAFObject, bool) {
 	pinner.Pin(&json)
 	pinner.Pin(&obj)
 
-	success := waf.syscall(waf.objectFromJSON, unsafe.PtrToUintptr(&obj), unsafe.SliceToUintptr(json), uintptr(len(json))) != 0
+	success := waf.syscall(waf.objectFromJSON,
+		unsafe.PtrToUintptr(&obj),
+		unsafe.SliceToUintptr(json),
+		uintptr(len(json)),
+		uintptr(alloc),
+	) != 0
 	return obj, success
 }
 

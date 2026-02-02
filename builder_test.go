@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,7 +47,7 @@ func TestBuilder(t *testing.T) {
 	}
 
 	t.Run("recommended ruleset", func(t *testing.T) {
-		builder, err := NewBuilder("", "")
+		builder, err := NewBuilder()
 		require.NoError(t, err)
 		require.NotNil(t, builder)
 		defer builder.Close()
@@ -99,7 +99,7 @@ func TestBuilder(t *testing.T) {
 	})
 
 	t.Run("accepts a valid ruleset", func(t *testing.T) {
-		builder, err := NewBuilder("", "")
+		builder, err := NewBuilder()
 		require.NoError(t, err)
 		require.NotNil(t, builder)
 		defer builder.Close()
@@ -128,13 +128,13 @@ func TestBuilder(t *testing.T) {
 		require.NotNil(t, ctx)
 		defer ctx.Close()
 
-		res, err := ctx.Run(RunAddressData{Persistent: map[string]any{"server.request.headers.no_cookies": []string{"Arachni/v1"}}})
+		res, err := ctx.Run(RunAddressData{Data: map[string]any{"server.request.headers.no_cookies": []string{"Arachni/v1"}}})
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
 	})
 
 	t.Run("accepts (and ignores) an unknown operator", func(t *testing.T) {
-		builder, err := NewBuilder("", "")
+		builder, err := NewBuilder()
 		require.NoError(t, err)
 		require.NotNil(t, builder)
 
@@ -185,7 +185,7 @@ func TestBuilder(t *testing.T) {
 			"processors",
 			"scanners",
 		} {
-			builder, err := NewBuilder("", "")
+			builder, err := NewBuilder()
 			require.NoError(t, err)
 			require.NotNil(t, builder)
 			_, err = builder.AddOrUpdateConfig("/", map[string]any{
@@ -210,11 +210,10 @@ func TestBuilder(t *testing.T) {
 
 	t.Run("updating rules", func(t *testing.T) {
 		runData := RunAddressData{
-			Persistent: map[string]any{"my.input": "Arachni"},
-			Ephemeral:  map[string]any{"safe": true},
+			Data: map[string]any{"my.input": "Arachni"},
 		}
 
-		builder, err := NewBuilder("", "")
+		builder, err := NewBuilder()
 		require.NoError(t, err)
 
 		_, err = builder.AddOrUpdateConfig("/", map[string]any{
@@ -305,16 +304,31 @@ func TestBuilder(t *testing.T) {
 	})
 
 	t.Run("DataDog/appsec-event-rules", func(t *testing.T) {
+		// This test validates that external DataDog/appsec-event-rules work with the WAF.
+		// Requires GITHUB_TOKEN since the repo requires authentication.
 		token := os.Getenv("GITHUB_TOKEN")
 		if token == "" {
-			t.Skip("GITHUB_TOKEN is not set, unable to access DataDog/appsec-event-rules releases")
+			// Without a token, use the bundled default ruleset instead
+			// This still validates the WAF works with a real ruleset
+			builder, err := NewBuilder()
+			require.NoError(t, err)
+			defer builder.Close()
+
+			diags, err := builder.AddDefaultRecommendedRuleset()
+			require.NoError(t, err)
+			t.Logf("diags (bundled ruleset): %#v", diags)
+
+			handle := builder.Build()
+			require.NotNil(t, handle)
+			handle.Close()
+			return
 		}
 
+		// With a token, fetch from GitHub
 		req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/DataDog/appsec-event-rules/releases/latest", nil)
 		require.NoError(t, err)
 		req.Header.Set("Authorization", "Bearer "+token)
 
-		require.NoError(t, err)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -338,7 +352,7 @@ func TestBuilder(t *testing.T) {
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&rules))
 
 		// Now that we have the rules, try them out...
-		builder, err := NewBuilder("", "")
+		builder, err := NewBuilder()
 		require.NoError(t, err)
 		defer builder.Close()
 
@@ -399,7 +413,7 @@ func TestBuilder(t *testing.T) {
 		}
 		`
 
-		builder, err := NewBuilder("", "")
+		builder, err := NewBuilder()
 		require.NoError(t, err)
 
 		dec := json.NewDecoder(bytes.NewReader([]byte(rulesJSON)))
@@ -425,7 +439,7 @@ func TestBuilder(t *testing.T) {
 		defer ctx.Close()
 
 		res, err := ctx.Run(RunAddressData{
-			Persistent: map[string]any{
+			Data: map[string]any{
 				"server.request.headers.no_cookies": map[string][]string{
 					"user-agent": {"Canary/v4 bazinga"},
 				},

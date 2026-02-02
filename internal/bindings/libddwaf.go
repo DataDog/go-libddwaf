@@ -21,10 +21,14 @@ type wafSymbols struct {
 	knownActions             uintptr
 	getVersion               uintptr
 	contextInit              uintptr
+	contextEval              uintptr // v2: renamed from ddwaf_run
 	contextDestroy           uintptr
-	objectFree               uintptr
+	subcontextInit           uintptr // v2: new
+	subcontextEval           uintptr // v2: new
+	subcontextDestroy        uintptr // v2: new
+	objectDestroy            uintptr // v2: renamed from ddwaf_object_free
 	objectFromJSON           uintptr
-	run                      uintptr
+	getDefaultAllocator      uintptr
 	setLogCb                 uintptr
 }
 
@@ -55,6 +59,18 @@ func newWafSymbols(handle uintptr) (syms wafSymbols, err error) {
 	if syms.contextInit, err = purego.Dlsym(handle, "ddwaf_context_init"); err != nil {
 		return syms, err
 	}
+	if syms.contextEval, err = purego.Dlsym(handle, "ddwaf_context_eval"); err != nil {
+		return syms, err
+	}
+	if syms.subcontextInit, err = purego.Dlsym(handle, "ddwaf_subcontext_init"); err != nil {
+		return syms, err
+	}
+	if syms.subcontextEval, err = purego.Dlsym(handle, "ddwaf_subcontext_eval"); err != nil {
+		return syms, err
+	}
+	if syms.subcontextDestroy, err = purego.Dlsym(handle, "ddwaf_subcontext_destroy"); err != nil {
+		return syms, err
+	}
 	if syms.destroy, err = purego.Dlsym(handle, "ddwaf_destroy"); err != nil {
 		return syms, err
 	}
@@ -67,13 +83,13 @@ func newWafSymbols(handle uintptr) (syms wafSymbols, err error) {
 	if syms.knownAddresses, err = purego.Dlsym(handle, "ddwaf_known_addresses"); err != nil {
 		return syms, err
 	}
-	if syms.objectFree, err = purego.Dlsym(handle, "ddwaf_object_free"); err != nil {
+	if syms.objectDestroy, err = purego.Dlsym(handle, "ddwaf_object_destroy"); err != nil {
 		return syms, err
 	}
 	if syms.objectFromJSON, err = purego.Dlsym(handle, "ddwaf_object_from_json"); err != nil {
 		return syms, err
 	}
-	if syms.run, err = purego.Dlsym(handle, "ddwaf_run"); err != nil {
+	if syms.getDefaultAllocator, err = purego.Dlsym(handle, "ddwaf_get_default_allocator"); err != nil {
 		return syms, err
 	}
 	if syms.setLogCb, err = purego.Dlsym(handle, "ddwaf_set_log_cb"); err != nil {

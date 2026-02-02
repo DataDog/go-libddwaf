@@ -14,14 +14,14 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 )
 
 //go:embed recommended.json.gz
 var defaultRuleset []byte
 
 // DefaultRuleset returns the default ruleset as a WAFObject
-// It is the caller's responsibility to free the returned WAFObject using [bindings.Lib.ObjectFree]
+// It is the caller's responsibility to free the returned WAFObject using [bindings.Lib.ObjectDestroy]
 // when it is no longer needed.
 // The returned error is non-nil if the ruleset could not be decompressed or parsed.
 func DefaultRuleset() (bindings.WAFObject, error) {
@@ -31,19 +31,20 @@ func DefaultRuleset() (bindings.WAFObject, error) {
 
 	gz, err := gzip.NewReader(bytes.NewReader(defaultRuleset))
 	if err != nil {
-		return bindings.WAFObject{}, err
+		return bindings.WAFObject{}, fmt.Errorf("failed to create gzip reader for default ruleset: %w", err)
 	}
 
 	defer gz.Close()
 
 	decompressedRuleset, err := io.ReadAll(gz)
 	if err != nil {
-		return bindings.WAFObject{}, err
+		return bindings.WAFObject{}, fmt.Errorf("failed to decompress default ruleset: %w", err)
 	}
 
-	parsedRuleset, ok := bindings.Lib.ObjectFromJSON(decompressedRuleset)
+	// v2: ObjectFromJSON now takes an allocator parameter
+	parsedRuleset, ok := bindings.Lib.ObjectFromJSON(decompressedRuleset, bindings.Lib.DefaultAllocator())
 	if !ok {
-		return bindings.WAFObject{}, fmt.Errorf("could not parse default ruleset: ddwaf_object_from_json failed")
+		return bindings.WAFObject{}, fmt.Errorf("failed to parse default ruleset: ddwaf_object_from_json returned false")
 	}
 	return parsedRuleset, nil
 }

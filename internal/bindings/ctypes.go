@@ -6,19 +6,19 @@
 package bindings
 
 import (
+	"encoding/binary"
 	"fmt"
 	"structs"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/pin"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
-	"github.com/pkg/errors"
+	"github.com/DataDog/go-libddwaf/v5/internal/pin"
+	"github.com/DataDog/go-libddwaf/v5/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 const (
-	MaxStringLength   = 4096
-	MaxContainerDepth = 20
-	MaxContainerSize  = 256
+	MaxStringLength   uint16 = 4096
+	MaxContainerDepth uint16 = 20
+	MaxContainerSize  uint16 = 256
 )
 
 type WAFReturnCode int32
@@ -31,193 +31,596 @@ const (
 	WAFMatch
 )
 
-// WAFObjectType is an enum in C which has the size of DWORD.
-// But DWORD is 4 bytes in amd64 and arm64 so uint32 it is.
-type WAFObjectType uint32
+// WAFObjectType represents the type discriminator for a WAFObject.
+type WAFObjectType uint8
 
-const WAFInvalidType WAFObjectType = 0
 const (
-	WAFIntType WAFObjectType = 1 << iota
-	WAFUintType
-	WAFStringType
-	WAFArrayType
-	WAFMapType
-	WAFBoolType
-	WAFFloatType
-	WAFNilType
+	// WAFInvalidType represents an unknown or uninitialized type
+	WAFInvalidType WAFObjectType = 0x00
+	// WAFNilType represents a null type, used for its semantical value
+	WAFNilType WAFObjectType = 0x01
+	// WAFBoolType represents a boolean type
+	WAFBoolType WAFObjectType = 0x02
+	// WAFIntType represents a 64-bit signed integer (DDWAF_OBJ_SIGNED)
+	WAFIntType WAFObjectType = 0x04
+	// WAFUintType represents a 64-bit unsigned integer (DDWAF_OBJ_UNSIGNED)
+	WAFUintType WAFObjectType = 0x06
+	// WAFFloatType represents a 64-bit float (double)
+	WAFFloatType WAFObjectType = 0x08
+	// WAFStringType represents a dynamic UTF-8 string (up to uint32 length)
+	WAFStringType WAFObjectType = 0x10
+	// WAFLiteralStringType represents a literal UTF-8 string (never freed)
+	WAFLiteralStringType WAFObjectType = 0x12
+	// WAFSmallStringType represents a UTF-8 string up to 14 bytes (inline storage)
+	WAFSmallStringType WAFObjectType = 0x14
+	// WAFArrayType represents an array of ddwaf_object (up to uint16 capacity)
+	WAFArrayType WAFObjectType = 0x20
+	// WAFMapType represents an array of ddwaf_object_kv (up to uint16 capacity)
+	WAFMapType WAFObjectType = 0x40
 )
 
 func (w WAFObjectType) String() string {
 	switch w {
 	case WAFInvalidType:
 		return "invalid"
+	case WAFNilType:
+		return "nil"
+	case WAFBoolType:
+		return "bool"
 	case WAFIntType:
 		return "int"
 	case WAFUintType:
 		return "uint"
+	case WAFFloatType:
+		return "float"
 	case WAFStringType:
 		return "string"
+	case WAFLiteralStringType:
+		return "literal_string"
+	case WAFSmallStringType:
+		return "small_string"
 	case WAFArrayType:
 		return "array"
 	case WAFMapType:
 		return "map"
-	case WAFBoolType:
-		return "bool"
-	case WAFFloatType:
-		return "float"
-	case WAFNilType:
-		return "nil"
 	default:
 		return fmt.Sprintf("unknown(%d)", w)
 	}
 }
 
+// WAFObject represents the ddwaf_object union type.
+// It is exactly 16 bytes to match the C union layout.
+//
+// The 16-byte union layout supports multiple interpretations based on type:
+//
+//	struct _ddwaf_object_bool {      // type=0x02
+//	    uint8_t type;                // offset 0
+//	    bool val;                    // offset 1
+//	};                               // + padding to 16 bytes
+//
+//	struct _ddwaf_object_signed {    // type=0x04
+//	    uint8_t type;                // offset 0
+//	    int64_t val;                 // offset 8 (7 bytes padding)
+//	};
+//
+//	struct _ddwaf_object_unsigned {  // type=0x06
+//	    uint8_t type;                // offset 0
+//	    uint64_t val;                // offset 8 (7 bytes padding)
+//	};
+//
+//	struct _ddwaf_object_float {     // type=0x08
+//	    uint8_t type;                // offset 0
+//	    double val;                  // offset 8 (7 bytes padding)
+//	};
+//
+//	struct _ddwaf_object_string {    // type=0x10 or 0x12
+//	    uint8_t type;                // offset 0
+//	    uint32_t size;               // offset 4 (3 bytes padding)
+//	    char *ptr;                   // offset 8
+//	};
+//
+//	struct _ddwaf_object_small_string { // type=0x14
+//	    uint8_t type;                // offset 0
+//	    uint8_t size;                // offset 1
+//	    char data[14];               // offset 2
+//	};
+//
+//	struct _ddwaf_object_array {     // type=0x20
+//	    uint8_t type;                // offset 0
+//	    uint16_t size;               // offset 2 (1 byte padding)
+//	    uint16_t capacity;           // offset 4
+//	    ddwaf_object *ptr;           // offset 8 (2 bytes padding)
+//	};
+//
+//	struct _ddwaf_object_map {       // type=0x40
+//	    uint8_t type;                // offset 0
+//	    uint16_t size;               // offset 2 (1 byte padding)
+//	    uint16_t capacity;           // offset 4
+//	    ddwaf_object_kv *ptr;        // offset 8 (2 bytes padding)
+//	};
+//
+// All these offsets are sorted in the constants below and used to query the byte slice.
 type WAFObject struct {
-	_                   structs.HostLayout
-	ParameterName       uintptr
-	ParameterNameLength uint64
-	Value               uintptr
-	NbEntries           uint64
-	Type                WAFObjectType
-	_                   [4]byte
-	// Forced padding
-	// We only support 2 archs and cgo generated the same padding to both.
-	// We don't want the C struct to be packed because actually go will do the same padding itself,
-	// we just add it explicitly to not take any chance.
-	// And we cannot pack a struct in go so it will get tricky if the struct is
-	// packed (apart from breaking all tracers of course)
+	_    structs.HostLayout
+	data [16]byte
+}
+
+// Byte offset constants for WAFObject fields
+const (
+	wafObjectTypeOffset = 0  // uint8_t type at byte 0
+	wafObjectBoolOffset = 1  // bool val at byte 1
+	wafObjectSStrSize   = 1  // small string size at byte 1
+	wafObjectSStrData   = 2  // small string data starts at byte 2
+	wafObjectSStrMaxLen = 14 // max small string length
+
+	wafObjectContainerSizeOffset     = 2 // uint16 size at byte 2 (for array/map)
+	wafObjectContainerCapacityOffset = 4 // uint16 capacity at byte 4 (for array/map)
+	wafObjectStringSizeOffset        = 4 // uint32 size at byte 4 (for string)
+	wafObjectPtrOffset               = 8 // pointer at byte 8 (for string/array/map and int64/uint64/float64)
+)
+
+// WAFObjectKV represents a key-value pair in a map.
+// Maps are now arrays of {key, value} pairs where both are full WAFObjects.
+//
+//	struct _ddwaf_object_kv {
+//	    union _ddwaf_object key;    // 16 bytes
+//	    union _ddwaf_object val;    // 16 bytes
+//	};
+type WAFObjectKV struct {
+	_   structs.HostLayout
+	Key WAFObject // 16 bytes
+	Val WAFObject // 16 bytes
+}
+
+// Type returns the type discriminator of this WAFObject.
+func (w *WAFObject) Type() WAFObjectType {
+	return WAFObjectType(w.data[wafObjectTypeOffset])
+}
+
+// setType sets the type discriminator of this WAFObject.
+func (w *WAFObject) setType(t WAFObjectType) {
+	w.data[wafObjectTypeOffset] = byte(t)
 }
 
 // IsInvalid determines whether this WAF Object has the invalid type (which is the 0-value).
 func (w *WAFObject) IsInvalid() bool {
-	return w.Type == WAFInvalidType
+	return w.Type() == WAFInvalidType
 }
 
 // IsNil determines whether this WAF Object is nil or not.
 func (w *WAFObject) IsNil() bool {
-	return w.Type == WAFNilType
+	return w.Type() == WAFNilType
 }
 
 // IsArray determines whether this WAF Object is an array or not.
 func (w *WAFObject) IsArray() bool {
-	return w.Type == WAFArrayType
+	return w.Type() == WAFArrayType
 }
 
 // IsMap determines whether this WAF Object is a map or not.
 func (w *WAFObject) IsMap() bool {
-	return w.Type == WAFMapType
+	return w.Type() == WAFMapType
 }
 
-// IsInt determines whether this WAF Object is a iny or not.
+// IsInt determines whether this WAF Object is a signed int or not.
 func (w *WAFObject) IsInt() bool {
-	return w.Type == WAFIntType
+	return w.Type() == WAFIntType
 }
 
 // IsUint determines whether this WAF Object is a uint or not.
 func (w *WAFObject) IsUint() bool {
-	return w.Type == WAFUintType
+	return w.Type() == WAFUintType
 }
 
 // IsBool determines whether this WAF Object is a bool or not.
 func (w *WAFObject) IsBool() bool {
-	return w.Type == WAFBoolType
+	return w.Type() == WAFBoolType
 }
 
 // IsFloat determines whether this WAF Object is a float or not.
 func (w *WAFObject) IsFloat() bool {
-	return w.Type == WAFFloatType
+	return w.Type() == WAFFloatType
 }
 
 // IsString determines whether this WAF Object is a string or not.
+// Returns true for regular strings, literal strings, and small strings.
 func (w *WAFObject) IsString() bool {
-	return w.Type == WAFStringType
+	t := w.Type()
+	return t == WAFStringType || t == WAFLiteralStringType || t == WAFSmallStringType
 }
 
 // IsUnusable returns true if the wafObject has no impact on the WAF execution
 // But we still need this kind of objects to forward map keys in case the value of the map is invalid
 func (w *WAFObject) IsUnusable() bool {
-	return w.Type == WAFInvalidType || w.Type == WAFNilType
+	return w.Type() == WAFInvalidType || w.Type() == WAFNilType
 }
 
-// SetArray sets the receiving [WAFObject] to a new array with the given
-// capacity.
-func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint64) []WAFObject {
-	return w.setArrayTyped(pinner, capacity, WAFArrayType)
+// SetNil sets the receiving [WAFObject] to nil.
+//
+// C layout for nil (type=0x01):
+//
+//	byte 0: type (0x01)
+//	bytes 1-15: unused (zeroed)
+func (w *WAFObject) SetNil() {
+	clear(w.data[:])
+	w.setType(WAFNilType)
+}
+
+// SetInvalid sets the receiving [WAFObject] to invalid.
+//
+// C layout for invalid (type=0x00):
+//
+//	byte 0: type (0x00)
+//	bytes 1-15: unused (zeroed)
+func (w *WAFObject) SetInvalid() {
+	clear(w.data[:])
+	w.setType(WAFInvalidType)
+}
+
+// SetBool sets the receiving [WAFObject] value to the given bool.
+//
+// C layout for bool (type=0x02):
+//
+//	struct _ddwaf_object_bool {
+//	    uint8_t type;    // offset 0
+//	    bool val;        // offset 1
+//	};
+func (w *WAFObject) SetBool(b bool) {
+	clear(w.data[:])
+	w.setType(WAFBoolType)
+	if b {
+		w.data[wafObjectBoolOffset] = 1
+	}
+}
+
+// SetInt sets the receiving [WAFObject] value to the given int64.
+//
+// C layout for signed int (type=0x04):
+//
+//	struct _ddwaf_object_signed {
+//	    uint8_t type;    // offset 0
+//	    // 7 bytes padding
+//	    int64_t val;     // offset 8
+//	};
+func (w *WAFObject) SetInt(i int64) {
+	clear(w.data[:])
+	w.setType(WAFIntType)
+	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(i))
+}
+
+// SetUint sets the receiving [WAFObject] value to the given uint64.
+//
+// C layout for unsigned int (type=0x06):
+//
+//	struct _ddwaf_object_unsigned {
+//	    uint8_t type;    // offset 0
+//	    // 7 bytes padding
+//	    uint64_t val;    // offset 8
+//	};
+func (w *WAFObject) SetUint(i uint64) {
+	clear(w.data[:])
+	w.setType(WAFUintType)
+	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], i)
+}
+
+// SetFloat sets the receiving [WAFObject] value to the given float64.
+//
+// C layout for float (type=0x08):
+//
+//	struct _ddwaf_object_float {
+//	    uint8_t type;    // offset 0
+//	    // 7 bytes padding
+//	    double val;      // offset 8
+//	};
+func (w *WAFObject) SetFloat(f float64) {
+	clear(w.data[:])
+	w.setType(WAFFloatType)
+	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], unsafe.NativeToUint64(f))
+}
+
+// SetString sets the receiving [WAFObject] value to the given string.
+// Uses small string optimization for strings <= 14 bytes.
+//
+// C layout for string (type=0x10):
+//
+//	struct _ddwaf_object_string {
+//	    uint8_t type;    // offset 0
+//	    // 3 bytes padding
+//	    uint32_t size;   // offset 4
+//	    char *ptr;       // offset 8
+//	};
+//
+// C layout for small string (type=0x14):
+//
+//	struct _ddwaf_object_small_string {
+//	    uint8_t type;    // offset 0
+//	    uint8_t size;    // offset 1
+//	    char data[14];   // offset 2
+//	};
+func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
+	clear(w.data[:])
+
+	header := unsafe.NativeStringUnwrap(str)
+	length := header.Len
+
+	// Use small string optimization for strings that fit in 14 bytes
+	if length <= wafObjectSStrMaxLen {
+		w.setType(WAFSmallStringType)
+		w.data[wafObjectSStrSize] = byte(length)
+		if length > 0 {
+			copy(w.data[wafObjectSStrData:], unsafe.Slice((*byte)(unsafe.Pointer(header.Data)), uint64(length)))
+		}
+		return
+	}
+
+	// Regular string: pin the data pointer
+	w.setType(WAFStringType)
+	binary.NativeEndian.PutUint32(w.data[wafObjectStringSizeOffset:], uint32(length))
+	pinner.Pin(unsafe.Pointer(header.Data))
+	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(unsafe.Pointer(header.Data))))
+}
+
+// SetLiteralString sets the receiving [WAFObject] value to a literal string.
+// Literal strings are never freed by the WAF.
+//
+// C layout for literal string (type=0x12):
+//
+//	struct _ddwaf_object_string {
+//	    uint8_t type;    // offset 0
+//	    // 3 bytes padding
+//	    uint32_t size;   // offset 4
+//	    char *ptr;       // offset 8
+//	};
+func (w *WAFObject) SetLiteralString(pinner pin.Pinner, str string) {
+	clear(w.data[:])
+
+	header := unsafe.NativeStringUnwrap(str)
+	length := header.Len
+
+	w.setType(WAFLiteralStringType)
+	binary.NativeEndian.PutUint32(w.data[wafObjectStringSizeOffset:], uint32(length))
+	if length > 0 {
+		pinner.Pin(unsafe.Pointer(header.Data))
+		binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(unsafe.Pointer(header.Data))))
+	}
+}
+
+// SetArray sets the receiving [WAFObject] to a new array with the given capacity.
+// Returns a slice of WAFObjects that can be populated.
+//
+// C layout for array (type=0x20):
+//
+//	struct _ddwaf_object_array {
+//	    uint8_t type;         // offset 0
+//	    // 1 byte padding
+//	    uint16_t size;        // offset 2
+//	    uint16_t capacity;    // offset 4
+//	    // 2 bytes padding
+//	    ddwaf_object *ptr;    // offset 8
+//	};
+func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint16) []WAFObject {
+	clear(w.data[:])
+	w.setType(WAFArrayType)
+
+	if capacity == 0 {
+		return nil
+	}
+
+	// Clamp capacity to uint16 max
+	arr := make([]WAFObject, 0, capacity)
+	ptr := unsafe.Pointer(unsafe.SliceData(arr))
+	pinner.Pin(ptr)
+
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], 0)
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], capacity)
+	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
+
+	return arr[:capacity]
 }
 
 // SetArrayData sets the receiving [WAFObject] to the provided array items.
+//
+// C layout for array (type=0x20): see SetArray
 func (w *WAFObject) SetArrayData(pinner pin.Pinner, data []WAFObject) {
-	w.setArrayDataTyped(pinner, data, WAFArrayType)
+	clear(w.data[:])
+	w.setType(WAFArrayType)
+
+	length := len(data)
+	if length == 0 {
+		return
+	}
+
+	ptr := unsafe.Pointer(unsafe.SliceData(data))
+	pinner.Pin(ptr)
+
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], uint16(length))
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(cap(data)))
+	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
+}
+
+// SetArraySize updates the size field of an array object.
+// This is used after populating array elements.
+func (w *WAFObject) SetArraySize(size uint16) {
+	capacity := binary.NativeEndian.Uint16(w.data[wafObjectContainerCapacityOffset:])
+	if size > capacity {
+		size = capacity
+	}
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], size)
 }
 
 // SetMap sets the receiving [WAFObject] to a new map with the given capacity.
-func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint64) []WAFObject {
-	return w.setArrayTyped(pinner, capacity, WAFMapType)
+// Returns a slice of WAFObjectKV pairs that can be populated.
+//
+// C layout for map (type=0x40):
+//
+//	struct _ddwaf_object_map {
+//	    uint8_t type;           // offset 0
+//	    // 1 byte padding
+//	    uint16_t size;          // offset 2
+//	    uint16_t capacity;      // offset 4
+//	    // 2 bytes padding
+//	    ddwaf_object_kv *ptr;   // offset 8
+//	};
+func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint16) []WAFObjectKV {
+	clear(w.data[:])
+	w.setType(WAFMapType)
+
+	if capacity == 0 {
+		return nil
+	}
+
+	kvs := make([]WAFObjectKV, 0, capacity)
+	ptr := unsafe.Pointer(unsafe.SliceData(kvs))
+	pinner.Pin(ptr)
+
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], 0)
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], capacity)
+	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
+
+	return kvs[:capacity]
 }
 
 // SetMapData sets the receiving [WAFObject] to the provided map items.
-func (w *WAFObject) SetMapData(pinner pin.Pinner, data []WAFObject) {
-	w.setArrayDataTyped(pinner, data, WAFMapType)
-}
+//
+// C layout for map (type=0x40): see SetMap
+func (w *WAFObject) SetMapData(pinner pin.Pinner, data []WAFObjectKV) {
+	clear(w.data[:])
+	w.setType(WAFMapType)
 
-// SetMapKey sets the receiving [WAFObject] to a new map key with the given
-// string.
-func (w *WAFObject) SetMapKey(pinner pin.Pinner, key string) {
-	header := unsafe.NativeStringUnwrap(key)
-
-	w.ParameterNameLength = uint64(header.Len)
-	if w.ParameterNameLength == 0 {
-		w.ParameterName = 0
+	length := len(data)
+	if length == 0 {
 		return
 	}
-	pinner.Pin(unsafe.Pointer(header.Data))
-	w.ParameterName = uintptr(unsafe.Pointer(header.Data))
+
+	ptr := unsafe.Pointer(unsafe.SliceData(data))
+	pinner.Pin(ptr)
+
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], uint16(length))
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(cap(data)))
+	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
 }
 
-func (w *WAFObject) MapKey() string {
-	return string(unsafe.Slice(*(**byte)(unsafe.Pointer(&w.ParameterName)), w.ParameterNameLength))
-}
-
-func (w *WAFObject) Values() ([]WAFObject, error) {
-	if !w.IsArray() && !w.IsMap() {
-		return nil, errors.New("value is not an array or map")
+// SetMapSize updates the size field of a map object.
+// This is used after populating map entries.
+func (w *WAFObject) SetMapSize(size uint16) {
+	capacity := binary.NativeEndian.Uint16(w.data[wafObjectContainerCapacityOffset:])
+	if size > capacity {
+		size = capacity
 	}
-	return unsafe.Slice(*(**WAFObject)(unsafe.Pointer(&w.Value)), w.NbEntries), nil
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], size)
 }
 
-func (w *WAFObject) AnyValue() (any, error) {
-	switch w.Type {
-	case WAFArrayType:
-		return w.ArrayValue()
-	case WAFBoolType:
-		return w.BoolValue()
-	case WAFFloatType:
-		return w.FloatValue()
-	case WAFIntType:
-		return w.IntValue()
-	case WAFMapType:
-		return w.MapValue()
-	case WAFStringType:
-		return w.StringValue()
-	case WAFUintType:
-		return w.UIntValue()
-	case WAFNilType:
-		return nil, nil
+// BoolValue returns the boolean value of this WAFObject.
+func (w *WAFObject) BoolValue() (bool, error) {
+	if !w.IsBool() {
+		return false, fmt.Errorf("value is not a boolean but %s", w.Type().String())
+	}
+	return w.data[wafObjectBoolOffset] != 0, nil
+}
+
+// IntValue returns the int64 value of this WAFObject.
+func (w *WAFObject) IntValue() (int64, error) {
+	if !w.IsInt() {
+		return 0, fmt.Errorf("value is not a signed int but %s", w.Type().String())
+	}
+	return int64(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:])), nil
+}
+
+// UIntValue returns the uint64 value of this WAFObject.
+func (w *WAFObject) UIntValue() (uint64, error) {
+	if !w.IsUint() {
+		return 0, fmt.Errorf("value is not an unsigned int but %s", w.Type().String())
+	}
+	return binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]), nil
+}
+
+// FloatValue returns the float64 value of this WAFObject.
+func (w *WAFObject) FloatValue() (float64, error) {
+	if !w.IsFloat() {
+		return 0, fmt.Errorf("value is not a float but %s", w.Type().String())
+	}
+	bits := binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:])
+	return *(*float64)(unsafe.Pointer(&bits)), nil
+}
+
+// StringValue returns the string value of this WAFObject.
+// Works for regular strings, literal strings, and small strings.
+func (w *WAFObject) StringValue() (string, error) {
+	t := w.Type()
+	switch t {
+	case WAFSmallStringType:
+		size := int(w.data[wafObjectSStrSize])
+		if size == 0 {
+			return "", nil
+		}
+		return string(w.data[wafObjectSStrData : wafObjectSStrData+size]), nil
+
+	case WAFStringType, WAFLiteralStringType:
+		size := binary.NativeEndian.Uint32(w.data[wafObjectStringSizeOffset:])
+		if size == 0 {
+			return "", nil
+		}
+		ptr := uintptr(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]))
+		return string(unsafe.Slice(*(**byte)(unsafe.Pointer(&ptr)), uint64(size))), nil
+
 	default:
-		return nil, fmt.Errorf("%w: %s", waferrors.ErrUnsupportedValue, w.Type)
+		return "", fmt.Errorf("value is not a string but %s", t.String())
 	}
 }
 
+// ArraySize returns the number of elements in an array.
+func (w *WAFObject) ArraySize() (uint16, error) {
+	if !w.IsArray() {
+		return 0, fmt.Errorf("value is not an array but %s", w.Type().String())
+	}
+	return binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:]), nil
+}
+
+// ArrayValues returns the array elements as a slice of WAFObjects as-is using unsafe conversion.
+func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
+	if !w.IsArray() {
+		return nil, fmt.Errorf("value is not an array but %s", w.Type().String())
+	}
+
+	size := binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:])
+	if size == 0 {
+		return nil, nil
+	}
+
+	ptr := uintptr(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]))
+	return unsafe.Slice(*(**WAFObject)(unsafe.Pointer(&ptr)), uint64(size)), nil
+}
+
+// MapSize returns the number of entries in a map.
+func (w *WAFObject) MapSize() (uint16, error) {
+	if !w.IsMap() {
+		return 0, fmt.Errorf("value is not a map but %s", w.Type().String())
+	}
+	return binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:]), nil
+}
+
+// MapEntries returns the map entries as a slice of WAFObjectKV pairs as-is using unsafe conversion.
+func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
+	if !w.IsMap() {
+		return nil, fmt.Errorf("value is not a map but %s", w.Type().String())
+	}
+
+	size := binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:])
+	if size == 0 {
+		return nil, nil
+	}
+
+	ptr := uintptr(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]))
+	return unsafe.Slice(*(**WAFObjectKV)(unsafe.Pointer(&ptr)), uint64(size)), nil
+}
+
+// ArrayValue returns the array as a slice of any values (recursive conversion) making a copy of the whole.
 func (w *WAFObject) ArrayValue() ([]any, error) {
 	if w.IsNil() {
 		return nil, nil
 	}
 
-	if !w.IsArray() {
-		return nil, errors.New("value is not an array")
-	}
-
-	items, err := w.Values()
+	items, err := w.ArrayValues()
 	if err != nil {
 		return nil, err
 	}
@@ -232,24 +635,24 @@ func (w *WAFObject) ArrayValue() ([]any, error) {
 	return res, nil
 }
 
+// MapValue returns the map as a Go map (recursive conversion) making a copy of the whole.
 func (w *WAFObject) MapValue() (map[string]any, error) {
 	if w.IsNil() {
 		return nil, nil
 	}
 
-	if !w.IsMap() {
-		return nil, errors.New("value is not a map")
-	}
-
-	items, err := w.Values()
+	entries, err := w.MapEntries()
 	if err != nil {
 		return nil, err
 	}
 
-	res := make(map[string]any, len(items))
-	for _, item := range items {
-		key := item.MapKey()
-		res[key], err = item.AnyValue()
+	res := make(map[string]any, len(entries))
+	for _, entry := range entries {
+		key, err := entry.Key.StringValue()
+		if err != nil {
+			return nil, fmt.Errorf("while decoding map key: %w", err)
+		}
+		res[key], err = entry.Val.AnyValue()
 		if err != nil {
 			return nil, fmt.Errorf("while decoding value at %q: %w", key, err)
 		}
@@ -257,146 +660,28 @@ func (w *WAFObject) MapValue() (map[string]any, error) {
 	return res, nil
 }
 
-func (w *WAFObject) BoolValue() (bool, error) {
-	if !w.IsBool() {
-		return false, errors.New("value is not a boolean")
+// AnyValue returns the value of this WAFObject as a Go any type.
+func (w *WAFObject) AnyValue() (any, error) {
+	switch w.Type() {
+	case WAFArrayType:
+		return w.ArrayValue()
+	case WAFBoolType:
+		return w.BoolValue()
+	case WAFFloatType:
+		return w.FloatValue()
+	case WAFIntType:
+		return w.IntValue()
+	case WAFMapType:
+		return w.MapValue()
+	case WAFStringType, WAFLiteralStringType, WAFSmallStringType:
+		return w.StringValue()
+	case WAFUintType:
+		return w.UIntValue()
+	case WAFNilType:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("%w: %s (0x%02x)", waferrors.ErrUnsupportedValue, w.Type(), byte(w.Type()))
 	}
-	return w.Value != 0, nil
-}
-
-func (w *WAFObject) FloatValue() (float64, error) {
-	if !w.IsFloat() {
-		return 0, errors.New("value is not a uint")
-	}
-	return *(*float64)(unsafe.Pointer(&w.Value)), nil
-}
-
-func (w *WAFObject) IntValue() (int64, error) {
-	if !w.IsInt() {
-		return 0, errors.New("value is not a uint")
-	}
-	return int64(w.Value), nil
-}
-
-func (w *WAFObject) StringValue() (string, error) {
-	if !w.IsString() {
-		return "", errors.New("value is not a string")
-	}
-	return string(unsafe.Slice(*(**byte)(unsafe.Pointer(&w.Value)), w.NbEntries)), nil
-}
-
-func (w *WAFObject) UIntValue() (uint64, error) {
-	if !w.IsUint() {
-		return 0, errors.New("value is not a uint")
-	}
-	return uint64(w.Value), nil
-}
-
-var blankCStringValue = unsafe.Pointer(unsafe.NativeStringUnwrap("\x00").Data)
-
-// SetString sets the receiving [WAFObject] value to the given string.
-func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
-	header := unsafe.NativeStringUnwrap(str)
-
-	w.Type = WAFStringType
-	w.NbEntries = uint64(header.Len)
-	if w.NbEntries == 0 {
-		w.Value = uintptr(blankCStringValue)
-		return
-	}
-	pinner.Pin(unsafe.Pointer(header.Data))
-	w.Value = uintptr(unsafe.Pointer(header.Data))
-}
-
-// SetInt sets the receiving [WAFObject] value to the given int.
-func (w *WAFObject) SetInt(i int64) {
-	w.Type = WAFIntType
-	w.Value = unsafe.NativeToUintptr(i)
-}
-
-// SetUint sets the receiving [WAFObject] value to the given uint.
-func (w *WAFObject) SetUint(i uint64) {
-	w.Type = WAFUintType
-	w.Value = unsafe.NativeToUintptr(i)
-}
-
-// SetBool sets the receiving [WAFObject] value to the given bool.
-func (w *WAFObject) SetBool(b bool) {
-	w.Type = WAFBoolType
-	if b {
-		w.Value = uintptr(1)
-	} else {
-		w.Value = uintptr(0)
-	}
-}
-
-// SetFloat sets the receiving [WAFObject] value to the given float.
-func (w *WAFObject) SetFloat(f float64) {
-	w.Type = WAFFloatType
-	w.Value = unsafe.NativeToUintptr(f)
-}
-
-// SetNil sets the receiving [WAFObject] to nil.
-func (w *WAFObject) SetNil() {
-	w.Type = WAFNilType
-	w.Value = 0
-}
-
-// SetInvalid sets the receiving [WAFObject] to invalid.
-func (w *WAFObject) SetInvalid() {
-	w.Type = WAFInvalidType
-	w.Value = 0
-}
-
-func (w *WAFObject) setArrayTyped(pinner pin.Pinner, capacity uint64, t WAFObjectType) []WAFObject {
-	var arr []WAFObject
-	if capacity > 0 {
-		arr = make([]WAFObject, capacity)
-	}
-	w.setArrayDataTyped(pinner, arr, t)
-	return arr
-}
-
-func (w *WAFObject) setArrayDataTyped(pinner pin.Pinner, arr []WAFObject, t WAFObjectType) {
-	w.Type = t
-	w.NbEntries = uint64(len(arr))
-	if w.NbEntries == 0 {
-		w.Value = 0
-		return
-	}
-
-	ptr := unsafe.Pointer(unsafe.SliceData(arr))
-	pinner.Pin(ptr)
-	w.Value = uintptr(ptr)
-}
-
-type WAFConfig struct {
-	_          structs.HostLayout
-	Limits     WAFConfigLimits
-	Obfuscator WAFConfigObfuscator
-	FreeFn     uintptr
-}
-
-type WAFConfigLimits struct {
-	_                 structs.HostLayout
-	MaxContainerSize  uint32
-	MaxContainerDepth uint32
-	MaxStringLength   uint32
-}
-
-type WAFConfigObfuscator struct {
-	_          structs.HostLayout
-	KeyRegex   uintptr // char *
-	ValueRegex uintptr // char *
-}
-
-type WAFResult struct {
-	_            structs.HostLayout
-	Timeout      byte
-	Events       WAFObject
-	Actions      WAFObject
-	Derivatives  WAFObject
-	TotalRuntime uint64
 }
 
 // WAFBuilder is a forward declaration in ddwaf.h header
@@ -410,3 +695,9 @@ type WAFHandle uintptr
 // WAFContext is a forward declaration in ddwaf.h header
 // We basically don't need to modify it, only to give it to the waf
 type WAFContext uintptr
+
+// WAFSubcontext is a forward declaration in ddwaf.h header for subcontexts
+type WAFSubcontext uintptr
+
+// WAFAllocator is an opaque handle to a WAF allocator
+type WAFAllocator uintptr

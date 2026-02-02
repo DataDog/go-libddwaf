@@ -19,10 +19,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
-	"github.com/DataDog/go-libddwaf/v4/timer"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/timer"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 
 	"github.com/stretchr/testify/require"
 )
@@ -36,9 +35,19 @@ func wafTest(t *testing.T, obj *bindings.WAFObject) {
 	require.NoError(t, err)
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()
+
+	// v2: Run with persistent data first
 	_, err = wafCtx.Run(RunAddressData{
-		Persistent: map[string]any{"my.input": obj},
-		Ephemeral:  map[string]any{"my.other.input": obj},
+		Data: map[string]any{"my.input": obj},
+	})
+	require.NoError(t, err)
+
+	// v2: Use subcontext for ephemeral data
+	subCtx, err := wafCtx.SubContext()
+	require.NoError(t, err)
+	defer subCtx.Close()
+	_, err = subCtx.Run(RunAddressData{
+		Data: map[string]any{"my.other.input": obj},
 	})
 	require.NoError(t, err)
 }
@@ -651,9 +660,9 @@ func TestEncoderLimits(t *testing.T) {
 		encoder, err := newEncoder(EncoderConfig{
 			Pinner:           &pinner,
 			Timer:            encodeTimer,
-			MaxObjectDepth:   maxValueDepth,
-			MaxStringSize:    maxStringLength,
-			MaxContainerSize: maxContainerLength,
+			MaxObjectDepth:   uint16(maxValueDepth),
+			MaxStringSize:    uint16(maxStringLength),
+			MaxContainerSize: uint16(maxContainerLength),
 		})
 
 		require.NoError(t, err)
@@ -694,18 +703,46 @@ type typeTree struct {
 }
 
 func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WAFObject) {
-	require.Equal(t, expected._type, actual.Type, "expected type %v, got type %v", expected._type, actual.Type)
+	actualType := actual.Type()
+	expectedType := expected._type
+
+	// v2: Small string optimization means short strings use WAFSmallStringType.
+	// Treat WAFSmallStringType as equivalent to WAFStringType for comparison.
+	if expectedType == bindings.WAFStringType && actualType == bindings.WAFSmallStringType {
+		actualType = bindings.WAFStringType
+	}
+
+	require.Equal(t, expectedType, actualType, "expected type %v, got type %v", expected._type, actual.Type())
 
 	if expected._type != bindings.WAFMapType && expected._type != bindings.WAFArrayType {
 		return
 	}
 
-	if uint64(len(expected.children)) != actual.NbEntries {
-		t.Fatalf("expected len %v, got len %v", len(expected.children), actual.NbEntries)
+	// v2: Get container size based on type
+	var actualSize int
+	if expected._type == bindings.WAFArrayType {
+		size, _ := actual.ArraySize()
+		actualSize = int(size)
+	} else {
+		size, _ := actual.MapSize()
+		actualSize = int(size)
 	}
 
-	for i := range expected.children {
-		assertEqualType(t, expected.children[i], unsafe.CastWithOffset[bindings.WAFObject](actual.Value, uint64(i)))
+	if len(expected.children) != actualSize {
+		t.Fatalf("expected len %v, got len %v", len(expected.children), actualSize)
+	}
+
+	// v2: Iterate using new methods
+	if expected._type == bindings.WAFArrayType {
+		items, _ := actual.ArrayValues()
+		for i := range expected.children {
+			assertEqualType(t, expected.children[i], &items[i])
+		}
+	} else {
+		entries, _ := actual.MapEntries()
+		for i := range expected.children {
+			assertEqualType(t, expected.children[i], &entries[i].Val)
+		}
 	}
 }
 

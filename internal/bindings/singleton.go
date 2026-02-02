@@ -9,7 +9,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/support"
+	"github.com/DataDog/go-libddwaf/v5/internal/support"
 )
 
 // Globally dlopen() libddwaf only once because several dlopens (eg. in tests)
