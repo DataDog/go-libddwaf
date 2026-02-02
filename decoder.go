@@ -8,34 +8,36 @@ package libddwaf
 import (
 	"fmt"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/ffi"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
-// decodeErrors transforms the wafObject received by the wafRulesetInfo after the call to wafDl.wafInit to a map where
-// keys are the error message and the value is a array of all the rule ids which triggered this specific error
-func decodeErrors(obj *bindings.WAFObject) (map[string][]string, error) {
+// decodeErrors decodes WAF diagnostics error data into a map structure for easier consumption.
+// The WAF library returns errors grouped by message, with each message mapping to the rule IDs
+// that failed with that error. This structure allows callers to report both error messages and
+// the specific rules that failed.
+func decodeErrors(obj *WAFObject) (map[string][]string, error) {
 	if !obj.IsMap() {
-		return nil, fmt.Errorf("decodeErrors: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type)
+		return nil, fmt.Errorf("decodeErrors: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type())
+	}
+	entries, err := obj.MapEntries()
+	if err != nil {
+		return nil, fmt.Errorf("decodeErrors: failed to get map entries: %w", err)
 	}
 
-	if obj.Value == 0 && obj.NbEntries == 0 {
+	if len(entries) == 0 {
 		return nil, nil
 	}
 
-	if obj.Value == 0 && obj.NbEntries > 0 {
-		return nil, waferrors.ErrNilObjectPtr
-	}
-
-	wafErrors := map[string][]string{}
-	for i := uint64(0); i < obj.NbEntries; i++ {
-		objElem := ffi.CastWithOffset[bindings.WAFObject](obj.Value, i)
-
-		errorMessage := ffi.GostringSized(ffi.Cast[byte](objElem.ParameterName), objElem.ParameterNameLength)
-		ruleIds, err := decodeStringArray(objElem)
+	wafErrors := make(map[string][]string, len(entries))
+	for _, entry := range entries {
+		errorMessage, err := entry.Key().StringValue()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decodeErrors: failed to decode error key: %w", err)
+		}
+
+		ruleIds, err := decodeStringArray(entry.Value())
+		if err != nil {
+			return nil, fmt.Errorf("decodeErrors: failed to decode rule IDs for error %q: %w", errorMessage, err)
 		}
 
 		wafErrors[errorMessage] = ruleIds
@@ -44,126 +46,135 @@ func decodeErrors(obj *bindings.WAFObject) (map[string][]string, error) {
 	return wafErrors, nil
 }
 
-func decodeDiagnostics(obj *bindings.WAFObject) (Diagnostics, error) {
+func decodeDiagnostics(obj *WAFObject) (Diagnostics, error) {
 	if !obj.IsMap() {
-		return Diagnostics{}, fmt.Errorf("decodeDiagnostics: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type)
+		return Diagnostics{}, fmt.Errorf("decodeDiagnostics: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type())
 	}
-	if obj.Value == 0 && obj.NbEntries > 0 {
-		return Diagnostics{}, waferrors.ErrNilObjectPtr
+	entries, err := obj.MapEntries()
+	if err != nil {
+		return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to get map entries: %w", err)
 	}
 
-	var (
-		diags Diagnostics
-		err   error
-	)
-	for i := uint64(0); i < obj.NbEntries; i++ {
-		objElem := ffi.CastWithOffset[bindings.WAFObject](obj.Value, i)
-		key := ffi.GostringSized(ffi.Cast[byte](objElem.ParameterName), objElem.ParameterNameLength)
+	var diags Diagnostics
+	for _, entry := range entries {
+		key, err := entry.Key().StringValue()
+		if err != nil {
+			return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+		}
+
 		switch key {
 		case "actions":
-			diags.Actions, err = decodeFeature(objElem)
+			diags.Actions, err = decodeFeature(entry.Value())
 		case "custom_rules":
-			diags.CustomRules, err = decodeFeature(objElem)
+			diags.CustomRules, err = decodeFeature(entry.Value())
 		case "exclusions":
-			diags.Exclusions, err = decodeFeature(objElem)
+			diags.Exclusions, err = decodeFeature(entry.Value())
 		case "rules":
-			diags.Rules, err = decodeFeature(objElem)
+			diags.Rules, err = decodeFeature(entry.Value())
 		case "rules_data":
-			diags.RulesData, err = decodeFeature(objElem)
+			diags.RulesData, err = decodeFeature(entry.Value())
 		case "exclusion_data":
-			diags.ExclusionData, err = decodeFeature(objElem)
+			diags.ExclusionData, err = decodeFeature(entry.Value())
 		case "rules_override":
-			diags.RulesOverrides, err = decodeFeature(objElem)
+			diags.RulesOverrides, err = decodeFeature(entry.Value())
 		case "processors":
-			diags.Processors, err = decodeFeature(objElem)
+			diags.Processors, err = decodeFeature(entry.Value())
 		case "processor_overrides":
-			diags.ProcessorOverrides, err = decodeFeature(objElem)
+			diags.ProcessorOverrides, err = decodeFeature(entry.Value())
 		case "scanners":
-			diags.Scanners, err = decodeFeature(objElem)
+			diags.Scanners, err = decodeFeature(entry.Value())
 		case "ruleset_version":
-			diags.Version = ffi.GostringSized(ffi.Cast[byte](objElem.Value), objElem.NbEntries)
+			diags.Version, err = entry.Value().StringValue()
 		default:
-			// ignore?
+			// Unknown diagnostic keys are intentionally ignored so newer libddwaf
+			// versions don't break this decoder.
 		}
 		if err != nil {
-			return Diagnostics{}, err
+			return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", key, err)
 		}
 	}
 
 	return diags, nil
 }
 
-func decodeFeature(obj *bindings.WAFObject) (*Feature, error) {
+func decodeFeature(obj *WAFObject) (*Feature, error) {
 	if !obj.IsMap() {
-		return nil, fmt.Errorf("decodeFeature: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type)
+		return nil, fmt.Errorf("decodeFeature: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type())
 	}
-	if obj.Value == 0 && obj.NbEntries > 0 {
-		return nil, waferrors.ErrNilObjectPtr
+	entries, err := obj.MapEntries()
+	if err != nil {
+		return nil, fmt.Errorf("decodeFeature: failed to get map entries: %w", err)
 	}
-	var feature Feature
-	var err error
 
-	for i := uint64(0); i < obj.NbEntries; i++ {
-		objElem := ffi.CastWithOffset[bindings.WAFObject](obj.Value, i)
-		key := ffi.GostringSized(ffi.Cast[byte](objElem.ParameterName), objElem.ParameterNameLength)
+	var feature Feature
+	for _, entry := range entries {
+		key, err := entry.Key().StringValue()
+		if err != nil {
+			return nil, fmt.Errorf("decodeFeature: failed to decode key: %w", err)
+		}
+
 		switch key {
 		case "error":
-			feature.Error = ffi.GostringSized(ffi.Cast[byte](objElem.Value), objElem.NbEntries)
+			feature.Error, err = entry.Value().StringValue()
 		case "errors":
-			feature.Errors, err = decodeErrors(objElem)
+			feature.Errors, err = decodeErrors(entry.Value())
 		case "failed":
-			feature.Failed, err = decodeStringArray(objElem)
+			feature.Failed, err = decodeStringArray(entry.Value())
 		case "loaded":
-			feature.Loaded, err = decodeStringArray(objElem)
+			feature.Loaded, err = decodeStringArray(entry.Value())
 		case "skipped":
-			feature.Skipped, err = decodeStringArray(objElem)
+			feature.Skipped, err = decodeStringArray(entry.Value())
 		case "warnings":
-			feature.Warnings, err = decodeErrors(objElem)
+			feature.Warnings, err = decodeErrors(entry.Value())
 		default:
-			return nil, fmt.Errorf("%w: %s", waferrors.ErrUnsupportedValue, key)
+			return nil, fmt.Errorf("decodeFeature: %w: unknown field %q", waferrors.ErrUnsupportedValue, key)
 		}
 
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decodeFeature: failed to decode field %q: %w", key, err)
 		}
 	}
 
 	return &feature, nil
 }
 
-func decodeStringArray(obj *bindings.WAFObject) ([]string, error) {
-	// We consider that nil is an empty array
+func decodeStringArray(obj *WAFObject) ([]string, error) {
 	if obj.IsNil() {
 		return nil, nil
 	}
 
 	if !obj.IsArray() {
-		return nil, fmt.Errorf("decodeStringArray: %w: expected array, got %s", waferrors.ErrInvalidObjectType, obj.Type)
+		return nil, fmt.Errorf("decodeStringArray: %w: expected array, got %s", waferrors.ErrInvalidObjectType, obj.Type())
+	}
+	items, err := obj.ArrayValues()
+	if err != nil {
+		return nil, fmt.Errorf("decodeStringArray: failed to get array values: %w", err)
 	}
 
-	if obj.Value == 0 && obj.NbEntries > 0 {
-		return nil, waferrors.ErrNilObjectPtr
-	}
-
-	if obj.NbEntries == 0 {
+	if len(items) == 0 {
 		return nil, nil
 	}
 
-	strArr := make([]string, 0, obj.NbEntries)
-	for i := uint64(0); i < obj.NbEntries; i++ {
-		objElem := ffi.CastWithOffset[bindings.WAFObject](obj.Value, i)
-		if objElem.Type != bindings.WAFStringType {
-			return nil, fmt.Errorf("decodeStringArray: %w: expected string, got %s", waferrors.ErrInvalidObjectType, objElem.Type)
+	strArr := make([]string, 0, len(items))
+	for i, item := range items {
+		if !item.IsString() {
+			return nil, fmt.Errorf("decodeStringArray: %w: expected string at index %d, got %s", waferrors.ErrInvalidObjectType, i, item.Type())
 		}
 
-		strArr = append(strArr, ffi.GostringSized(ffi.Cast[byte](objElem.Value), objElem.NbEntries))
+		str, err := item.StringValue()
+		if err != nil {
+			return nil, fmt.Errorf("decodeStringArray: failed to decode string at index %d: %w", i, err)
+		}
+		strArr = append(strArr, str)
 	}
 
 	return strArr, nil
 }
 
-// Deprecated: This is merely wrapping [bindings.WAFObject.AnyValue], which should be used directly
-// instead.
+// DecodeObject decodes a [WAFObject] into a generic Go value.
+//
+// Deprecated: This is merely wrapping [WAFObject.AnyValue], which should be
+// used directly instead.
 func DecodeObject(obj *WAFObject) (any, error) {
 	return obj.AnyValue()
 }

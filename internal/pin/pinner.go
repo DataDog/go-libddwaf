@@ -36,18 +36,18 @@ var _ Pinner = (*runtime.Pinner)(nil)
 // ConcurrentPinner is a [Pinner] that is safe for concurrent use by multiple
 // goroutines.
 type ConcurrentPinner struct {
-	runtime.Pinner
-	sync.Mutex
+	pinner runtime.Pinner
+	mu     sync.Mutex
 }
 
 func (p *ConcurrentPinner) Pin(v any) {
-	p.Lock()
-	p.Pinner.Pin(v)
-	p.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pinner.Pin(v)
 }
 
 func (p *ConcurrentPinner) Unpin() {
-	p.Lock()
-	p.Pinner.Unpin()
-	p.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pinner.Unpin()
 }

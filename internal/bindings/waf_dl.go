@@ -14,9 +14,9 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/ffi"
-	"github.com/DataDog/go-libddwaf/v4/internal/lib"
-	"github.com/DataDog/go-libddwaf/v4/internal/log"
+	"github.com/DataDog/go-libddwaf/v5/internal/lib"
+	"github.com/DataDog/go-libddwaf/v5/internal/log"
+	"github.com/DataDog/go-libddwaf/v5/internal/unsafeutil"
 	"github.com/ebitengine/purego"
 )
 
@@ -26,16 +26,17 @@ import (
 // since purego calls are not type safe
 type WAFLib struct {
 	wafSymbols
-	handle uintptr
+	handle           uintptr
+	defaultAllocator WAFAllocator
 }
 
-// newWAFLib loads the libddwaf shared library and resolves all tge relevant symbols.
+// newWAFLib loads the libddwaf shared library and resolves all the relevant symbols.
 // The caller is responsible for calling wafDl.Close on the returned object once they
 // are done with it so that associated resources can be released.
 func newWAFLib() (dl *WAFLib, err error) {
 	path, closer, err := lib.DumpEmbeddedWAF()
 	if err != nil {
-		return nil, fmt.Errorf("dump embedded WAF: %w", err)
+		return nil, fmt.Errorf("failed to dump embedded WAF library: %w", err)
 	}
 	defer func() {
 		if rmErr := closer(); rmErr != nil {
@@ -45,26 +46,31 @@ func newWAFLib() (dl *WAFLib, err error) {
 
 	var handle uintptr
 	if handle, err = purego.Dlopen(path, purego.RTLD_LOCAL|purego.RTLD_NOW); err != nil {
-		return nil, fmt.Errorf("load a dynamic library file: %w", err)
+		return nil, fmt.Errorf("failed to load dynamic library %q: %w", path, err)
+	}
+
+	closeOnError := func() {
+		if closeErr := purego.Dlclose(handle); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("error closing the shared libddwaf library: %w", closeErr))
+		}
 	}
 
 	var symbols wafSymbols
 	if symbols, err = newWafSymbols(handle); err != nil {
-		if closeErr := purego.Dlclose(handle); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("error released the shared libddwaf library: %w", closeErr))
-		}
+		closeOnError()
 		return
 	}
 
-	dl = &WAFLib{symbols, handle}
+	dl = &WAFLib{wafSymbols: symbols, handle: handle}
 
 	// Try calling the waf to make sure everything is fine
-	if _, err = tryCall(dl.GetVersion); err != nil {
-		if closeErr := purego.Dlclose(handle); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("error released the shared libddwaf library: %w", closeErr))
-		}
+	if _, err = tryCall(dl.Version); err != nil {
+		err = fmt.Errorf("calling ddwaf_get_version after Dlopen: %w", err)
+		closeOnError()
 		return
 	}
+
+	dl.defaultAllocator = dl.loadDefaultAllocator()
 
 	if val := os.Getenv(log.EnvVarLogLevel); val != "" {
 		logLevel := log.LevelNamed(val)
@@ -80,19 +86,25 @@ func (waf *WAFLib) Close() error {
 	return purego.Dlclose(waf.handle)
 }
 
-// GetVersion returned string is a static string so we do not need to free it
-func (waf *WAFLib) GetVersion() string {
-	return ffi.Gostring(ffi.Cast[byte](waf.syscall(waf.getVersion)))
+// Version returned string is a static string so we do not need to free it
+func (waf *WAFLib) Version() string {
+	return unsafeutil.Gostring((*byte)(unsafe.Pointer(waf.syscall(waf.getVersion))))
 }
 
-// BuilderInit initializes a new WAF builder with the provided configuration,
-// which may be nil. Returns nil in case of an error.
-func (waf *WAFLib) BuilderInit(cfg *WAFConfig) WAFBuilder {
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-	pinner.Pin(cfg)
+// loadDefaultAllocator returns the default allocator used by the library.
+// This is called once at load time; use DefaultAllocator() for the cached value.
+func (waf *WAFLib) loadDefaultAllocator() WAFAllocator {
+	return WAFAllocator(waf.syscall(waf.getDefaultAllocator))
+}
 
-	return WAFBuilder(waf.syscall(waf.builderInit, uintptr(unsafe.Pointer(cfg))))
+// DefaultAllocator returns the cached default allocator.
+func (waf *WAFLib) DefaultAllocator() WAFAllocator {
+	return waf.defaultAllocator
+}
+
+// BuilderInit initializes a new WAF builder.
+func (waf *WAFLib) BuilderInit() WAFBuilder {
+	return WAFBuilder(waf.syscall(waf.builderInit))
 }
 
 // BuilderAddOrUpdateConfig adds or updates a configuration based on the
@@ -106,7 +118,7 @@ func (waf *WAFLib) BuilderAddOrUpdateConfig(builder WAFBuilder, path string, con
 
 	res := waf.syscall(waf.builderAddOrUpdateConfig,
 		uintptr(builder),
-		uintptr(unsafe.Pointer(ffi.Cstring(&pinner, path))),
+		uintptr(unsafe.Pointer(unsafeutil.Cstring(&pinner, path))),
 		uintptr(len(path)),
 		uintptr(unsafe.Pointer(config)),
 		uintptr(unsafe.Pointer(diags)),
@@ -122,7 +134,7 @@ func (waf *WAFLib) BuilderRemoveConfig(builder WAFBuilder, path string) bool {
 
 	return byte(waf.syscall(waf.builderRemoveConfig,
 		uintptr(builder),
-		uintptr(unsafe.Pointer(ffi.Cstring(&pinner, path))),
+		uintptr(unsafe.Pointer(unsafeutil.Cstring(&pinner, path))),
 		uintptr(len(path)),
 	)) != 0
 }
@@ -134,33 +146,38 @@ func (waf *WAFLib) BuilderBuildInstance(builder WAFBuilder) WAFHandle {
 }
 
 // BuilderGetConfigPaths returns the list of currently loaded paths.
-// Returns nil in case of an error.
-func (waf *WAFLib) BuilderGetConfigPaths(builder WAFBuilder, filter string) []string {
+func (waf *WAFLib) BuilderGetConfigPaths(builder WAFBuilder, filter string) ([]string, error) {
 	var paths WAFObject
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 	pinner.Pin(&paths)
 
-	filterData := ffi.StringData(filter)
-	if filterData != nil {
-		pinner.Pin(unsafe.Pointer(filterData))
+	// Pin the string backing data, not the header
+	if filterData := unsafeutil.StringData(filter); filterData != nil {
+		pinner.Pin(filterData)
 	}
 
 	count := waf.syscall(waf.builderGetConfigPaths,
 		uintptr(builder),
 		uintptr(unsafe.Pointer(&paths)),
-		uintptr(unsafe.Pointer(filterData)),
+		uintptr(unsafe.Pointer(unsafeutil.StringData(filter))),
 		uintptr(len(filter)),
 	)
-	defer waf.ObjectFree(&paths)
+	defer waf.ObjectDestroy(&paths, waf.defaultAllocator)
 
 	list := make([]string, 0, count)
-	for i := range uint64(count) {
-		obj := ffi.CastWithOffset[WAFObject](paths.Value, i)
-		path := ffi.GostringSized(ffi.Cast[byte](obj.Value), obj.NbEntries)
+	items, err := paths.ArrayValues()
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode config paths array for filter %q: %w", filter, err)
+	}
+	for i, item := range items {
+		path, err := item.StringValue()
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode config path %d for filter %q: %w", i, filter, err)
+		}
 		list = append(list, path)
 	}
-	return list
+	return list, nil
 }
 
 // BuilderDestroy destroys a WAF builder instance.
@@ -194,55 +211,106 @@ func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 	pinner.Pin(&nbAddresses)
 
 	arrayVoidC := waf.syscall(symbol, uintptr(handle), uintptr(unsafe.Pointer(&nbAddresses)))
-	if arrayVoidC == 0 {
-		return nil
-	}
-
-	if nbAddresses == 0 {
+	if arrayVoidC == 0 || nbAddresses == 0 {
 		return nil
 	}
 
 	// These C strings are static strings so we do not need to free them
+	arrayPtr := unsafe.Pointer(arrayVoidC)
 	addresses := make([]string, int(nbAddresses))
-	for i := 0; i < int(nbAddresses); i++ {
-		addresses[i] = ffi.Gostring(*ffi.CastWithOffset[*byte](arrayVoidC, uint64(i)))
+	for i := range int(nbAddresses) {
+		charPtr := *(**byte)(unsafe.Add(arrayPtr, uintptr(i)*unsafe.Sizeof(uintptr(0))))
+		addresses[i] = unsafeutil.Gostring(charPtr)
 	}
 
 	return addresses
 }
 
-func (waf *WAFLib) ContextInit(handle WAFHandle) WAFContext {
-	return WAFContext(waf.syscall(waf.contextInit, uintptr(handle)))
+// ContextInit creates a new WAF context.
+// Takes an allocator for output objects created during evaluation.
+func (waf *WAFLib) ContextInit(handle WAFHandle, outputAlloc WAFAllocator) WAFContext {
+	return WAFContext(waf.syscall(waf.contextInit, uintptr(handle), uintptr(outputAlloc)))
+}
+
+// ContextEval performs a matching operation on the provided data.
+//
+// Parameters:
+//   - context: WAF context for this evaluation
+//   - data: Map of addresses to values for evaluation (will be stored by context)
+//   - alloc: Allocator used to free the data after context destruction (can be 0 to not free)
+//   - result: Output object for events, actions, duration, timeout, attributes
+//   - timeout: Maximum time budget in microseconds
+func (waf *WAFLib) ContextEval(context WAFContext, data *WAFObject, alloc WAFAllocator, result *WAFObject, timeout uint64) WAFReturnCode {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	pinner.Pin(data)
+	pinner.Pin(result)
+
+	return WAFReturnCode(waf.syscall(waf.contextEval,
+		uintptr(context),
+		uintptr(unsafe.Pointer(data)),
+		uintptr(alloc),
+		uintptr(unsafe.Pointer(result)),
+		uintptr(timeout),
+	))
 }
 
 func (waf *WAFLib) ContextDestroy(context WAFContext) {
 	waf.syscall(waf.contextDestroy, uintptr(context))
 }
 
-func (waf *WAFLib) ObjectFree(obj *WAFObject) {
+// SubcontextInit creates a subcontext from a parent context for ephemeral data evaluation.
+func (waf *WAFLib) SubcontextInit(context WAFContext) WAFSubcontext {
+	return WAFSubcontext(waf.syscall(waf.subcontextInit, uintptr(context)))
+}
+
+// SubcontextEval performs a matching operation on the provided data within a subcontext.
+//
+// Parameters:
+//   - subcontext: WAF subcontext for this evaluation
+//   - data: Map of addresses to values for evaluation
+//   - alloc: Allocator used to free the data after subcontext destruction (can be 0 to not free)
+//   - result: Output object for events, actions, duration, timeout, attributes
+//   - timeout: Maximum time budget in microseconds
+func (waf *WAFLib) SubcontextEval(subcontext WAFSubcontext, data *WAFObject, alloc WAFAllocator, result *WAFObject, timeout uint64) WAFReturnCode {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	pinner.Pin(data)
+	pinner.Pin(result)
+
+	return WAFReturnCode(waf.syscall(waf.subcontextEval,
+		uintptr(subcontext),
+		uintptr(unsafe.Pointer(data)),
+		uintptr(alloc),
+		uintptr(unsafe.Pointer(result)),
+		uintptr(timeout),
+	))
+}
+
+// SubcontextDestroy destroys a subcontext and frees data passed to it.
+func (waf *WAFLib) SubcontextDestroy(subcontext WAFSubcontext) {
+	waf.syscall(waf.subcontextDestroy, uintptr(subcontext))
+}
+
+// ObjectDestroy frees the memory contained within the object using the provided allocator.
+// The allocator should be the same one that was used to allocate the object's contents,
+// or the default allocator if the object was created by the WAF library.
+func (waf *WAFLib) ObjectDestroy(obj *WAFObject, alloc WAFAllocator) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 	pinner.Pin(obj)
 
-	waf.syscall(waf.objectFree, uintptr(unsafe.Pointer(obj)))
-}
-
-func (waf *WAFLib) Run(context WAFContext, persistentData, ephemeralData *WAFObject, result *WAFObject, timeout uint64) WAFReturnCode {
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-
-	pinner.Pin(persistentData)
-	pinner.Pin(ephemeralData)
-	pinner.Pin(result)
-
-	return WAFReturnCode(waf.syscall(waf.run, uintptr(context), uintptr(unsafe.Pointer(persistentData)), uintptr(unsafe.Pointer(ephemeralData)), uintptr(unsafe.Pointer(result)), uintptr(timeout)))
+	waf.syscall(waf.objectDestroy, uintptr(unsafe.Pointer(obj)), uintptr(alloc))
 }
 
 func (waf *WAFLib) Handle() uintptr {
 	return waf.handle
 }
 
-func (waf *WAFLib) ObjectFromJSON(json []byte) (WAFObject, bool) {
+// ObjectFromJSON parses JSON into a WAFObject.
+func (waf *WAFLib) ObjectFromJSON(json []byte, alloc WAFAllocator) (WAFObject, bool) {
 	var (
 		obj    WAFObject
 		pinner runtime.Pinner
@@ -251,12 +319,17 @@ func (waf *WAFLib) ObjectFromJSON(json []byte) (WAFObject, bool) {
 	defer pinner.Unpin()
 	pinner.Pin(&obj)
 
-	jsonData := ffi.SliceData(json)
-	if jsonData != nil {
-		pinner.Pin(unsafe.Pointer(jsonData))
+	// Pin the slice backing data, not the header
+	if jsonData := unsafeutil.SliceData(json); jsonData != nil {
+		pinner.Pin(jsonData)
 	}
 
-	success := waf.syscall(waf.objectFromJSON, uintptr(unsafe.Pointer(&obj)), uintptr(unsafe.Pointer(jsonData)), uintptr(len(json))) != 0
+	success := waf.syscall(waf.objectFromJSON,
+		uintptr(unsafe.Pointer(&obj)),
+		uintptr(unsafe.Pointer(unsafe.SliceData(json))),
+		uintptr(len(json)),
+		uintptr(alloc),
+	) != 0
 	return obj, success
 }
 

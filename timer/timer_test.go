@@ -8,21 +8,24 @@ package timer_test
 import (
 	"runtime"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/timer"
+	"github.com/DataDog/go-libddwaf/v5/timer"
 
 	"github.com/stretchr/testify/require"
 )
 
 func hasExpired(t *testing.T, timer timer.Timer, duration time.Duration) {
+	t.Helper()
 	require.Greater(t, timer.Spent(), duration)
 	require.Zero(t, timer.Remaining())
 	require.True(t, timer.Exhausted())
 }
 
 func hasSumExpired(t *testing.T, timer timer.NodeTimer, duration time.Duration) {
+	t.Helper()
 	require.Greater(t, timer.SumSpent(), duration)
 	require.Zero(t, timer.SumRemaining())
 	require.True(t, timer.SumExhausted())
@@ -43,7 +46,6 @@ func TestBasic(t *testing.T) {
 		spent := newTimer.Stop()
 		require.Equal(t, newTimer.Spent(), spent)
 
-		// The timer was indeed stopped
 		time.Sleep(1 * time.Millisecond)
 		require.Equal(t, newTimer.Spent(), spent)
 	})
@@ -221,6 +223,19 @@ func TestInheritBudget(t *testing.T) {
 		hasExpired(t, leafTimer, time.Millisecond)
 		hasSumExpired(t, nodeTimer, time.Millisecond)
 	})
+
+	t.Run("inherited-sum-budget-not-exhausted-after-start", func(t *testing.T) {
+		rootTimer, err := timer.NewTreeTimer(timer.WithBudget(time.Hour), timer.WithComponents("a"))
+		require.NoError(t, err)
+
+		nodeTimer, err := rootTimer.NewNode("a", timer.WithComponents("b"))
+		require.NoError(t, err)
+
+		nodeTimer.Start()
+
+		require.False(t, nodeTimer.SumExhausted(), "SumExhausted must be false right after Start when inheriting parent's sum budget")
+		require.Greater(t, nodeTimer.SumRemaining(), time.Hour-time.Second, "SumRemaining must reflect the inherited budget after Start")
+	})
 }
 
 func TestTree(t *testing.T) {
@@ -334,42 +349,85 @@ func TestTree(t *testing.T) {
 	})
 }
 
+func TestBaseTimerConcurrentReadWrite(t *testing.T) {
+	timerNode, err := timer.NewTreeTimer(timer.WithBudget(10*time.Second), timer.WithComponents("test"))
+	require.NoError(t, err)
+
+	leaf, err := timerNode.NewLeaf("test")
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	barrier := make(chan struct{})
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-barrier
+		for i := 0; i < 1000; i++ {
+			leaf.Start()
+			leaf.Stop()
+		}
+	}()
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-barrier
+			for j := 0; j < 100; j++ {
+				_ = leaf.Spent()
+				_ = leaf.Remaining()
+				_ = leaf.Exhausted()
+			}
+		}()
+	}
+
+	close(barrier)
+	wg.Wait()
+}
+
 // Reproduce approximately the same number of calls that the WAF context will do
 func BenchmarkContext(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		contextTimer, _ := timer.NewTreeTimer(
+		contextTimer, err := timer.NewTreeTimer(
 			timer.WithBudget(4*time.Millisecond),
 			timer.WithComponents("Run"))
+		if err != nil {
+			b.Fatal(err)
+		}
 
 		// Let's say we do 4 calls to run in the WAF
-		for i := 0; i < 4; i++ {
-			runTimer, _ := contextTimer.NewNode("Run",
+		for range 4 {
+			runTimer, err := contextTimer.NewNode("Run",
 				timer.WithBudget(1*time.Millisecond),
 				timer.WithComponents("persistent-encoder"),
 				timer.WithComponents("ephemera-encoder"),
 				timer.WithComponents("waiting"),
 				timer.WithComponents("run"),
 			)
+			if err != nil {
+				b.Fatal(err)
+			}
 
 			runTimer.Start()
 
 			runTimer.MustLeaf("persistent-encoder").Timed(func(timer timer.Timer) {
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					runtime.KeepAlive(timer.Exhausted())
 				}
 			})
 
-			if contextTimer.SumExhausted() {
+			if contextTimer.SumExhausted() { //nolint:staticcheck // TODO(quality-plan): benchmark intentionally calls SumExhausted for side-effect timing without early exit
 				// return
 			}
 
 			runTimer.MustLeaf("ephemera-encoder").Timed(func(timer timer.Timer) {
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					runtime.KeepAlive(timer.Exhausted())
 				}
 			})
 
-			if contextTimer.SumExhausted() {
+			if contextTimer.SumExhausted() { //nolint:staticcheck // TODO(quality-plan): benchmark intentionally calls SumExhausted for side-effect timing without early exit
 				// return
 			}
 
@@ -389,41 +447,40 @@ func BenchmarkContext(b *testing.B) {
 // Reproduce approximately the same number of calls that the WAF run will do
 func BenchmarkRun(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		runTimer, _ := timer.NewTreeTimer(timer.WithBudget(1*time.Millisecond),
+		runTimer, err := timer.NewTreeTimer(timer.WithBudget(1*time.Millisecond),
 			timer.WithComponents("persistent-encoder"),
 			timer.WithComponents("ephemera-encoder"),
 			timer.WithComponents("waiting"),
 			timer.WithComponents("run"),
 		)
+		if err != nil {
+			b.Fatal(err)
+		}
 
 		runTimer.Start()
 
 		runTimer.MustLeaf("persistent-encoder").Timed(func(timer timer.Timer) {
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				runtime.KeepAlive(timer.Exhausted())
 			}
 		})
 
-		if runTimer.SumExhausted() {
-			// return
+		if runTimer.SumExhausted() { //nolint:staticcheck // TODO(quality-plan): benchmark intentionally calls SumExhausted for side-effect timing without early exit
 		}
 
 		runTimer.MustLeaf("ephemera-encoder").Timed(func(timer timer.Timer) {
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				runtime.KeepAlive(timer.Exhausted())
 			}
 		})
 
-		if runTimer.SumExhausted() {
-			// return
+		if runTimer.SumExhausted() { //nolint:staticcheck // TODO(quality-plan): benchmark intentionally calls SumExhausted for side-effect timing without early exit
 		}
 
 		runTimer.MustLeaf("waiting", timer.WithUnlimitedBudget()).Timed(func(timer timer.Timer) {
-			// do some work
 		})
 
 		runTimer.MustLeaf("run").Timed(func(timer timer.Timer) {
-			// do some work
 		})
 
 		runTimer.Stop()

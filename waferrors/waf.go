@@ -12,7 +12,7 @@ import (
 
 var (
 	// ErrContextClosed is returned when an operation is attempted on a
-	// [github.com/DataDog/go-libddwaf/v4.Context] that has already been closed.
+	// [github.com/DataDog/go-libddwaf/v5.Context] that has already been closed.
 	ErrContextClosed = errors.New("closed WAF context")
 
 	// ErrMaxDepthExceeded is returned when the WAF encounters a value that
@@ -32,12 +32,39 @@ var (
 	// ErrTooManyIndirections is returned when the WAF encounters a value that
 	// exceeds the maximum number of indirections (pointer to pointer to...).
 	ErrTooManyIndirections = errors.New("too many indirections")
+	// ErrHandleReleased is returned when an operation is attempted on a
+	// [github.com/DataDog/go-libddwaf/v5.Handle] whose reference count has
+	// reached zero.
+	ErrHandleReleased = errors.New("WAF handle has been released")
+
+	// ErrBuilderInitFailed is returned when the C library fails to allocate
+	// a WAF builder.
+	ErrBuilderInitFailed = errors.New("failed to initialize the WAF builder")
+
+	// ErrContextInitFailed is returned when the C library fails to allocate
+	// a WAF context.
+	ErrContextInitFailed = errors.New("failed to initialize WAF context")
+
+	// ErrUnknownReturnCode wraps an unexpected return code from the C library.
+	ErrUnknownReturnCode = errors.New("unknown WAF return code")
+
+	// ErrResultInvalidType is returned when unwrapping a WAF result encounters
+	// an object whose type is not expected for that field.
+	ErrResultInvalidType = errors.New("invalid WAF result object type")
+
+	// ErrNilContext is returned when a nil context.Context is passed where a
+	// non-nil one is required.
+	ErrNilContext = errors.New("nil context.Context")
+
+	// ErrBinaryNotString is returned by the decoder when a value expected to be
+	// a string is not actually a string/[]byte.
+	ErrBinaryNotString = errors.New("WAF object value is not a string")
 )
 
-// RunError the WAF can return when running it.
+// RunError represents an error returned by the WAF during a run.
 type RunError int
 
-// Errors the WAF can return when running it.
+// RunError values returned by the WAF.
 const (
 	// ErrInternal denotes a WAF internal error.
 	ErrInternal RunError = iota + 1
@@ -55,23 +82,24 @@ const (
 	ErrEmptyRuleAddresses
 )
 
-var errorStrMap = map[RunError]string{
-	ErrInternal:           "internal waf error",
-	ErrInvalidObject:      "invalid waf object",
-	ErrInvalidArgument:    "invalid waf argument",
-	ErrTimeout:            "waf timeout",
-	ErrOutOfMemory:        "out of memory",
-	ErrEmptyRuleAddresses: "empty rule addresses",
-}
-
 // Error returns the string representation of the [RunError].
 func (e RunError) Error() string {
-	description, ok := errorStrMap[e]
-	if !ok {
-		return fmt.Sprintf("unknown waf error %d", e)
+	switch e {
+	case ErrInternal:
+		return "internal waf error"
+	case ErrInvalidObject:
+		return "invalid waf object"
+	case ErrInvalidArgument:
+		return "invalid waf argument"
+	case ErrTimeout:
+		return "waf timeout"
+	case ErrOutOfMemory:
+		return "out of memory"
+	case ErrEmptyRuleAddresses:
+		return "empty rule addresses"
+	default:
+		return fmt.Sprintf("unknown waf error %d", int(e))
 	}
-
-	return description
 }
 
 // ToWafErrorCode converts an error to a WAF error code, returns zero if the
@@ -104,5 +132,5 @@ func (e *PanicError) Unwrap() error {
 
 // Error returns the error string representation.
 func (e *PanicError) Error() string {
-	return fmt.Sprintf("panic while executing %s: %#+v", e.In, e.Err)
+	return fmt.Sprintf("panic while executing %s: %v", e.In, e.Err)
 }
