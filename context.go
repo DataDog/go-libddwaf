@@ -416,11 +416,11 @@ func (context *Context) Close() *Context {
 	}
 
 	// Root context: full cleanup
+	defer context.handle.Close() // Reduce the reference counter of the Handle.
 	bindings.Lib.ContextDestroy(context.cContext)
 	context.cContext = 0 // Makes it easy to spot use-after-free/double-free issues
 
 	context.pinner.Unpin() // The pinned data is no longer needed, explicitly release
-	context.handle.Close() // Reduce the reference counter of the Handle.
 	return nil
 }
 

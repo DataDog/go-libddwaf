@@ -24,12 +24,12 @@ func (*WAFLib) Close() error { return nil }
 
 func (*WAFLib) GetVersion() string { return "" }
 
-// v2: Returns the default allocator
+// GetDefaultAllocator returns the default allocator used by the library.
+// This is called once at load time; use DefaultAllocator() for the cached value.
 func (*WAFLib) GetDefaultAllocator() WAFAllocator { return 0 }
 
 func (*WAFLib) DefaultAllocator() WAFAllocator { return 0 }
 
-// v2: BuilderInit no longer takes config
 func (*WAFLib) BuilderInit() WAFBuilder { return 0 }
 
 func (*WAFLib) BuilderAddOrUpdateConfig(WAFBuilder, string, *WAFObject, *WAFObject) bool {
@@ -52,17 +52,14 @@ func (*WAFLib) KnownAddresses(WAFHandle) []string { return nil }
 
 func (*WAFLib) KnownActions(WAFHandle) []string { return nil }
 
-// v2: ContextInit takes an allocator
 func (*WAFLib) ContextInit(WAFHandle, WAFAllocator) WAFContext { return 0 }
 
-// v2: ContextEval replaces Run
 func (*WAFLib) ContextEval(WAFContext, *WAFObject, WAFAllocator, *WAFObject, uint64) WAFReturnCode {
 	return WAFErrInternal
 }
 
 func (*WAFLib) ContextDestroy(WAFContext) {}
 
-// v2: New subcontext API
 func (*WAFLib) SubcontextInit(WAFContext) WAFSubcontext { return 0 }
 
 func (*WAFLib) SubcontextEval(WAFSubcontext, *WAFObject, WAFAllocator, *WAFObject, uint64) WAFReturnCode {
@@ -71,10 +68,8 @@ func (*WAFLib) SubcontextEval(WAFSubcontext, *WAFObject, WAFAllocator, *WAFObjec
 
 func (*WAFLib) SubcontextDestroy(WAFSubcontext) {}
 
-// v2: ObjectDestroy replaces ObjectFree, takes allocator
 func (*WAFLib) ObjectDestroy(*WAFObject, WAFAllocator) {}
 
-// v2: ObjectFromJSON takes an allocator
 func (*WAFLib) ObjectFromJSON([]byte, WAFAllocator) (WAFObject, bool) { return WAFObject{}, false }
 
 func (*WAFLib) Handle() uintptr { return 0 }

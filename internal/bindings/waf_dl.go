@@ -26,7 +26,7 @@ import (
 type WAFLib struct {
 	wafSymbols
 	handle           uintptr
-	defaultAllocator WAFAllocator // v2: stored at load time
+	defaultAllocator WAFAllocator
 }
 
 // newWAFLib loads the libddwaf shared library and resolves all the relevant symbols.
@@ -89,6 +89,7 @@ func (waf *WAFLib) GetVersion() string {
 }
 
 // GetDefaultAllocator returns the default allocator used by the library.
+// This is called once at load time; use DefaultAllocator() for the cached value.
 func (waf *WAFLib) GetDefaultAllocator() WAFAllocator {
 	return WAFAllocator(waf.syscall(waf.getDefaultAllocator))
 }
@@ -99,7 +100,6 @@ func (waf *WAFLib) DefaultAllocator() WAFAllocator {
 }
 
 // BuilderInit initializes a new WAF builder.
-// v2: No longer takes a config parameter.
 func (waf *WAFLib) BuilderInit() WAFBuilder {
 	return WAFBuilder(waf.syscall(waf.builderInit))
 }
@@ -223,13 +223,12 @@ func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 }
 
 // ContextInit creates a new WAF context.
-// v2: Takes an allocator for output objects created during evaluation.
+// Takes an allocator for output objects created during evaluation.
 func (waf *WAFLib) ContextInit(handle WAFHandle, outputAlloc WAFAllocator) WAFContext {
 	return WAFContext(waf.syscall(waf.contextInit, uintptr(handle), uintptr(outputAlloc)))
 }
 
 // ContextEval performs a matching operation on the provided data.
-// v2: Replaces Run. Takes data and an allocator for freeing the data.
 //
 // Parameters:
 //   - context: WAF context for this evaluation
@@ -257,14 +256,12 @@ func (waf *WAFLib) ContextDestroy(context WAFContext) {
 	waf.syscall(waf.contextDestroy, uintptr(context))
 }
 
-// SubcontextInit creates a subcontext from a parent context.
-// v2: New API for ephemeral data evaluation.
+// SubcontextInit creates a subcontext from a parent context for ephemeral data evaluation.
 func (waf *WAFLib) SubcontextInit(context WAFContext) WAFSubcontext {
 	return WAFSubcontext(waf.syscall(waf.subcontextInit, uintptr(context)))
 }
 
 // SubcontextEval performs a matching operation on the provided data within a subcontext.
-// v2: New API. Similar to ContextEval but for subcontexts.
 //
 // Parameters:
 //   - subcontext: WAF subcontext for this evaluation
@@ -289,13 +286,13 @@ func (waf *WAFLib) SubcontextEval(subcontext WAFSubcontext, data *WAFObject, all
 }
 
 // SubcontextDestroy destroys a subcontext and frees data passed to it.
-// v2: New API.
 func (waf *WAFLib) SubcontextDestroy(subcontext WAFSubcontext) {
 	waf.syscall(waf.subcontextDestroy, uintptr(subcontext))
 }
 
-// ObjectDestroy frees the memory contained within the object.
-// v2: Renamed from ObjectFree, now takes an allocator parameter.
+// ObjectDestroy frees the memory contained within the object using the provided allocator.
+// The allocator should be the same one that was used to allocate the object's contents,
+// or the default allocator if the object was created by the WAF library.
 func (waf *WAFLib) ObjectDestroy(obj *WAFObject, alloc WAFAllocator) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
@@ -309,7 +306,6 @@ func (waf *WAFLib) Handle() uintptr {
 }
 
 // ObjectFromJSON parses JSON into a WAFObject.
-// v2: Now requires an allocator parameter.
 func (waf *WAFLib) ObjectFromJSON(json []byte, alloc WAFAllocator) (WAFObject, bool) {
 	var (
 		obj    WAFObject

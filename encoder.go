@@ -372,8 +372,13 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 		capacity = encoder.config.MaxContainerSize
 	}
 
+	// Clamp capacity to uint16 max
+	if capacity > 0xFFFF {
+		capacity = 0xFFFF
+	}
+
 	// v2: Maps use WAFObjectKV pairs
-	kvArray := obj.SetMap(encoder.config.Pinner, uint64(capacity))
+	kvArray := obj.SetMap(encoder.config.Pinner, uint16(capacity))
 	for i := 0; i < nbFields; i++ {
 		if encoder.config.Timer.Exhausted() {
 			return
@@ -418,8 +423,8 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, 
 		capacity = encoder.config.MaxContainerSize
 	}
 
-	// v2: Maps use WAFObjectKV pairs
-	kvArray := obj.SetMap(encoder.config.Pinner, uint64(capacity))
+	// Maps use WAFObjectKV pairs
+	kvArray := obj.SetMap(encoder.config.Pinner, uint16(capacity))
 
 	length := 0
 	for iter := value.MapRange(); iter.Next(); {
@@ -496,7 +501,12 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject
 
 	currIndex := 0
 
-	objArray := obj.SetArray(encoder.config.Pinner, uint64(capacity))
+	// clamp capacity to uint16
+	if capacity > 0xFFFF {
+		capacity = 0xFFFF
+	}
+
+	objArray := obj.SetArray(encoder.config.Pinner, uint16(capacity))
 
 	for i := 0; i < length; i++ {
 		if encoder.config.Timer.Exhausted() {

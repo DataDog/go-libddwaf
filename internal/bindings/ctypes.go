@@ -7,7 +7,6 @@ package bindings
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"structs"
 
@@ -33,7 +32,6 @@ const (
 )
 
 // WAFObjectType represents the type discriminator for a WAFObject.
-// In v2, these are not bitmasks but explicit values.
 type WAFObjectType uint8
 
 const (
@@ -90,7 +88,7 @@ func (w WAFObjectType) String() string {
 	}
 }
 
-// WAFObject represents the v2 ddwaf_object union type.
+// WAFObject represents the ddwaf_object union type.
 // It is exactly 16 bytes to match the C union layout.
 //
 // The 16-byte union layout supports multiple interpretations based on type:
@@ -140,6 +138,8 @@ func (w WAFObjectType) String() string {
 //	    uint16_t capacity;           // offset 4
 //	    ddwaf_object_kv *ptr;        // offset 8 (2 bytes padding)
 //	};
+//
+// All these offsets are sorted in the constants below and used to query the byte slice.
 type WAFObject struct {
 	_    structs.HostLayout
 	data [16]byte
@@ -159,7 +159,7 @@ const (
 	wafObjectPtrOffset               = 8 // pointer at byte 8 (for string/array/map and int64/uint64/float64)
 )
 
-// WAFObjectKV represents a key-value pair in a v2 map.
+// WAFObjectKV represents a key-value pair in a map.
 // Maps are now arrays of {key, value} pairs where both are full WAFObjects.
 //
 //	struct _ddwaf_object_kv {
@@ -398,7 +398,7 @@ func (w *WAFObject) SetLiteralString(pinner pin.Pinner, str string) {
 //	    // 2 bytes padding
 //	    ddwaf_object *ptr;    // offset 8
 //	};
-func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint64) []WAFObject {
+func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint16) []WAFObject {
 	clear(w.data[:])
 	w.setType(WAFArrayType)
 
@@ -407,16 +407,12 @@ func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint64) []WAFObject {
 	}
 
 	// Clamp capacity to uint16 max
-	if capacity > 0xFFFF {
-		capacity = 0xFFFF
-	}
-
 	arr := make([]WAFObject, 0, capacity)
 	ptr := unsafe.Pointer(unsafe.SliceData(arr))
 	pinner.Pin(ptr)
 
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], 0)
-	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(capacity))
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], capacity)
 	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
 
 	return arr[:capacity]
@@ -445,6 +441,10 @@ func (w *WAFObject) SetArrayData(pinner pin.Pinner, data []WAFObject) {
 // SetArraySize updates the size field of an array object.
 // This is used after populating array elements.
 func (w *WAFObject) SetArraySize(size uint16) {
+	capacity := binary.NativeEndian.Uint16(w.data[wafObjectContainerCapacityOffset:])
+	if size > capacity {
+		size = capacity
+	}
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], size)
 }
 
@@ -461,7 +461,7 @@ func (w *WAFObject) SetArraySize(size uint16) {
 //	    // 2 bytes padding
 //	    ddwaf_object_kv *ptr;   // offset 8
 //	};
-func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint64) []WAFObjectKV {
+func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint16) []WAFObjectKV {
 	clear(w.data[:])
 	w.setType(WAFMapType)
 
@@ -469,17 +469,12 @@ func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint64) []WAFObjectKV {
 		return nil
 	}
 
-	// Clamp capacity to uint16 max
-	if capacity > 0xFFFF {
-		capacity = 0xFFFF
-	}
-
 	kvs := make([]WAFObjectKV, 0, capacity)
 	ptr := unsafe.Pointer(unsafe.SliceData(kvs))
 	pinner.Pin(ptr)
 
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], 0)
-	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(capacity))
+	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], capacity)
 	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
 
 	return kvs[:capacity]
@@ -508,13 +503,17 @@ func (w *WAFObject) SetMapData(pinner pin.Pinner, data []WAFObjectKV) {
 // SetMapSize updates the size field of a map object.
 // This is used after populating map entries.
 func (w *WAFObject) SetMapSize(size uint16) {
+	capacity := binary.NativeEndian.Uint16(w.data[wafObjectContainerCapacityOffset:])
+	if size > capacity {
+		size = capacity
+	}
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], size)
 }
 
 // BoolValue returns the boolean value of this WAFObject.
 func (w *WAFObject) BoolValue() (bool, error) {
 	if !w.IsBool() {
-		return false, errors.New("value is not a boolean")
+		return false, fmt.Errorf("value is not a boolean but %s", w.Type().String())
 	}
 	return w.data[wafObjectBoolOffset] != 0, nil
 }
@@ -522,7 +521,7 @@ func (w *WAFObject) BoolValue() (bool, error) {
 // IntValue returns the int64 value of this WAFObject.
 func (w *WAFObject) IntValue() (int64, error) {
 	if !w.IsInt() {
-		return 0, errors.New("value is not a signed int")
+		return 0, fmt.Errorf("value is not a signed int but %s", w.Type().String())
 	}
 	return int64(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:])), nil
 }
@@ -530,7 +529,7 @@ func (w *WAFObject) IntValue() (int64, error) {
 // UIntValue returns the uint64 value of this WAFObject.
 func (w *WAFObject) UIntValue() (uint64, error) {
 	if !w.IsUint() {
-		return 0, errors.New("value is not an unsigned int")
+		return 0, fmt.Errorf("value is not an unsigned int but %s", w.Type().String())
 	}
 	return binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]), nil
 }
@@ -538,7 +537,7 @@ func (w *WAFObject) UIntValue() (uint64, error) {
 // FloatValue returns the float64 value of this WAFObject.
 func (w *WAFObject) FloatValue() (float64, error) {
 	if !w.IsFloat() {
-		return 0, errors.New("value is not a float")
+		return 0, fmt.Errorf("value is not a float but %s", w.Type().String())
 	}
 	bits := binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:])
 	return *(*float64)(unsafe.Pointer(&bits)), nil
@@ -565,22 +564,22 @@ func (w *WAFObject) StringValue() (string, error) {
 		return string(unsafe.Slice(*(**byte)(unsafe.Pointer(&ptr)), uint64(size))), nil
 
 	default:
-		return "", errors.New("value is not a string")
+		return "", fmt.Errorf("value is not a string but %s", t.String())
 	}
 }
 
 // ArraySize returns the number of elements in an array.
 func (w *WAFObject) ArraySize() (uint16, error) {
 	if !w.IsArray() {
-		return 0, errors.New("value is not an array")
+		return 0, fmt.Errorf("value is not an array but %s", w.Type().String())
 	}
 	return binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:]), nil
 }
 
-// ArrayValues returns the array elements as a slice of WAFObjects.
+// ArrayValues returns the array elements as a slice of WAFObjects as-is using unsafe conversion.
 func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 	if !w.IsArray() {
-		return nil, errors.New("value is not an array")
+		return nil, fmt.Errorf("value is not an array but %s", w.Type().String())
 	}
 
 	size := binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:])
@@ -595,15 +594,15 @@ func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 // MapSize returns the number of entries in a map.
 func (w *WAFObject) MapSize() (uint16, error) {
 	if !w.IsMap() {
-		return 0, errors.New("value is not a map")
+		return 0, fmt.Errorf("value is not a map but %s", w.Type().String())
 	}
 	return binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:]), nil
 }
 
-// MapEntries returns the map entries as a slice of WAFObjectKV pairs.
+// MapEntries returns the map entries as a slice of WAFObjectKV pairs as-is using unsafe conversion.
 func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
 	if !w.IsMap() {
-		return nil, errors.New("value is not a map")
+		return nil, fmt.Errorf("value is not a map but %s", w.Type().String())
 	}
 
 	size := binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:])
@@ -615,7 +614,7 @@ func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
 	return unsafe.Slice(*(**WAFObjectKV)(unsafe.Pointer(&ptr)), uint64(size)), nil
 }
 
-// ArrayValue returns the array as a slice of any values (recursive conversion).
+// ArrayValue returns the array as a slice of any values (recursive conversion) making a copy of the whole.
 func (w *WAFObject) ArrayValue() ([]any, error) {
 	if w.IsNil() {
 		return nil, nil
@@ -636,7 +635,7 @@ func (w *WAFObject) ArrayValue() ([]any, error) {
 	return res, nil
 }
 
-// MapValue returns the map as a Go map (recursive conversion).
+// MapValue returns the map as a Go map (recursive conversion) making a copy of the whole.
 func (w *WAFObject) MapValue() (map[string]any, error) {
 	if w.IsNil() {
 		return nil, nil
@@ -681,7 +680,7 @@ func (w *WAFObject) AnyValue() (any, error) {
 	case WAFNilType:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("%w: %s", waferrors.ErrUnsupportedValue, w.Type())
+		return nil, fmt.Errorf("%w: %s (0x%02x)", waferrors.ErrUnsupportedValue, w.Type(), byte(w.Type()))
 	}
 }
 
@@ -697,7 +696,7 @@ type WAFHandle uintptr
 // We basically don't need to modify it, only to give it to the waf
 type WAFContext uintptr
 
-// WAFSubcontext is a forward declaration in ddwaf.h header for v2 subcontexts
+// WAFSubcontext is a forward declaration in ddwaf.h header for subcontexts
 type WAFSubcontext uintptr
 
 // WAFAllocator is an opaque handle to a WAF allocator
