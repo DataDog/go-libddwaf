@@ -1,6 +1,6 @@
 module github.com/DataDog/go-libddwaf/v4
 
-go 1.23.0
+go 1.25.7
 
 require (
 	github.com/ebitengine/purego v0.8.3
