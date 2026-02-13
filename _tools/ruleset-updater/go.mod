@@ -1,6 +1,6 @@
 module github.com/DataDog/go-libddwaf/_tools/ruleset-updater
 
-go 1.23.0
+go 1.25.7
 
 require (
 	github.com/google/go-github/v72 v72.0.0
