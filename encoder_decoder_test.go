@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/internal/ffi"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 
@@ -705,7 +705,7 @@ func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WAFObject
 	}
 
 	for i := range expected.children {
-		assertEqualType(t, expected.children[i], unsafe.CastWithOffset[bindings.WAFObject](actual.Value, uint64(i)))
+		assertEqualType(t, expected.children[i], ffi.CastWithOffset[bindings.WAFObject](actual.Value, uint64(i)))
 	}
 }
 
