@@ -138,13 +138,17 @@ func (waf *WAFLib) BuilderGetConfigPaths(builder WAFBuilder, filter string) []st
 	var paths WAFObject
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
-	pinner.Pin(&filter)
 	pinner.Pin(&paths)
+
+	filterData := unsafe.StringData(filter)
+	if filterData != nil {
+		pinner.Pin(unsafe.Pointer(filterData))
+	}
 
 	count := waf.syscall(waf.builderGetConfigPaths,
 		uintptr(builder),
 		unsafe.PtrToUintptr(&paths),
-		unsafe.PtrToUintptr(unsafe.StringData(filter)),
+		unsafe.PtrToUintptr(filterData),
 		uintptr(len(filter)),
 	)
 	defer waf.ObjectFree(&paths)
@@ -244,10 +248,14 @@ func (waf *WAFLib) ObjectFromJSON(json []byte) (WAFObject, bool) {
 	)
 
 	defer pinner.Unpin()
-	pinner.Pin(&json)
 	pinner.Pin(&obj)
 
-	success := waf.syscall(waf.objectFromJSON, unsafe.PtrToUintptr(&obj), unsafe.SliceToUintptr(json), uintptr(len(json))) != 0
+	jsonData := unsafe.SliceData(json)
+	if jsonData != nil {
+		pinner.Pin(unsafe.Pointer(jsonData))
+	}
+
+	success := waf.syscall(waf.objectFromJSON, unsafe.PtrToUintptr(&obj), unsafe.PtrToUintptr(jsonData), uintptr(len(json))) != 0
 	return obj, success
 }
 
@@ -258,6 +266,7 @@ func (waf *WAFLib) ObjectFromJSON(json []byte) (WAFObject, bool) {
 //	1st - The return value is a pointer or a int of any type
 //	2nd - The return value is a float
 //	3rd - The value of `errno` at the end of the call
+//go:uintptrescapes
 func (waf *WAFLib) syscall(fn uintptr, args ...uintptr) uintptr {
 	ret, _, _ := purego.SyscallN(fn, args...)
 	return ret
