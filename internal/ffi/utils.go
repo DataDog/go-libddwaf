@@ -3,16 +3,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-package unsafe
+package ffi
 
 import (
 	"runtime"
 	"unsafe"
 )
-
-// Pointer is an alias for [unsafe.Pointer], re-exported so that callers do not
-// need to import the standard [unsafe] package directly.
-type Pointer = unsafe.Pointer
 
 // SliceData returns a pointer to the underlying array of the slice. It is a
 // generic wrapper around [unsafe.SliceData].

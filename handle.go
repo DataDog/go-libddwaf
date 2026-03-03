@@ -9,9 +9,10 @@ import (
 	"fmt"
 	"runtime"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v4/internal/ffi"
 	"github.com/DataDog/go-libddwaf/v4/timer"
 	"github.com/DataDog/go-libddwaf/v4/waferrors"
 )
@@ -144,8 +145,8 @@ func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscato
 			MaxStringLength:   bindings.MaxStringLength,
 		},
 		Obfuscator: bindings.WAFConfigObfuscator{
-			KeyRegex:   uintptr(unsafe.Pointer(unsafe.Cstring(pinner, keyObfuscatorRegex))),
-			ValueRegex: uintptr(unsafe.Pointer(unsafe.Cstring(pinner, valueObfuscatorRegex))),
+			KeyRegex:   uintptr(unsafe.Pointer(ffi.Cstring(pinner, keyObfuscatorRegex))),
+			ValueRegex: uintptr(unsafe.Pointer(ffi.Cstring(pinner, valueObfuscatorRegex))),
 		},
 		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
 		FreeFn: 0,

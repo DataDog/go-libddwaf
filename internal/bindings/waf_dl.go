@@ -12,10 +12,11 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"unsafe"
 
+	"github.com/DataDog/go-libddwaf/v4/internal/ffi"
 	"github.com/DataDog/go-libddwaf/v4/internal/lib"
 	"github.com/DataDog/go-libddwaf/v4/internal/log"
-	"github.com/DataDog/go-libddwaf/v4/internal/unsafe"
 	"github.com/ebitengine/purego"
 )
 
@@ -81,7 +82,7 @@ func (waf *WAFLib) Close() error {
 
 // GetVersion returned string is a static string so we do not need to free it
 func (waf *WAFLib) GetVersion() string {
-	return unsafe.Gostring(unsafe.Cast[byte](waf.syscall(waf.getVersion)))
+	return ffi.Gostring(ffi.Cast[byte](waf.syscall(waf.getVersion)))
 }
 
 // BuilderInit initializes a new WAF builder with the provided configuration,
@@ -105,7 +106,7 @@ func (waf *WAFLib) BuilderAddOrUpdateConfig(builder WAFBuilder, path string, con
 
 	res := waf.syscall(waf.builderAddOrUpdateConfig,
 		uintptr(builder),
-		uintptr(unsafe.Pointer(unsafe.Cstring(&pinner, path))),
+		uintptr(unsafe.Pointer(ffi.Cstring(&pinner, path))),
 		uintptr(len(path)),
 		uintptr(unsafe.Pointer(config)),
 		uintptr(unsafe.Pointer(diags)),
@@ -121,7 +122,7 @@ func (waf *WAFLib) BuilderRemoveConfig(builder WAFBuilder, path string) bool {
 
 	return byte(waf.syscall(waf.builderRemoveConfig,
 		uintptr(builder),
-		uintptr(unsafe.Pointer(unsafe.Cstring(&pinner, path))),
+		uintptr(unsafe.Pointer(ffi.Cstring(&pinner, path))),
 		uintptr(len(path)),
 	)) != 0
 }
@@ -140,7 +141,7 @@ func (waf *WAFLib) BuilderGetConfigPaths(builder WAFBuilder, filter string) []st
 	defer pinner.Unpin()
 	pinner.Pin(&paths)
 
-	filterData := unsafe.StringData(filter)
+	filterData := ffi.StringData(filter)
 	if filterData != nil {
 		pinner.Pin(unsafe.Pointer(filterData))
 	}
@@ -155,8 +156,8 @@ func (waf *WAFLib) BuilderGetConfigPaths(builder WAFBuilder, filter string) []st
 
 	list := make([]string, 0, count)
 	for i := range uint64(count) {
-		obj := unsafe.CastWithOffset[WAFObject](paths.Value, i)
-		path := unsafe.GostringSized(unsafe.Cast[byte](obj.Value), obj.NbEntries)
+		obj := ffi.CastWithOffset[WAFObject](paths.Value, i)
+		path := ffi.GostringSized(ffi.Cast[byte](obj.Value), obj.NbEntries)
 		list = append(list, path)
 	}
 	return list
@@ -204,7 +205,7 @@ func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 	// These C strings are static strings so we do not need to free them
 	addresses := make([]string, int(nbAddresses))
 	for i := 0; i < int(nbAddresses); i++ {
-		addresses[i] = unsafe.Gostring(*unsafe.CastWithOffset[*byte](arrayVoidC, uint64(i)))
+		addresses[i] = ffi.Gostring(*ffi.CastWithOffset[*byte](arrayVoidC, uint64(i)))
 	}
 
 	return addresses
@@ -250,7 +251,7 @@ func (waf *WAFLib) ObjectFromJSON(json []byte) (WAFObject, bool) {
 	defer pinner.Unpin()
 	pinner.Pin(&obj)
 
-	jsonData := unsafe.SliceData(json)
+	jsonData := ffi.SliceData(json)
 	if jsonData != nil {
 		pinner.Pin(unsafe.Pointer(jsonData))
 	}
