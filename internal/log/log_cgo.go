@@ -27,9 +27,9 @@ func CallbackFunctionPointer() uintptr {
 
 //export ddwafLogCallbackFnV4
 func ddwafLogCallbackFnV4(level C.DDWAF_LOG_LEVEL, fnPtr, filePtr *C.char, line C.unsigned, msgPtr *C.char, _ C.uint64_t) {
-	function := unsafe.Gostring(unsafe.CastNative[C.char, byte](fnPtr))
-	file := unsafe.Gostring(unsafe.CastNative[C.char, byte](filePtr))
-	message := unsafe.Gostring(unsafe.CastNative[C.char, byte](msgPtr))
+	function := unsafe.Gostring((*byte)(unsafe.Pointer(fnPtr)))
+	file := unsafe.Gostring((*byte)(unsafe.Pointer(filePtr)))
+	message := unsafe.Gostring((*byte)(unsafe.Pointer(msgPtr)))
 
 	logMessage(Level(level), function, file, uint(line), message)
 }

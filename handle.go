@@ -144,8 +144,8 @@ func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscato
 			MaxStringLength:   bindings.MaxStringLength,
 		},
 		Obfuscator: bindings.WAFConfigObfuscator{
-			KeyRegex:   unsafe.PtrToUintptr(unsafe.Cstring(pinner, keyObfuscatorRegex)),
-			ValueRegex: unsafe.PtrToUintptr(unsafe.Cstring(pinner, valueObfuscatorRegex)),
+			KeyRegex:   uintptr(unsafe.Pointer(unsafe.Cstring(pinner, keyObfuscatorRegex))),
+			ValueRegex: uintptr(unsafe.Pointer(unsafe.Cstring(pinner, valueObfuscatorRegex))),
 		},
 		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
 		FreeFn: 0,
