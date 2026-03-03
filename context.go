@@ -313,7 +313,7 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 		}
 	}
 
-	return res, duration, goRunError(ret)
+	return res, duration, goRunError(ret, err)
 }
 
 // Close disposes of the underlying `ddwaf_context` and releases the associated
