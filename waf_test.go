@@ -359,10 +359,10 @@ func TestTimeout(t *testing.T) {
 	})
 
 	t.Run("both-timeout", func(t *testing.T) {
-		// TODO(eliott.bouhana): APPSEC-58637
-		t.Skip("TODO(eliott.bouhana): This test is flaky and needs to be fixed")
-
-		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey, raspTimerKey))
+		// Use a budget large enough for the first (small) run to always succeed,
+		// but small enough that the second (large) run always times out.
+		budget := 10 * time.Millisecond
+		context, err := waf.NewContext(timer.WithBudget(budget), timer.WithComponents(wafTimerKey, raspTimerKey))
 		require.NoError(t, err)
 		require.NotNil(t, context)
 		defer context.Close()
@@ -378,9 +378,9 @@ func TestTimeout(t *testing.T) {
 
 		res, err = context.Run(RunAddressData{Persistent: largeValue, TimerKey: raspTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
-		require.LessOrEqual(t, context.Timer.Stats()[wafTimerKey], time.Millisecond)
-		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey]+context.Timer.Stats()[wafTimerKey], time.Millisecond)
-		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey]+res.TimerStats[EncodeTimeKey], time.Millisecond)
+		require.LessOrEqual(t, context.Timer.Stats()[wafTimerKey], budget)
+		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey]+context.Timer.Stats()[wafTimerKey], budget)
+		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey]+res.TimerStats[EncodeTimeKey], budget)
 	})
 }
 
