@@ -1,0 +1,13 @@
+Source: Datadog prod logs, 2026-03-05T22:20:50Z
+Host: us5-prod-dog-zorua-f-k8s-4ac9083710a6d7b9-c9vb
+Function: ddwaf_run (via WAFLib.Run, waf_dl.go:233)
+addr=0x0, m=10
+
+goroutine 2374 gp=0xc0010ee380 m=10 mp=0xc000600008 [syscall]:
+runtime.cgocall(0x3494e00, 0xc000140000)
+github.com/ebitengine/purego.syscall_syscall15X(0x769a20769eb0, 0x769a14a823c0, 0xc00b1fff80, 0xc00b1fffb0, 0xc00b252090, 0x2fb, ...)
+github.com/DataDog/go-libddwaf/v4/internal/bindings.(*WAFLib).Run(...)  waf_dl.go:233
+github.com/DataDog/go-libddwaf/v4.(*Context).run(...)  context.go:233
+github.com/DataDog/go-libddwaf/v4.(*Context).Run(...)  context.go:151
+github.com/DataDog/dd-trace-go/v2/internal/appsec/emitter/waf.(*ContextOperation).OnEvent(...)  context.go:182
+  → grpcsec.MonitorRequestMessage → BatchAddEdges_Handler  ← different RPC!

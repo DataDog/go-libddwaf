@@ -1,0 +1,16 @@
+Source: Datadog prod logs, 2026-03-05T22:11:26Z
+Host: us5-prod-dog-zorua-a-k8s-be5f1c9958908775-8p5m
+Function: ddwaf_run (via WAFLib.Run, waf_dl.go:233)
+addr=0x0, m=4
+
+goroutine 6186 — Different code path: grpcsec.Feature.OnStart calls Run directly
+Call path:
+  BatchAddNodes_Handler → grpcsec.StartHandlerOperation
+    → grpcsec.Feature.OnStart (grpc.go:54)
+      → waf.ContextOperation.Run (run.go:43)
+        → Context.Run → Context.run → WAFLib.Run
+          → ddwaf_run ← SIGSEGV
+
+NOTE: This is a DIFFERENT listener path from the earlier traces.
+grpcsec.Feature.OnStart runs WAF at handler start, vs
+waf.Feature.onStart which creates the context.

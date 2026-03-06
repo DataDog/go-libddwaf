@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gunzip:*)",
+      "Bash(gunzip -c internal/ruleset/recommended.json.gz | python3 -c \"import sys,json; json.load\\(sys.stdin\\); print\\('JSON is valid'\\)\" 2>&1)",
+      "Bash(tail:*)",
+      "mcp__datadog__search_datadog_logs",
+      "mcp__datadog__analyze_datadog_logs"
+    ]
+  },
+  "disabledMcpjsonServers": [
+    "claude-flow"
+  ]
+}

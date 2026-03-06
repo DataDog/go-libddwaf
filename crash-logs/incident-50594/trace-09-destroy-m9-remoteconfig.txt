@@ -1,0 +1,15 @@
+Source: Datadog prod logs, 2026-03-05T22:13:03Z
+Host: eu1-prod-dog-staryu-a-k8s-e09f245542371d50-48gn
+Function: ddwaf_destroy (via WAFLib.Destroy, waf_dl.go:173)
+addr=0x0, m=9
+
+goroutine 213 — CRITICAL: this is the Remote Config goroutine!
+Call path:
+  remoteconfig.Start → remoteconfig.Client.updateState → Client.applyUpdate
+    → appsec.onRCRulesUpdate → appsec.SwapRootOperation
+      → waf.Feature.Stop → Handle.Close → WAFLib.Destroy
+        → ddwaf_destroy ← SIGSEGV
+
+NOTE: This is a Remote Config update destroying the WAF handle while other
+goroutines are still using it for ContextInit/Run/ContextDestroy!
+This is the SMOKING GUN for a use-after-free / race condition.

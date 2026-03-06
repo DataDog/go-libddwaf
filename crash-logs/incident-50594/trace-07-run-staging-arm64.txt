@@ -1,0 +1,14 @@
+Source: staging goroutine.log (arm64)
+Function: ddwaf_run (via WAFLib.Run, waf_dl.go:233)
+m=15
+
+goroutine 7530 gp=0x4006433dc0 m=15 mp=0x4000c00008 [syscall]:
+runtime.cgocall(0x3426250, 0x4006631380)
+github.com/ebitengine/purego.syscall_syscall15X(0xe760184e2344, 0xe75ff84165c0, 0x400bd258f0, 0x400bd25bc0, 0x400bd25bf0, 0x3ad, ...)
+github.com/DataDog/go-libddwaf/v4/internal/bindings.(*WAFLib).Run(...)  waf_dl.go:233
+github.com/DataDog/go-libddwaf/v4.(*Context).run(...)  context.go:233
+github.com/DataDog/go-libddwaf/v4.(*Context).Run(...)  context.go:151
+github.com/DataDog/dd-trace-go/v2/internal/appsec/emitter/waf.(*ContextOperation).Run(...)  run.go:43
+github.com/DataDog/dd-trace-go/v2/internal/appsec/listener/grpcsec.(*Feature).OnStart(...)  grpc.go:54
+  → grpcsec.StartHandlerOperation → BatchAddNodes_Handler
+NOTE: arm64 (asm_arm64.s:1268), different code path via grpcsec.Feature.OnStart

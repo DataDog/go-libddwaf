@@ -1,0 +1,13 @@
+Source: Datadog prod logs, 2026-03-05T22:21:35Z
+Host: us5-prod-dog-zorua-f-k8s-4ac9083710a6d7b9-2cdn
+Function: ddwaf_run (via WAFLib.Run, waf_dl.go:233)
+addr=0x0, m=10
+
+goroutine 3224 gp=0xc001208700 m=10 mp=0xc000b96008 [syscall]:
+runtime.cgocall(0x3494e00, 0xc000c80000)
+github.com/ebitengine/purego.syscall_syscall15X(0x73df44d69eb0, 0x73df4821d900, 0xc00ebc83f0, 0xc00ebc8420, 0xc00ebc8510, 0x2b8, ...)
+github.com/DataDog/go-libddwaf/v4/internal/bindings.(*WAFLib).Run(...)  waf_dl.go:233
+github.com/DataDog/go-libddwaf/v4.(*Context).run(...)  context.go:233
+github.com/DataDog/go-libddwaf/v4.(*Context).Run(...)  context.go:151
+github.com/DataDog/dd-trace-go/v2/internal/appsec/emitter/waf.(*ContextOperation).OnEvent(...)  context.go:182
+  → grpcsec.MonitorRequestMessage → BatchAddNodes_Handler

@@ -1,0 +1,12 @@
+Source: Datadog prod logs, 2026-03-05T22:17:56Z
+Host: us5-prod-dog-zorua-c-k8s-99f47a3ab5974bab-dlcn
+Function: ddwaf_context_destroy (via WAFLib.ContextDestroy, waf_dl.go:214)
+addr=0x0, m=3
+
+goroutine 4444 gp=0xc00bc248c0 m=3 mp=0xc0000b9008 [syscall]:
+runtime.cgocall(0x3494e00, 0xc00c3a3040)
+github.com/ebitengine/purego.syscall_syscall15X(0x7d6e92f6a270, 0x7d6e9908ee40, 0x0, 0x0, ...)
+github.com/DataDog/go-libddwaf/v4/internal/bindings.(*WAFLib).ContextDestroy(...)  waf_dl.go:214
+github.com/DataDog/go-libddwaf/v4.(*Context).Close(...)  context.go:327
+github.com/DataDog/dd-trace-go/v2/internal/appsec/listener/waf.(*Feature).onFinish(...)  waf.go:140
+  → grpcsec.HandlerOperation.Finish → BatchAddNodes_Handler

@@ -1,0 +1,12 @@
+Source: Datadog prod logs, 2026-03-05T22:20:59Z
+Host: us5-prod-dog-zorua-f-k8s-4ac9083710a6d7b9-fnzv
+Function: ddwaf_context_init (via WAFLib.ContextInit, waf_dl.go:210)
+addr=0x0, m=15
+
+goroutine 1753 gp=0xc00092afc0 m=15 mp=0xc000f8e008 [syscall]:
+runtime.cgocall(0x3494e00, 0xc0001b0000)
+github.com/ebitengine/purego.syscall_syscall15X(0x778c18367230, 0x778c197688b0, 0x0, 0x0, ...)
+github.com/DataDog/go-libddwaf/v4/internal/bindings.(*WAFLib).ContextInit(...)  waf_dl.go:210
+github.com/DataDog/go-libddwaf/v4.(*Handle).NewContext(...)  handle.go:58
+github.com/DataDog/dd-trace-go/v2/internal/appsec/listener/waf.(*Feature).onStart(...)  waf.go:98
+  → grpcsec.StartHandlerOperation → BatchAddNodes_Handler

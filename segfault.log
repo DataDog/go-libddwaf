@@ -1,0 +1,1669 @@
+{"error.is_crash":true,"error.kind":"runtime.errorString","error.message":"SIGSEGV: segmentation violation","error.stack":"PC=0x32c7b23 m=0 sigcode=1 addr=0x0
+signal arrived during cgo execution
+
+goroutine 1 gp=0xc000002380 m=0 mp=0xa3610c0 [syscall]:
+runtime.cgocall(0xbe57a0, 0xc00457ef70)
+\t/usr/local/go/src/runtime/cgocall.go:167 +0x4b fp=0xc000088450 sp=0xc000088418 pc=0x61686b
+github.com/ebitengine/purego.syscall_syscall15X(0x76fd41f768a0, 0xc004a095c0, 0xc005074000, 0x2f23a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, ...)
+\t/go/pkg/mod/github.com/ebitengine/purego@v0.9.1/syscall_sysv.go:27 +0x269 fp=0xc000088590 sp=0xc000088450 pc=0xbe4989
+github.com/ebitengine/purego.SyscallN(0x76fd41f768a0, {0xc004f984b0?, 0xc004a095c0?, 0xc00509e000?})
+\t/go/pkg/mod/github.com/ebitengine/purego@v0.9.1/syscall.go:55 +0x15b fp=0xc0000886a8 sp=0xc000088590 pc=0xbe46bb
+github.com/DataDog/go-libddwaf/v4/internal/bindings.(*WAFLib).syscall(...)
+\t/go/pkg/mod/github.com/!data!dog/go-libddwaf/v4@v4.8.0/internal/bindings/waf_dl.go:262
+github.com/DataDog/go-libddwaf/v4/internal/bindings.(*WAFLib).ObjectFromJSON(0xc0049e0240, {0xc005074000, 0x2f23a, 0x36000})
+\t/go/pkg/mod/github.com/!data!dog/go-libddwaf/v4@v4.8.0/internal/bindings/waf_dl.go:250 +0x17d fp=0xc000088730 sp=0xc0000886a8 pc=0xbed39d
+github.com/DataDog/go-libddwaf/v4/internal/ruleset.DefaultRuleset()
+\t/go/pkg/mod/github.com/!data!dog/go-libddwaf/v4@v4.8.0/internal/ruleset/ruleset.go:44 +0x206 fp=0xc000088818 sp=0xc000088730 pc=0xbedd66
+github.com/DataDog/go-libddwaf/v4.(*Builder).AddDefaultRecommendedRuleset(0xc0049d3650)
+\t/go/pkg/mod/github.com/!data!dog/go-libddwaf/v4@v4.8.0/builder.go:68 +0x78 fp=0xc0000889b8 sp=0xc000088818 pc=0xc04338
+github.com/DataDog/dd-trace-go/v2/internal/appsec/config.(*WAFManager).RestoreDefaultConfig(0xc00471ef00)
+\t/go/pkg/mod/github.com/!data!dog/dd-trace-go/v2@v2.6.0/internal/appsec/config/wafmanager.go:154 +0x85 fp=0xc000088cd0 sp=0xc0000889b8 pc=0xc5f1e5
+github.com/DataDog/dd-trace-go/v2/internal/appsec/config.NewWAFManagerWithStaticRules({{0x5fb10ff?, 0x0?}, {0x5fbe654?, 0xa0ecf9?}}, {0x0, 0x0, 0x0})
+\t/go/pkg/mod/github.com/!data!dog/dd-trace-go/v2@v2.6.0/internal/appsec/config/wafmanager.go:51 +0x99 fp=0xc000088d10 sp=0xc000088cd0 pc=0xc5df79
+github.com/DataDog/dd-trace-go/v2/internal/appsec/config.(*StartConfig).NewConfig(0xc004a17d80)
+\t/go/pkg/mod/github.com/!data!dog/dd-trace-go/v2@v2.6.0/internal/appsec/config/config.go:206 +0xa5 fp=0xc000088e08 sp=0xc000088d10 pc=0xc5ce85
+github.com/DataDog/dd-trace-go/v2/internal/appsec.Start({0xc0000892c8, 0x2, 0x4})
+\t/go/pkg/mod/github.com/!data!dog/dd-trace-go/v2@v2.6.0/internal/appsec/appsec.go:84 +0x45e fp=0xc000089010 sp=0xc000088e08 pc=0xcd233e
+github.com/DataDog/dd-trace-go/v2/ddtrace/tracer.Start({0xc00055d900, 0x9, 0x10})
+\t/go/pkg/mod/github.com/!data!dog/dd-trace-go/v2@v2.6.0/ddtrace/tracer/tracer.go:276 +0x7e5 fp=0xc000089310 sp=0xc000089010 pc=0xe3ab25
+gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer.Start({0xc00055d900, 0x9, 0x10})
+\t/go/pkg/mod/gopkg.in/!data!dog/dd-trace-go.v1@v1.74.8/ddtrace/tracer/tracer.go:32 +0xb3 fp=0xc000089358 sp=0xc000089310 pc=0xe5b0d3
+github.com/DataDog/dd-go/config/tracing.applyConfig.func1()
+\t/go/src/github.com/DataDog/dd-go/config/tracing/tracer.go:253 +0xf05 fp=0xc0000897c0 sp=0xc000089358 pc=0x25942e5
+sync.(*Once).doSlow(0xc004a06380?, 0xc00377f4d0?)
+\t/usr/local/go/src/sync/once.go:78 +0xac fp=0xc000089818 sp=0xc0000897c0 pc=0x63092c
+sync.(*Once).Do(...)
+\t/usr/local/go/src/sync/once.go:69
+github.com/DataDog/dd-go/config/tracing.applyConfig(0xc004a06380?)
+\t/go/src/github.com/DataDog/dd-go/config/tracing/tracer.go:196 +0x45 fp=0xc000089848 sp=0xc000089818 pc=0x25933a5
+github.com/DataDog/dd-go/config/tracing.PullTracerConfig(0xc004a06380)
+\t/go/src/github.com/DataDog/dd-go/config/tracing/tracer.go:91 +0x50 fp=0xc000089868 sp=0xc000089848 pc=0x2592470
+github.com/DataDog/dd-go/pkg/ddapp.(*App).bootstrapTracing(0xc001a1eb40?, {0xc000082160?, 0x12?})
+\t/go/src/github.com/DataDog/dd-go/pkg/ddapp/bootstrap.go:730 +0xec fp=0xc000089888 sp=0xc000089868 pc=0x259996c
+github.com/DataDog/dd-go/pkg/ddapp.(*App).BootstrapSafely(0xc001a1eb40)
+\t/go/src/github.com/DataDog/dd-go/pkg/ddapp/bootstrap.go:568 +0x30f fp=0xc000089cb8 sp=0xc000089888 pc=0x259888f
+github.com/DataDog/dd-go/pkg/ddapp.(*App).Bootstrap(0x5ef7cb1?)
+\t/go/src/github.com/DataDog/dd-go/pkg/ddapp/bootstrap.go:462 +0x1f fp=0xc000089d90 sp=0xc000089cb8 pc=0x259825f
+main.main()
+\t/go/src/github.com/DataDog/dd-go/apps/cloud-streams-processor/main.go:89 +0x8e fp=0xc000089f50 sp=0xc000089d90 pc=0x2788eee
+runtime.main()
+\t/usr/local/go/src/runtime/proc.go:285 +0x29d fp=0xc000089fe0 sp=0xc000089f50 pc=0x5ddd3d
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000089fe8 sp=0xc000089fe0 pc=0x625de1
+
+goroutine 2 gp=0xc000002e00 m=nil [force gc (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000a0fa8 sp=0xc0000a0f88 pc=0x61bf2e
+runtime.goparkunlock(...)
+\t/usr/local/go/src/runtime/proc.go:466
+runtime.forcegchelper()
+\t/usr/local/go/src/runtime/proc.go:373 +0xb3 fp=0xc0000a0fe0 sp=0xc0000a0fa8 pc=0x5de073
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000a0fe8 sp=0xc0000a0fe0 pc=0x625de1
+created by runtime.init.7 in goroutine 1
+\t/usr/local/go/src/runtime/proc.go:361 +0x1a
+
+goroutine 3 gp=0xc000002fc0 m=nil [GC sweep wait]:
+runtime.gopark(0xa383701?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000a1750 sp=0xc0000a1730 pc=0x61bf2e
+runtime.goparkunlock(...)
+\t/usr/local/go/src/runtime/proc.go:466
+runtime.bgsweep(0xc0000c2000)
+\t/usr/local/go/src/runtime/mgcsweep.go:323 +0xdf fp=0xc0000a17c8 sp=0xc0000a1750 pc=0x5c2d9f
+runtime.gcenable.gowrap1()
+\t/usr/local/go/src/runtime/mgc.go:212 +0x25 fp=0xc0000a17e0 sp=0xc0000a17c8 pc=0x5b50a5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000a17e8 sp=0xc0000a17e0 pc=0x625de1
+created by runtime.gcenable in goroutine 1
+\t/usr/local/go/src/runtime/mgc.go:212 +0x66
+
+goroutine 4 gp=0xc000003180 m=nil [GC scavenge wait]:
+runtime.gopark(0xc0000c2000?, 0x6d61a30?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000a1f78 sp=0xc0000a1f58 pc=0x61bf2e
+runtime.goparkunlock(...)
+\t/usr/local/go/src/runtime/proc.go:466
+runtime.(*scavengerState).park(0xa345ac0)
+\t/usr/local/go/src/runtime/mgcscavenge.go:425 +0x49 fp=0xc0000a1fa8 sp=0xc0000a1f78 pc=0x5c0369
+runtime.bgscavenge(0xc0000c2000)
+\t/usr/local/go/src/runtime/mgcscavenge.go:658 +0x59 fp=0xc0000a1fc8 sp=0xc0000a1fa8 pc=0x5c0919
+runtime.gcenable.gowrap2()
+\t/usr/local/go/src/runtime/mgc.go:213 +0x25 fp=0xc0000a1fe0 sp=0xc0000a1fc8 pc=0x5b5045
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000a1fe8 sp=0xc0000a1fe0 pc=0x625de1
+created by runtime.gcenable in goroutine 1
+\t/usr/local/go/src/runtime/mgc.go:213 +0xa5
+
+goroutine 5 gp=0xc0000036c0 m=nil [GOMAXPROCS updater (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000a2788 sp=0xc0000a2768 pc=0x61bf2e
+runtime.goparkunlock(...)
+\t/usr/local/go/src/runtime/proc.go:466
+runtime.updateMaxProcsGoroutine()
+\t/usr/local/go/src/runtime/proc.go:6720 +0xe7 fp=0xc0000a27e0 sp=0xc0000a2788 pc=0x5ed8e7
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000a27e8 sp=0xc0000a27e0 pc=0x625de1
+created by runtime.defaultGOMAXPROCSUpdateEnable in goroutine 1
+\t/usr/local/go/src/runtime/proc.go:6708 +0x37
+
+goroutine 6 gp=0xc000003c00 m=nil [chan receive]:
+runtime.gopark(0xc000420080?, 0xc000420000?, 0xc0?, 0xc6?, 0x6a98268?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000a0700 sp=0xc0000a06e0 pc=0x61bf2e
+runtime.chanrecv(0xc000420000, 0xc0000a07b8, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc0000a0778 sp=0xc0000a0700 pc=0x5a2bd3
+runtime.chanrecv2(0x2dc6c0?, 0x99504d0?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc0000a07a0 sp=0xc0000a0778 pc=0x5a2752
+go.ddbuild.io/dd-source/x/libs/go/timing/fastclock.runForever()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/timing/fastclock/fastclock.go:31 +0x54 fp=0xc0000a07e0 sp=0xc0000a07a0 pc=0x19b09b4
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000a07e8 sp=0xc0000a07e0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/timing/fastclock.init.0 in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/timing/fastclock/fastclock.go:22 +0x1f
+
+goroutine 7 gp=0xc000003dc0 m=nil [finalizer wait]:
+runtime.gopark(0x0?, 0x6a98470?, 0xc0?, 0x64?, 0x2000000020?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000a2e20 sp=0xc0000a2e00 pc=0x61bf2e
+runtime.runFinalizers()
+\t/usr/local/go/src/runtime/mfinal.go:210 +0x107 fp=0xc0000a2fe0 sp=0xc0000a2e20 pc=0x5b3fa7
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000a2fe8 sp=0xc0000a2fe0 pc=0x625de1
+created by runtime.createfing in goroutine 1
+\t/usr/local/go/src/runtime/mfinal.go:172 +0x3d
+
+goroutine 8 gp=0xc0001d4c40 m=nil [GC worker (idle)]:
+runtime.gopark(0x2b3d9fa3b37?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001fb8f38 sp=0xc001fb8f18 pc=0x61bf2e
+runtime.gcBgMarkWorker(0xc0000ce700)
+\t/usr/local/go/src/runtime/mgc.go:1463 +0xeb fp=0xc001fb8fc8 sp=0xc001fb8f38 pc=0x5b778b
+runtime.gcBgMarkStartWorkers.gowrap1()
+\t/usr/local/go/src/runtime/mgc.go:1373 +0x25 fp=0xc001fb8fe0 sp=0xc001fb8fc8 pc=0x5b7665
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001fb8fe8 sp=0xc001fb8fe0 pc=0x625de1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+\t/usr/local/go/src/runtime/mgc.go:1373 +0x105
+
+goroutine 9 gp=0xc0001d4a80 m=nil [cleanup wait]:
+runtime.gopark(0x76fd422a7800?, 0xc00009cf90?, 0x35?, 0x82?, 0x76fd422a7800?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00009cf68 sp=0xc00009cf48 pc=0x61bf2e
+runtime.goparkunlock(...)
+\t/usr/local/go/src/runtime/proc.go:466
+runtime.(*cleanupQueue).dequeue(0xa3461a0)
+\t/usr/local/go/src/runtime/mcleanup.go:439 +0xc5 fp=0xc00009cfa0 sp=0xc00009cf68 pc=0x5b0ca5
+runtime.runCleanups()
+\t/usr/local/go/src/runtime/mcleanup.go:635 +0x45 fp=0xc00009cfe0 sp=0xc00009cfa0 pc=0x5b1365
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00009cfe8 sp=0xc00009cfe0 pc=0x625de1
+created by runtime.(*cleanupQueue).createGs in goroutine 1
+\t/usr/local/go/src/runtime/mcleanup.go:589 +0xa5
+
+goroutine 18 gp=0xc0001d5dc0 m=nil [select]:
+runtime.gopark(0xc0003eb9e0?, 0xc0003eb8f0?, 0xf0?, 0x7f?, 0xc00009d5f8?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00009d520 sp=0xc00009d500 pc=0x61bf2e
+runtime.selectgo(0xc00009d730, 0xc00009d720, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00009d6c0 sp=0xc00009d520 pc=0x5f28b8
+github.com/DataDog/dd-go/util/grpcutil.(*StatsDTracer).Run(0xc00098e1e0, 0xc000561950?)
+\t/go/src/github.com/DataDog/dd-go/util/grpcutil/statsd.go:59 +0xba fp=0xc00009d7c0 sp=0xc00009d6c0 pc=0x19bba7a
+github.com/DataDog/dd-go/util/grpcutil.init.0.gowrap1()
+\t/go/src/github.com/DataDog/dd-go/util/grpcutil/grpc.go:45 +0x2a fp=0xc00009d7e0 sp=0xc00009d7c0 pc=0x19bb98a
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00009d7e8 sp=0xc00009d7e0 pc=0x625de1
+created by github.com/DataDog/dd-go/util/grpcutil.init.0 in goroutine 1
+\t/go/src/github.com/DataDog/dd-go/util/grpcutil/grpc.go:45 +0xe5
+
+goroutine 16 gp=0xc000002000 m=nil [select]:
+runtime.gopark(0xc0003eb890?, 0xc0003eb730?, 0xf0?, 0x7f?, 0xc00009ddf8?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00009dd20 sp=0xc00009dd00 pc=0x61bf2e
+runtime.selectgo(0xc00009df30, 0xc00009df20, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00009dec0 sp=0xc00009dd20 pc=0x5f28b8
+go.ddbuild.io/dd-source/x/libs/go/util/grpcutil.(*StatsDTracer).Run(0xc00098fd70, 0xc000561a70?)
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/util/grpcutil/statsd.go:59 +0xba fp=0xc00009dfc0 sp=0xc00009dec0 pc=0x130af3a
+go.ddbuild.io/dd-source/x/libs/go/util/grpcutil.init.0.gowrap1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/util/grpcutil/grpc.go:27 +0x2a fp=0xc00009dfe0 sp=0xc00009dfc0 pc=0x1308cca
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00009dfe8 sp=0xc00009dfe0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/util/grpcutil.init.0 in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/util/grpcutil/grpc.go:27 +0xe5
+
+goroutine 12 gp=0xc00071e540 m=nil [chan receive]:
+runtime.gopark(0xc000420160?, 0xc0004200e0?, 0x0?, 0xf2?, 0x6a98268?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0002a1660 sp=0xc0002a1640 pc=0x61bf2e
+runtime.chanrecv(0xc0004200e0, 0xc0002a1738, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc0002a16d8 sp=0xc0002a1660 pc=0x5a2bd3
+runtime.chanrecv2(0x12a05f200?, 0x17?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc0002a1700 sp=0xc0002a16d8 pc=0x5a2752
+go.ddbuild.io/dd-source/libs/go/log.(*RateLimitedLogger).clear(0xc00037c4e0, 0xc0001fa691?)
+\t/go/pkg/mod/go.ddbuild.io/dd-source/libs/go/log@v1.0.25054540/rate_limited.go:41 +0x52 fp=0xc0002a17c0 sp=0xc0002a1700 pc=0x240a372
+go.ddbuild.io/dd-source/libs/go/log.NewRateLimitedLogger.gowrap1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/libs/go/log@v1.0.25054540/rate_limited.go:35 +0x25 fp=0xc0002a17e0 sp=0xc0002a17c0 pc=0x240a2e5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0002a17e8 sp=0xc0002a17e0 pc=0x625de1
+created by go.ddbuild.io/dd-source/libs/go/log.NewRateLimitedLogger in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/libs/go/log@v1.0.25054540/rate_limited.go:35 +0xf5
+
+goroutine 13 gp=0xc00071e700 m=nil [select]:
+runtime.gopark(0xc000420240?, 0xc0004201c0?, 0xf0?, 0x7f?, 0xc0002a1e68?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0002a1d90 sp=0xc0002a1d70 pc=0x61bf2e
+runtime.selectgo(0xc0002a1f78, 0xc0002a1f68, 0xc0002633b4?, 0x0, 0x53e0620?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0002a1f30 sp=0xc0002a1d90 pc=0x5f28b8
+go.ddbuild.io/dd-source/x/libs/go/log.(*RateLimitedLoggerBase).clear(0xc00071dac0, 0x0?)
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/log/rate_limited_base.go:48 +0xba fp=0xc0002a1fc0 sp=0xc0002a1f30 pc=0xe647fa
+go.ddbuild.io/dd-source/x/libs/go/log.NewRateLimitedLoggerBase.gowrap1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/log/rate_limited_base.go:40 +0x25 fp=0xc0002a1fe0 sp=0xc0002a1fc0 pc=0xe64705
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0002a1fe8 sp=0xc0002a1fe0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/log.NewRateLimitedLoggerBase in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/log/rate_limited_base.go:40 +0x125
+
+goroutine 14 gp=0xc00071e8c0 m=nil [select]:
+runtime.gopark(0xc000420320?, 0xc0004202a0?, 0xf0?, 0x7f?, 0xc00009c660?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000b3d88 sp=0xc0000b3d68 pc=0x61bf2e
+runtime.selectgo(0xc0000b3f80, 0xc00009c760, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0000b3f28 sp=0xc0000b3d88 pc=0x5f28b8
+go.ddbuild.io/dd-source/x/libs/go/util.(*Stopper).Every.func1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/util/stopper.go:77 +0xec fp=0xc0000b3fe0 sp=0xc0000b3f28 pc=0x128accc
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000b3fe8 sp=0xc0000b3fe0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/util.(*Stopper).Every in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/util/stopper.go:72 +0x92
+
+goroutine 15 gp=0xc00071ea80 m=nil [select]:
+runtime.gopark(0xc0003abf20?, 0xc0003abea0?, 0xf0?, 0x7f?, 0x40?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000b1d88 sp=0xc0000b1d68 pc=0x61bf2e
+runtime.selectgo(0xc0000b1f80, 0xc0000b1f60, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0000b1f28 sp=0xc0000b1d88 pc=0x5f28b8
+go.ddbuild.io/dd-source/x/libs/go/util.(*Stopper).Every.func1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/util/stopper.go:77 +0xec fp=0xc0000b1fe0 sp=0xc0000b1f28 pc=0x128accc
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000b1fe8 sp=0xc0000b1fe0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/util.(*Stopper).Every in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/util/stopper.go:72 +0x92
+
+goroutine 19 gp=0xc00071fc00 m=nil [select]:
+runtime.gopark(0xc0000ce620?, 0xc000bb1f20?, 0xa0?, 0x33?, 0xc00086fed8?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000aed80 sp=0xc0000aed60 pc=0x61bf2e
+runtime.selectgo(0xc0000aef68, 0xc00086ff54, 0xf?, 0x0, 0xc0000fe300?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0000aef20 sp=0xc0000aed80 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*sender).sendLoop(0xc000622280)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:106 +0xc5 fp=0xc0000aefc8 sp=0xc0000aef20 pc=0x78e205
+github.com/DataDog/datadog-go/v5/statsd.newSender.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x25 fp=0xc0000aefe0 sp=0xc0000aefc8 pc=0x78dce5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000aefe8 sp=0xc0000aefe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.newSender in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x17f
+
+goroutine 20 gp=0xc00071fdc0 m=nil [select]:
+runtime.gopark(0xc0003ebc10?, 0xc0003ebab0?, 0x6e?, 0xe5?, 0x16?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000afdc8 sp=0xc0000afda8 pc=0x61bf2e
+runtime.selectgo(0xc0000affb0, 0xc0002a0f98, 0x53e0620?, 0x0, 0xc0001fa369?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0000aff68 sp=0xc0000afdc8 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).start.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:65 +0x78 fp=0xc0000affe0 sp=0xc0000aff68 pc=0x7828d8
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000affe8 sp=0xc0000affe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).start in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:63 +0x6e
+
+goroutine 21 gp=0xc0001d4700 m=nil [select]:
+runtime.gopark(0xc000728240?, 0xc0007281c0?, 0x25?, 0x80?, 0xc00009c668?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00009c590 sp=0xc00009c570 pc=0x61bf2e
+runtime.selectgo(0xc00009c7a0, 0xc00009c768, 0x0?, 0x0, 0x1?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00009c730 sp=0xc00009c590 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*ClientEx).watch(...)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:572
+github.com/DataDog/datadog-go/v5/statsd.newWithWriter.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:549 +0xce fp=0xc00009c7e0 sp=0xc00009c730 pc=0x79150e
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00009c7e8 sp=0xc00009c7e0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.newWithWriter in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:547 +0x8d2
+
+goroutine 22 gp=0xc0001d48c0 m=nil [select]:
+runtime.gopark(0xc000728320?, 0xc0007282a0?, 0x25?, 0x80?, 0xc00009e678?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00009e5a0 sp=0xc00009e580 pc=0x61bf2e
+runtime.selectgo(0xc00009e798, 0xc00009e778, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00009e740 sp=0xc00009e5a0 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*telemetryClient).run.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/telemetry.go:167 +0xc6 fp=0xc00009e7e0 sp=0xc00009e740 pc=0x795766
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00009e7e8 sp=0xc00009e7e0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*telemetryClient).run in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/telemetry.go:163 +0x90
+
+goroutine 23 gp=0xc0001d4e00 m=nil [chan receive]:
+runtime.gopark(0x0?, 0x0?, 0x20?, 0xdc?, 0xc0006bc7f0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00009eea8 sp=0xc00009ee88 pc=0x61bf2e
+runtime.chanrecv(0xc000728000, 0xc00009ef90, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc00009ef20 sp=0xc00009eea8 pc=0x5a2bd3
+runtime.chanrecv2(0x6dd2368?, 0xc0003cdc20?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc00009ef48 sp=0xc00009ef20 pc=0x5a2752
+google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run(0xc0006bc6f0, {0x6dd2368, 0xc0003cdc20})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:88 +0xe5 fp=0xc00009efb8 sp=0xc00009ef48 pc=0xe9af05
+google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x28 fp=0xc00009efe0 sp=0xc00009efb8 pc=0xe9ad08
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00009efe8 sp=0xc00009efe0 pc=0x625de1
+created by google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer in goroutine 1
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x11a
+
+goroutine 24 gp=0xc0001d5500 m=nil [chan receive]:
+runtime.gopark(0xc0000794a0?, 0x3?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000b0ea8 sp=0xc0000b0e88 pc=0x61bf2e
+runtime.chanrecv(0xc000728070, 0xc0000b0f90, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc0000b0f20 sp=0xc0000b0ea8 pc=0x5a2bd3
+runtime.chanrecv2(0x6dd2368?, 0xc0003cdd10?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc0000b0f48 sp=0xc0000b0f20 pc=0x5a2752
+google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run(0xc0006bc720, {0x6dd2368, 0xc0003cdd10})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:88 +0xe5 fp=0xc0000b0fb8 sp=0xc0000b0f48 pc=0xe9af05
+google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x28 fp=0xc0000b0fe0 sp=0xc0000b0fb8 pc=0xe9ad08
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000b0fe8 sp=0xc0000b0fe0 pc=0x625de1
+created by google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer in goroutine 1
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x11a
+
+goroutine 25 gp=0xc0001d5a40 m=nil [chan receive]:
+runtime.gopark(0x0?, 0xc000a24d80?, 0x11?, 0x0?, 0xc0000794a7?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000866ea8 sp=0xc000866e88 pc=0x61bf2e
+runtime.chanrecv(0xc0007280e0, 0xc00086df90, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc000866f20 sp=0xc000866ea8 pc=0x5a2bd3
+runtime.chanrecv2(0x6dd2368?, 0xc0003cdd60?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc000866f48 sp=0xc000866f20 pc=0x5a2752
+google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run(0xc0006bc750, {0x6dd2368, 0xc0003cdd60})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:88 +0xe5 fp=0xc000866fb8 sp=0xc000866f48 pc=0xe9af05
+google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x28 fp=0xc000866fe0 sp=0xc000866fb8 pc=0xe9ad08
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000866fe8 sp=0xc000866fe0 pc=0x625de1
+created by google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer in goroutine 1
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x11a
+
+goroutine 26 gp=0xc0001d5c00 m=nil [select]:
+runtime.gopark(0xc0007284d0?, 0xc000089d50?, 0x8?, 0x21?, 0xc0007284e0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000861cd8 sp=0xc000861cb8 pc=0x61bf2e
+runtime.selectgo(0xc000861f40, 0xc000089ed0, 0xa342f40?, 0x0, 0xc0002a4cc0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000861e78 sp=0xc000861cd8 pc=0x5f28b8
+google.golang.org/grpc/internal/resolver/dns.(*dnsResolver).watcher(0xc0006e2100)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/resolver/dns/dns_resolver.go:221 +0x24b fp=0xc000861fc8 sp=0xc000861e78 pc=0xf36dab
+google.golang.org/grpc/internal/resolver/dns.(*dnsBuilder).Build.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/resolver/dns/dns_resolver.go:150 +0x25 fp=0xc000861fe0 sp=0xc000861fc8 pc=0xf36a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000861fe8 sp=0xc000861fe0 pc=0x625de1
+created by google.golang.org/grpc/internal/resolver/dns.(*dnsBuilder).Build in goroutine 24
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/resolver/dns/dns_resolver.go:150 +0x2cb
+
+goroutine 35 gp=0xc00134e000 m=nil [select]:
+runtime.gopark(0x6de0bc0?, 0xc0018ff6b0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00086b930 sp=0xc00086b910 pc=0x61bf2e
+runtime.selectgo(0xc00086bc20, 0xc00086bb0c, 0xc0018f20f0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00086bad0 sp=0xc00086b930 pc=0x5f28b8
+go.ddbuild.io/dd-source/x/libs/go/experiments.(*streamCache).watchExperiments(0xc0005260f0, {0x0, 0x0})
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/experiments/stream_cache.go:431 +0x4f7 fp=0xc00086bcb0 sp=0xc00086bad0 pc=0x115d057
+go.ddbuild.io/dd-source/x/libs/go/experiments.(*streamCache).watchExperimentsUntilCancellation.func1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/experiments/stream_cache.go:358 +0x2c fp=0xc00086bcf8 sp=0xc00086bcb0 pc=0x115c54c
+go.ddbuild.io/dd-source/x/libs/go/experiments/internal/retry.Do({0x6dd23a0, 0xc0018f20f0}, 0xc00086bf50, {0xc0002a0718, 0x2, 0xc000261551?})
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/experiments/internal/retry/retry.go:72 +0x162 fp=0xc00086beb8 sp=0xc00086bcf8 pc=0x1149f62
+go.ddbuild.io/dd-source/x/libs/go/experiments.(*streamCache).watchExperimentsUntilCancellation(0xc0005260f0)
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/experiments/stream_cache.go:357 +0x145 fp=0xc00086bf80 sp=0xc00086beb8 pc=0x115c4a5
+go.ddbuild.io/dd-source/x/libs/go/experiments.(*streamCache).initialize.func1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/experiments/stream_cache.go:133 +0x85 fp=0xc00086bfe0 sp=0xc00086bf80 pc=0x115a3a5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00086bfe8 sp=0xc00086bfe0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/experiments.(*streamCache).initialize in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/experiments/stream_cache.go:130 +0xd6
+
+goroutine 42 gp=0xc00134e540 m=nil [select]:
+runtime.gopark(0x165a8005ac388?, 0x6188b6?, 0xf0?, 0xf5?, 0x774c5a?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00009f5b8 sp=0xc00009f598 pc=0x61bf2e
+runtime.selectgo(0xc00009f7a8, 0xc00009f788, 0xc00009f7b8?, 0x0, 0x1000000010000?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00009f758 sp=0xc00009f5b8 pc=0x5f28b8
+google.golang.org/grpc.newClientStreamWithParams.func4()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/stream.go:426 +0x8c fp=0xc00009f7e0 sp=0xc00009f758 pc=0xfac8ec
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00009f7e8 sp=0xc00009f7e0 pc=0x625de1
+created by google.golang.org/grpc.newClientStreamWithParams in goroutine 35
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/stream.go:425 +0xeb7
+
+goroutine 32 gp=0xc00134e700 m=nil [select]:
+runtime.gopark(0xc0003ea1d0?, 0xc0003ea000?, 0xf0?, 0x7f?, 0xc00009fdf0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00009fd18 sp=0xc00009fcf8 pc=0x61bf2e
+runtime.selectgo(0xc00009ff78, 0xc00009fef0, 0xc0006bd1c0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00009feb8 sp=0xc00009fd18 pc=0x5f28b8
+google.golang.org/grpc/internal/transport.(*http2Client).keepalive(0xc000194b48)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:1738 +0x186 fp=0xc00009ffc8 sp=0xc00009feb8 pc=0xf1da66
+google.golang.org/grpc/internal/transport.NewHTTP2Client.gowrap3()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:401 +0x25 fp=0xc00009ffe0 sp=0xc00009ffc8 pc=0xf13345
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00009ffe8 sp=0xc00009ffe0 pc=0x625de1
+created by google.golang.org/grpc/internal/transport.NewHTTP2Client in goroutine 28
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:401 +0x1ddd
+
+goroutine 33 gp=0xc0018c1500 m=nil [IO wait]:
+runtime.gopark(0x640558?, 0xc0018e6008?, 0x0?, 0x13?, 0xc000869778?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0008696a8 sp=0xc000869688 pc=0x61bf2e
+runtime.netpollblock(0xc0008697e8?, 0x59f9e6?, 0x0?)
+\t/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0xc0008696e0 sp=0xc0008696a8 pc=0x5d6297
+internal/poll.runtime_pollWait(0x76fd4456e200, 0x72)
+\t/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0xc000869700 sp=0xc0008696e0 pc=0x61b105
+internal/poll.(*pollDesc).wait(0x6a99c90?, 0x4?, 0x0)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0xc000869728 sp=0xc000869700 pc=0x6aab07
+internal/poll.(*pollDesc).waitRead(...)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0xc0006e2c00, {0xc0005f1300, 0x1300, 0x1300})
+\t/usr/local/go/src/internal/poll/fd_unix.go:165 +0x25e fp=0xc0008697b8 sp=0xc000869728 pc=0x6abdde
+net.(*netFD).Read(0xc0006e2c00, {0xc0005f1300?, 0xc0005f1300?, 0x5?})
+\t/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0xc000869800 sp=0xc0008697b8 pc=0x753da5
+net.(*conn).Read(0xc00008edd0, {0xc0005f1300?, 0x61741a?, 0xc0008698d8?})
+\t/usr/local/go/src/net/net.go:196 +0x45 fp=0xc000869848 sp=0xc000869800 pc=0x764ce5
+crypto/tls.(*atLeastReader).Read(0xc0018d9698, {0xc0005f1300?, 0xc0018d9698?, 0x56bbd00?})
+\t/usr/local/go/src/crypto/tls/conn.go:819 +0x3b fp=0xc000869890 sp=0xc000869848 pc=0x8a4cdb
+bytes.(*Buffer).ReadFrom(0xc0006b6d28, {0x6d7df80, 0xc0018d9698})
+\t/usr/local/go/src/bytes/buffer.go:217 +0xa9 fp=0xc0008698e8 sp=0xc000869890 pc=0x6f37a9
+crypto/tls.(*Conn).readFromUntil(...)
+\t/usr/local/go/src/crypto/tls/conn.go:841
+crypto/tls.(*Conn).readRecordOrCCS(0xc0006b6a88, 0x0)
+\t/usr/local/go/src/crypto/tls/conn.go:630 +0x4de fp=0xc000869c70 sp=0xc0008698e8 pc=0x8a149e
+crypto/tls.(*Conn).readRecord(...)
+\t/usr/local/go/src/crypto/tls/conn.go:592
+crypto/tls.(*Conn).Read(0xc0006b6a88, {0xc0018b6f24, 0x9, 0x87?})
+\t/usr/local/go/src/crypto/tls/conn.go:1397 +0x145 fp=0xc000869cd8 sp=0xc000869c70 pc=0x8a9845
+google.golang.org/grpc/internal/credentials.(*syscallConn).Read(0xedf890?, {0xc0018b6f24?, 0x8?, 0x53?})
+\t\u003cautogenerated\u003e:1 +0x29 fp=0xc000869d08 sp=0xc000869cd8 pc=0xe89429
+io.ReadAtLeast(...)
+\t/usr/local/go/src/io/io.go:335
+io.ReadFull({0x76fd422f74a8, 0xc0018d4380}, {0xc0018b6f24, 0x9, 0x9})
+\t/usr/local/go/src/io/io.go:354 +0x6a fp=0xc000869d50 sp=0xc000869d08 pc=0x69d7ea
+golang.org/x/net/http2.readFrameHeader({0xc0018b6f24, 0x9, 0xc000000000?}, {0x76fd422f74a8?, 0xc0018d4380?})
+\t/go/pkg/mod/golang.org/x/net@v0.49.0/http2/frame.go:242 +0x5c fp=0xc000869d98 sp=0xc000869d50 pc=0xede9dc
+golang.org/x/net/http2.(*Framer).ReadFrameHeader(0xc0018b6ee0)
+\t/go/pkg/mod/golang.org/x/net@v0.49.0/http2/frame.go:505 +0x6b fp=0xc000869e20 sp=0xc000869d98 pc=0xedf0ab
+google.golang.org/grpc/internal/transport.(*framer).readFrame(0xc0006e2f00)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http_util.go:480 +0x45 fp=0xc000869e60 sp=0xc000869e20 pc=0xf2a625
+google.golang.org/grpc/internal/transport.(*http2Client).reader(0xc000194b48, 0xc0003dff10)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:1664 +0x1c5 fp=0xc000869fc0 sp=0xc000869e60 pc=0xf1d245
+google.golang.org/grpc/internal/transport.NewHTTP2Client.gowrap4()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:411 +0x25 fp=0xc000869fe0 sp=0xc000869fc0 pc=0xf132e5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000869fe8 sp=0xc000869fe0 pc=0x625de1
+created by google.golang.org/grpc/internal/transport.NewHTTP2Client in goroutine 28
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:411 +0x1e53
+
+goroutine 34 gp=0xc0018c16c0 m=nil [select]:
+runtime.gopark(0xc00098e678?, 0xc000867be8?, 0x80?, 0x7a?, 0x5dcb920?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000867c68 sp=0xc000867c48 pc=0x61bf2e
+runtime.selectgo(0xc000867f08, 0xc000867e50, 0xc0018d9680?, 0x0, 0x617ff0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000867e08 sp=0xc000867c68 pc=0x5f28b8
+google.golang.org/grpc/internal/transport.(*controlBuffer).get(...)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/controlbuf.go:425
+google.golang.org/grpc/internal/transport.(*loopyWriter).run(0xc0018de5a0)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/controlbuf.go:602 +0xce5 fp=0xc000867f68 sp=0xc000867e08 pc=0xf09625
+google.golang.org/grpc/internal/transport.NewHTTP2Client.func6()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:469 +0xd2 fp=0xc000867fe0 sp=0xc000867f68 pc=0xf131d2
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000867fe8 sp=0xc000867fe0 pc=0x625de1
+created by google.golang.org/grpc/internal/transport.NewHTTP2Client in goroutine 28
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:467 +0x244b
+
+goroutine 44 gp=0xc0018c1880 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0xe0?, 0x27?, 0x617ff0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000862710 sp=0xc0008626f0 pc=0x61bf2e
+runtime.selectgo(0xc0008628f8, 0xc0008628f0, 0x70?, 0x0, 0x5a6f86?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0008628b0 sp=0xc000862710 pc=0x5f28b8
+google.golang.org/grpc/internal/transport.(*recvBufferReader).readMessageHeaderClient(0xc000ac75e8, {0xc0005264f0, 0x5, 0x5})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/transport.go:198 +0xa7 fp=0xc000862968 sp=0xc0008628b0 pc=0xf2d7e7
+google.golang.org/grpc/internal/transport.(*recvBufferReader).ReadMessageHeader(0xc000ac75e8, {0xc0005264f0?, 0xc000194b48?, 0xc000ac7520?})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/transport.go:144 +0x45 fp=0xc000862998 sp=0xc000862968 pc=0xf2d245
+google.golang.org/grpc/internal/transport.(*transportReader).ReadMessageHeader(0xc000ac75c8, {0xc0005264f0?, 0x6d7d380?, 0xc0018db8c0?})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/transport.go:441 +0x25 fp=0xc0008629d0 sp=0xc000862998 pc=0xf2e385
+google.golang.org/grpc/internal/transport.(*Stream).ReadMessageHeader(0xc000ac7520, {0xc0005264f0, 0x5, 0x5})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/transport.go:366 +0xa9 fp=0xc000862a28 sp=0xc0008629d0 pc=0xf2dfa9
+google.golang.org/grpc.(*parser).recvMsg(0xc0005264e0, 0x4000000)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/rpc_util.go:772 +0x3b fp=0xc000862aa0 sp=0xc000862a28 pc=0xf9c47b
+google.golang.org/grpc.recvAndDecompress(0xc0005264e0, {0x6d7b940, 0xc000ac7520}, {0x0, 0x0}, 0x4000000, 0x0, {0x0, 0x0}, 0x0)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/rpc_util.go:931 +0x97 fp=0xc000862b90 sp=0xc000862aa0 pc=0xf9d3d7
+google.golang.org/grpc.recv(0x5df7740?, {0x76fd422f75d0, 0xa400a60}, {0x6d7b940?, 0xc000ac7520?}, {0x0?, 0x0?}, {0x5c2cd00, 0xc00191a060}, 0x4000000, ...)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/rpc_util.go:1014 +0xab fp=0xc000862c40 sp=0xc000862b90 pc=0xf9df6b
+google.golang.org/grpc.(*csAttempt).recvMsg(0xc0005264b0, {0x5c2cd00, 0xc00191a060}, 0x90000c0002611cb?)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/stream.go:1184 +0x357 fp=0xc000862dc8 sp=0xc000862c40 pc=0xfb16d7
+google.golang.org/grpc.(*clientStream).RecvMsg.func1(0x2?)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/stream.go:1031 +0x1f fp=0xc000862df8 sp=0xc000862dc8 pc=0xfb087f
+google.golang.org/grpc.(*clientStream).withRetry(0xc000b65b00, 0xc00029e730, 0xc00029e720)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/stream.go:835 +0x3cf fp=0xc000862e68 sp=0xc000862df8 pc=0xfaf42f
+google.golang.org/grpc.(*clientStream).RecvMsg(0xc000b65b00, {0x5c2cd00?, 0xc00191a060?})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/stream.go:1030 +0x155 fp=0xc000862f68 sp=0xc000862e68 pc=0xfb0675
+github.com/DataDog/apis/datadog/services/experiments/v1alpha/generated/go.(*distributionWatchExperimentsClient).Recv(0xc0018c5a30)
+\t/go/pkg/mod/github.com/!data!dog/apis@v1.93.54/datadog/services/experiments/v1alpha/generated/go/distribution_service_grpc.pb.go:145 +0x46 fp=0xc000862f98 sp=0xc000862f68 pc=0x1120086
+go.ddbuild.io/dd-source/x/libs/go/experiments.(*streamCache).watchExperiments.func2()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/experiments/stream_cache.go:423 +0x42 fp=0xc000862fe0 sp=0xc000862f98 pc=0x115d322
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000862fe8 sp=0xc000862fe0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/experiments.(*streamCache).watchExperiments in goroutine 35
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/experiments/stream_cache.go:422 +0x448
+
+goroutine 45 gp=0xc0018c1a40 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x20?, 0x2e?, 0xc00190bed8?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000860d80 sp=0xc000860d60 pc=0x61bf2e
+runtime.selectgo(0xc000860f68, 0xc00190bf54, 0xfb0860?, 0x0, 0xc00191a060?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000860f20 sp=0xc000860d80 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*sender).sendLoop(0xc001a22180)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:106 +0xc5 fp=0xc000860fc8 sp=0xc000860f20 pc=0x78e205
+github.com/DataDog/datadog-go/v5/statsd.newSender.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x25 fp=0xc000860fe0 sp=0xc000860fc8 pc=0x78dce5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000860fe8 sp=0xc000860fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.newSender in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x17f
+
+goroutine 40 gp=0xc0018c1c00 m=nil [IO wait]:
+runtime.gopark(0x640558?, 0xc0000b4b40?, 0x0?, 0x40?, 0xc0000b4ba0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000b4b28 sp=0xc0000b4b08 pc=0x61bf2e
+runtime.netpollblock(0x0?, 0x59f9e6?, 0x0?)
+\t/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0xc0000b4b60 sp=0xc0000b4b28 pc=0x5d6297
+internal/poll.runtime_pollWait(0x76fd4456de00, 0x72)
+\t/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0xc0000b4b80 sp=0xc0000b4b60 pc=0x61b105
+internal/poll.(*pollDesc).wait(0x6a99c90?, 0x8?, 0x0)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0xc0000b4ba8 sp=0xc0000b4b80 pc=0x6aab07
+internal/poll.(*pollDesc).waitRead(...)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0xc0006e3680, {0xc0018f4000, 0x1000, 0x1000})
+\t/usr/local/go/src/internal/poll/fd_unix.go:165 +0x25e fp=0xc0000b4c38 sp=0xc0000b4ba8 pc=0x6abdde
+net.(*netFD).Read(0xc0006e3680, {0xc0018f4000?, 0xc00051d808?, 0xc0000b4ca8?})
+\t/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0xc0000b4c80 sp=0xc0000b4c38 pc=0x753da5
+net.(*conn).Read(0xc00188c298, {0xc0018f4000?, 0x0?, 0x1?})
+\t/usr/local/go/src/net/net.go:196 +0x45 fp=0xc0000b4cc8 sp=0xc0000b4c80 pc=0x764ce5
+net/http.(*persistConn).Read(0xc000b658c0, {0xc0018f4000?, 0x98b805?, 0x6d79c80?})
+\t/usr/local/go/src/net/http/transport.go:2125 +0x47 fp=0xc0000b4d28 sp=0xc0000b4cc8 pc=0x992ce7
+bufio.(*Reader).fill(0xc0018dacc0)
+\t/usr/local/go/src/bufio/bufio.go:113 +0x103 fp=0xc0000b4d60 sp=0xc0000b4d28 pc=0x6f9023
+bufio.(*Reader).Peek(0xc0018dacc0, 0x1)
+\t/usr/local/go/src/bufio/bufio.go:152 +0x53 fp=0xc0000b4d80 sp=0xc0000b4d60 pc=0x6f9153
+net/http.(*persistConn).readLoop(0xc000b658c0)
+\t/usr/local/go/src/net/http/transport.go:2278 +0x172 fp=0xc0000b4fc8 sp=0xc0000b4d80 pc=0x9937f2
+net/http.(*Transport).dialConn.gowrap2()
+\t/usr/local/go/src/net/http/transport.go:1947 +0x25 fp=0xc0000b4fe0 sp=0xc0000b4fc8 pc=0x992225
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000b4fe8 sp=0xc0000b4fe0 pc=0x625de1
+created by net/http.(*Transport).dialConn in goroutine 38
+\t/usr/local/go/src/net/http/transport.go:1947 +0x174f
+
+goroutine 41 gp=0xc0018c1dc0 m=nil [select]:
+runtime.gopark(0x6d7bd20?, 0xa4?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000b5d18 sp=0xc0000b5cf8 pc=0x61bf2e
+runtime.selectgo(0xc0000b5f48, 0xc0000b5ef0, 0xc0018e2c80?, 0x0, 0xc0018f3290?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0000b5eb8 sp=0xc0000b5d18 pc=0x5f28b8
+net/http.(*persistConn).writeLoop(0xc000b658c0)
+\t/usr/local/go/src/net/http/transport.go:2600 +0xe7 fp=0xc0000b5fc8 sp=0xc0000b5eb8 pc=0x995207
+net/http.(*Transport).dialConn.gowrap3()
+\t/usr/local/go/src/net/http/transport.go:1948 +0x25 fp=0xc0000b5fe0 sp=0xc0000b5fc8 pc=0x9921c5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000b5fe8 sp=0xc0000b5fe0 pc=0x625de1
+created by net/http.(*Transport).dialConn in goroutine 38
+\t/usr/local/go/src/net/http/transport.go:1948 +0x17a5
+
+goroutine 46 gp=0xc0019fe380 m=nil [select]:
+runtime.gopark(0xc000397b30?, 0xc000397ab0?, 0x80?, 0x4d?, 0x514f6023400a0d32?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00029ddc8 sp=0xc00029dda8 pc=0x61bf2e
+runtime.selectgo(0xc00029dfb0, 0xc00029df98, 0x0?, 0x0, 0xc0018e2980?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00029df68 sp=0xc00029ddc8 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).start.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:65 +0x78 fp=0xc00029dfe0 sp=0xc00029df68 pc=0x7828d8
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00029dfe8 sp=0xc00029dfe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).start in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:63 +0x6e
+
+goroutine 47 gp=0xc0019fe540 m=nil [select]:
+runtime.gopark(0xc00039a240?, 0xc00039a150?, 0x25?, 0x80?, 0xc00029ee68?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00029ed90 sp=0xc00029ed70 pc=0x61bf2e
+runtime.selectgo(0xc00029efa0, 0xc00029ef68, 0x7559f0?, 0x0, 0xc00029ef78?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00029ef30 sp=0xc00029ed90 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*ClientEx).watch(...)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:572
+github.com/DataDog/datadog-go/v5/statsd.newWithWriter.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:549 +0xce fp=0xc00029efe0 sp=0xc00029ef30 pc=0x79150e
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00029efe8 sp=0xc00029efe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.newWithWriter in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:547 +0x8d2
+
+goroutine 48 gp=0xc0019fe700 m=nil [select]:
+runtime.gopark(0xc00039a320?, 0xc00039a2a0?, 0x25?, 0x80?, 0xc0002a0678?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0002a05a0 sp=0xc0002a0580 pc=0x61bf2e
+runtime.selectgo(0xc0002a0798, 0xc0002a0778, 0x115c520?, 0x0, 0xc0005260f0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0002a0740 sp=0xc0002a05a0 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*telemetryClient).run.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/telemetry.go:167 +0xc6 fp=0xc0002a07e0 sp=0xc0002a0740 pc=0x795766
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0002a07e8 sp=0xc0002a07e0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*telemetryClient).run in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/telemetry.go:163 +0x90
+
+goroutine 49 gp=0xc0019fe8c0 m=nil [chan receive]:
+runtime.gopark(0x0?, 0x0?, 0x60?, 0x84?, 0xc001f8e270?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00029f6a8 sp=0xc00029f688 pc=0x61bf2e
+runtime.chanrecv(0xc00039a000, 0xc00029f790, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc00029f720 sp=0xc00029f6a8 pc=0x5a2bd3
+runtime.chanrecv2(0x6dd2368?, 0xc0019f8460?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc00029f748 sp=0xc00029f720 pc=0x5a2752
+google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run(0xc001f8e190, {0x6dd2368, 0xc0019f8460})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:88 +0xe5 fp=0xc00029f7b8 sp=0xc00029f748 pc=0xe9af05
+google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x28 fp=0xc00029f7e0 sp=0xc00029f7b8 pc=0xe9ad08
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00029f7e8 sp=0xc00029f7e0 pc=0x625de1
+created by google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer in goroutine 1
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x11a
+
+goroutine 50 gp=0xc0019fea80 m=nil [chan receive]:
+runtime.gopark(0xc0018e4960?, 0x3?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000863ea8 sp=0xc000863e88 pc=0x61bf2e
+runtime.chanrecv(0xc00039a070, 0xc000863f90, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc000863f20 sp=0xc000863ea8 pc=0x5a2bd3
+runtime.chanrecv2(0x6dd2368?, 0xc0019f8500?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc000863f48 sp=0xc000863f20 pc=0x5a2752
+google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run(0xc001f8e1c0, {0x6dd2368, 0xc0019f8500})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:88 +0xe5 fp=0xc000863fb8 sp=0xc000863f48 pc=0xe9af05
+google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x28 fp=0xc000863fe0 sp=0xc000863fb8 pc=0xe9ad08
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000863fe8 sp=0xc000863fe0 pc=0x625de1
+created by google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer in goroutine 1
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x11a
+
+goroutine 51 gp=0xc0019fec40 m=nil [chan receive]:
+runtime.gopark(0x0?, 0xc0018bec00?, 0x11?, 0x0?, 0xc0018e4967?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000864ea8 sp=0xc000864e88 pc=0x61bf2e
+runtime.chanrecv(0xc00039a0e0, 0xc00086ff90, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc000864f20 sp=0xc000864ea8 pc=0x5a2bd3
+runtime.chanrecv2(0x6dd2368?, 0xc0019f8550?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc000864f48 sp=0xc000864f20 pc=0x5a2752
+google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run(0xc001f8e1f0, {0x6dd2368, 0xc0019f8550})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:88 +0xe5 fp=0xc000864fb8 sp=0xc000864f48 pc=0xe9af05
+google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x28 fp=0xc000864fe0 sp=0xc000864fb8 pc=0xe9ad08
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000864fe8 sp=0xc000864fe0 pc=0x625de1
+created by google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer in goroutine 1
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x11a
+
+goroutine 52 gp=0xc0019fee00 m=nil [select]:
+runtime.gopark(0xc00039a5b0?, 0x5a9d580?, 0x70?, 0x9d?, 0x5ac388?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00086fcd8 sp=0xc00086fcb8 pc=0x61bf2e
+runtime.selectgo(0xc00086ff40, 0xc000089ed0, 0xa342f40?, 0x0, 0xc0018fd2c0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00086fe78 sp=0xc00086fcd8 pc=0x5f28b8
+google.golang.org/grpc/internal/resolver/dns.(*dnsResolver).watcher(0xc00013a200)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/resolver/dns/dns_resolver.go:221 +0x24b fp=0xc00086ffc8 sp=0xc00086fe78 pc=0xf36dab
+google.golang.org/grpc/internal/resolver/dns.(*dnsBuilder).Build.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/resolver/dns/dns_resolver.go:150 +0x25 fp=0xc00086ffe0 sp=0xc00086ffc8 pc=0xf36a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00086ffe8 sp=0xc00086ffe0 pc=0x625de1
+created by google.golang.org/grpc/internal/resolver/dns.(*dnsBuilder).Build in goroutine 50
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/resolver/dns/dns_resolver.go:150 +0x2cb
+
+goroutine 61 gp=0xc0019fefc0 m=nil [chan receive]:
+runtime.gopark(0xc0007292e0?, 0xc000729260?, 0x0?, 0x58?, 0x6a98268?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00029e700 sp=0xc00029e6e0 pc=0x61bf2e
+runtime.chanrecv(0xc000729260, 0xc00029e7b8, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc00029e778 sp=0xc00029e700 pc=0x5a2bd3
+runtime.chanrecv2(0xdf8475800?, 0xc0003eb1f0?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc00029e7a0 sp=0xc00029e778 pc=0x5a2752
+go.ddbuild.io/dd-source/x/libs/go/statsd.errorReporting()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/statsd/statsd.go:475 +0x65 fp=0xc00029e7e0 sp=0xc00029e7a0 pc=0xfe6c45
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00029e7e8 sp=0xc00029e7e0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/statsd.initErrorReporting in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/statsd/statsd.go:471 +0x1a
+
+goroutine 62 gp=0xc0019ff180 m=nil [select]:
+runtime.gopark(0xc0007293c0?, 0xc000729340?, 0xf0?, 0x7f?, 0xc000800150?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00029fdb0 sp=0xc00029fd90 pc=0x61bf2e
+runtime.selectgo(0xc00029ffb0, 0xc00029ff88, 0x0?, 0x0, 0xf92701?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00029ff50 sp=0xc00029fdb0 pc=0x5f28b8
+go.ddbuild.io/dd-source/x/libs/go/log.StartRuntimeLevelWorker.func1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/log/runtime_level.go:25 +0x85 fp=0xc00029ffe0 sp=0xc00029ff50 pc=0xe64b05
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00029ffe8 sp=0xc00029ffe0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/log.StartRuntimeLevelWorker in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/log/runtime_level.go:19 +0x35
+
+goroutine 58 gp=0xc0019ff340 m=nil [select]:
+runtime.gopark(0xc000729200?, 0xc000729180?, 0xf0?, 0x7f?, 0xc00029b5f0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00029b518 sp=0xc00029b4f8 pc=0x61bf2e
+runtime.selectgo(0xc00029b778, 0xc00029b6f0, 0xc001f8e750?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc00029b6b8 sp=0xc00029b518 pc=0x5f28b8
+google.golang.org/grpc/internal/transport.(*http2Client).keepalive(0xc00191cb48)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:1738 +0x186 fp=0xc00029b7c8 sp=0xc00029b6b8 pc=0xf1da66
+google.golang.org/grpc/internal/transport.NewHTTP2Client.gowrap3()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:401 +0x25 fp=0xc00029b7e0 sp=0xc00029b7c8 pc=0xf13345
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00029b7e8 sp=0xc00029b7e0 pc=0x625de1
+created by google.golang.org/grpc/internal/transport.NewHTTP2Client in goroutine 54
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:401 +0x1ddd
+
+goroutine 59 gp=0xc0019ff500 m=nil [IO wait]:
+runtime.gopark(0x640558?, 0xc0018e7188?, 0x0?, 0x26?, 0xc001fb9778?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001fb96a8 sp=0xc001fb9688 pc=0x61bf2e
+runtime.netpollblock(0xc001fb97e8?, 0x59f9e6?, 0x0?)
+\t/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0xc001fb96e0 sp=0xc001fb96a8 pc=0x5d6297
+internal/poll.runtime_pollWait(0x76fd4456dc00, 0x72)
+\t/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0xc001fb9700 sp=0xc001fb96e0 pc=0x61b105
+internal/poll.(*pollDesc).wait(0x6a99c90?, 0x9?, 0x0)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0xc001fb9728 sp=0xc001fb9700 pc=0x6aab07
+internal/poll.(*pollDesc).waitRead(...)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0xc0003d2500, {0xc0005f2600, 0x1300, 0x1300})
+\t/usr/local/go/src/internal/poll/fd_unix.go:165 +0x25e fp=0xc001fb97b8 sp=0xc001fb9728 pc=0x6abdde
+net.(*netFD).Read(0xc0003d2500, {0xc0005f2600?, 0xc0005f2600?, 0x5?})
+\t/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0xc001fb9800 sp=0xc001fb97b8 pc=0x753da5
+net.(*conn).Read(0xc00188c000, {0xc0005f2600?, 0x61741a?, 0xc001fb98d8?})
+\t/usr/local/go/src/net/net.go:196 +0x45 fp=0xc001fb9848 sp=0xc001fb9800 pc=0x764ce5
+crypto/tls.(*atLeastReader).Read(0xc0018d8030, {0xc0005f2600?, 0xc0018d8030?, 0x56bbd00?})
+\t/usr/local/go/src/crypto/tls/conn.go:819 +0x3b fp=0xc001fb9890 sp=0xc001fb9848 pc=0x8a4cdb
+bytes.(*Buffer).ReadFrom(0xc001964628, {0x6d7df80, 0xc0018d8030})
+\t/usr/local/go/src/bytes/buffer.go:217 +0xa9 fp=0xc001fb98e8 sp=0xc001fb9890 pc=0x6f37a9
+crypto/tls.(*Conn).readFromUntil(...)
+\t/usr/local/go/src/crypto/tls/conn.go:841
+crypto/tls.(*Conn).readRecordOrCCS(0xc001964388, 0x0)
+\t/usr/local/go/src/crypto/tls/conn.go:630 +0x4de fp=0xc001fb9c70 sp=0xc001fb98e8 pc=0x8a149e
+crypto/tls.(*Conn).readRecord(...)
+\t/usr/local/go/src/crypto/tls/conn.go:592
+crypto/tls.(*Conn).Read(0xc001964388, {0xc0018b6044, 0x9, 0xc0018d8210?})
+\t/usr/local/go/src/crypto/tls/conn.go:1397 +0x145 fp=0xc001fb9cd8 sp=0xc001fb9c70 pc=0x8a9845
+google.golang.org/grpc/internal/credentials.(*syscallConn).Read(0xedf794?, {0xc0018b6044?, 0x0?, 0x6?})
+\t\u003cautogenerated\u003e:1 +0x29 fp=0xc001fb9d08 sp=0xc001fb9cd8 pc=0xe89429
+io.ReadAtLeast(...)
+\t/usr/local/go/src/io/io.go:335
+io.ReadFull({0x76fd422f74a8, 0xc0019fc820}, {0xc0018b6044, 0x9, 0x9})
+\t/usr/local/go/src/io/io.go:354 +0x6a fp=0xc001fb9d50 sp=0xc001fb9d08 pc=0x69d7ea
+golang.org/x/net/http2.readFrameHeader({0xc0018b6044, 0x9, 0xc000000000?}, {0x76fd422f74a8?, 0xc0019fc820?})
+\t/go/pkg/mod/golang.org/x/net@v0.49.0/http2/frame.go:242 +0x5c fp=0xc001fb9d98 sp=0xc001fb9d50 pc=0xede9dc
+golang.org/x/net/http2.(*Framer).ReadFrameHeader(0xc0018b6000)
+\t/go/pkg/mod/golang.org/x/net@v0.49.0/http2/frame.go:505 +0x6b fp=0xc001fb9e20 sp=0xc001fb9d98 pc=0xedf0ab
+google.golang.org/grpc/internal/transport.(*framer).readFrame(0xc0003d2700)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http_util.go:480 +0x45 fp=0xc001fb9e60 sp=0xc001fb9e20 pc=0xf2a625
+google.golang.org/grpc/internal/transport.(*http2Client).reader(0xc00191cb48, 0xc00039b420)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:1664 +0x1c5 fp=0xc001fb9fc0 sp=0xc001fb9e60 pc=0xf1d245
+google.golang.org/grpc/internal/transport.NewHTTP2Client.gowrap4()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:411 +0x25 fp=0xc001fb9fe0 sp=0xc001fb9fc0 pc=0xf132e5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001fb9fe8 sp=0xc001fb9fe0 pc=0x625de1
+created by google.golang.org/grpc/internal/transport.NewHTTP2Client in goroutine 54
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:411 +0x1e53
+
+goroutine 60 gp=0xc0019ff6c0 m=nil [select]:
+runtime.gopark(0x76fd42d492e0?, 0xc001431be8?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001431c68 sp=0xc001431c48 pc=0x61bf2e
+runtime.selectgo(0xc001431f08, 0xc001431e50, 0xc0018d8078?, 0x0, 0x617ff0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001431e08 sp=0xc001431c68 pc=0x5f28b8
+google.golang.org/grpc/internal/transport.(*controlBuffer).get(...)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/controlbuf.go:425
+google.golang.org/grpc/internal/transport.(*loopyWriter).run(0xc0019f6f00)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/controlbuf.go:602 +0xce5 fp=0xc001431f68 sp=0xc001431e08 pc=0xf09625
+google.golang.org/grpc/internal/transport.NewHTTP2Client.func6()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:469 +0xd2 fp=0xc001431fe0 sp=0xc001431f68 pc=0xf131d2
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001431fe8 sp=0xc001431fe0 pc=0x625de1
+created by google.golang.org/grpc/internal/transport.NewHTTP2Client in goroutine 54
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:467 +0x244b
+
+goroutine 64 gp=0xc0019ffa40 m=nil [IO wait]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000865ac0 sp=0xc000865aa0 pc=0x61bf2e
+runtime.netpollblock(0x696db6da5b6db684?, 0x59f9e6?, 0x0?)
+\t/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0xc000865af8 sp=0xc000865ac0 pc=0x5d6297
+internal/poll.runtime_pollWait(0x76fd4456d800, 0x72)
+\t/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0xc000865b18 sp=0xc000865af8 pc=0x61b105
+internal/poll.(*pollDesc).wait(0xc000048180?, 0x549af80?, 0x0)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0xc000865b40 sp=0xc000865b18 pc=0x6aab07
+internal/poll.(*pollDesc).waitRead(...)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Accept(0xc000048180)
+\t/usr/local/go/src/internal/poll/fd_unix.go:613 +0x28c fp=0xc000865be8 sp=0xc000865b40 pc=0x6afe2c
+net.(*netFD).accept(0xc000048180)
+\t/usr/local/go/src/net/fd_unix.go:161 +0x29 fp=0xc000865ca0 sp=0xc000865be8 pc=0x755c49
+net.(*TCPListener).accept(0xc0018e3f00)
+\t/usr/local/go/src/net/tcpsock_posix.go:159 +0x1b fp=0xc000865cf0 sp=0xc000865ca0 pc=0x76df3b
+net.(*TCPListener).Accept(0xc0018e3f00)
+\t/usr/local/go/src/net/tcpsock.go:380 +0x30 fp=0xc000865d20 sp=0xc000865cf0 pc=0x76d110
+net/http.(*onceCloseListener).Accept(0x6dd22f8?)
+\t\u003cautogenerated\u003e:1 +0x24 fp=0xc000865d38 sp=0xc000865d20 pc=0x9a6ae4
+net/http.(*Server).Serve(0xc001fa1400, {0x6dcaf20, 0xc0018e3f00})
+\t/usr/local/go/src/net/http/server.go:3463 +0x30c fp=0xc000865e68 sp=0xc000865d38 pc=0x97decc
+net/http.(*Server).ListenAndServe(0xc001fa1400)
+\t/usr/local/go/src/net/http/server.go:3389 +0x72 fp=0xc000865e98 sp=0xc000865e68 pc=0x97dab2
+net/http.ListenAndServe(...)
+\t/usr/local/go/src/net/http/server.go:3704
+github.com/DataDog/dd-go/pkg/ddapp.(*App).RunDebugHTTP.func1()
+\t/go/src/github.com/DataDog/dd-go/pkg/ddapp/bootstrap.go:828 +0x456 fp=0xc000865fe0 sp=0xc000865e98 pc=0x259aad6
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000865fe8 sp=0xc000865fe0 pc=0x625de1
+created by github.com/DataDog/dd-go/pkg/ddapp.(*App).RunDebugHTTP in goroutine 1
+\t/go/src/github.com/DataDog/dd-go/pkg/ddapp/bootstrap.go:816 +0x9a
+
+goroutine 128 gp=0xc0019ffc00 m=nil [select]:
+runtime.gopark(0xc000236420?, 0xc000ccfc90?, 0xc0?, 0x10?, 0xc000ccfc90?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000ccfc68 sp=0xc000ccfc48 pc=0x61bf2e
+runtime.selectgo(0xc000ccff08, 0xc000ccfe50, 0xc00098e4c8?, 0x0, 0x617ff0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000ccfe08 sp=0xc000ccfc68 pc=0x5f28b8
+google.golang.org/grpc/internal/transport.(*controlBuffer).get(...)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/controlbuf.go:425
+google.golang.org/grpc/internal/transport.(*loopyWriter).run(0xc0019f7400)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/controlbuf.go:602 +0xce5 fp=0xc000ccff68 sp=0xc000ccfe08 pc=0xf09625
+google.golang.org/grpc/internal/transport.NewHTTP2Client.func6()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:469 +0xd2 fp=0xc000ccffe0 sp=0xc000ccff68 pc=0xf131d2
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000ccffe8 sp=0xc000ccffe0 pc=0x625de1
+created by google.golang.org/grpc/internal/transport.NewHTTP2Client in goroutine 120
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:467 +0x244b
+
+goroutine 66 gp=0xc0019ffdc0 m=nil [IO wait]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001fb4b80 sp=0xc001fb4b60 pc=0x61bf2e
+runtime.netpollblock(0x5e5e6b2?, 0x59f9e6?, 0x0?)
+\t/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0xc001fb4bb8 sp=0xc001fb4b80 pc=0x5d6297
+internal/poll.runtime_pollWait(0x76fd4456d400, 0x72)
+\t/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0xc001fb4bd8 sp=0xc001fb4bb8 pc=0x61b105
+internal/poll.(*pollDesc).wait(0xc000048480?, 0x5b5436?, 0x0)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0xc001fb4c00 sp=0xc001fb4bd8 pc=0x6aab07
+internal/poll.(*pollDesc).waitRead(...)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Accept(0xc000048480)
+\t/usr/local/go/src/internal/poll/fd_unix.go:613 +0x28c fp=0xc001fb4ca8 sp=0xc001fb4c00 pc=0x6afe2c
+net.(*netFD).accept(0xc000048480)
+\t/usr/local/go/src/net/fd_unix.go:161 +0x29 fp=0xc001fb4d60 sp=0xc001fb4ca8 pc=0x755c49
+net.(*TCPListener).accept(0xc0018e2800)
+\t/usr/local/go/src/net/tcpsock_posix.go:159 +0x1b fp=0xc001fb4db0 sp=0xc001fb4d60 pc=0x76df3b
+net.(*TCPListener).Accept(0xc0018e2800)
+\t/usr/local/go/src/net/tcpsock.go:380 +0x30 fp=0xc001fb4de0 sp=0xc001fb4db0 pc=0x76d110
+net/http.(*onceCloseListener).Accept(0x6dd22f8?)
+\t\u003cautogenerated\u003e:1 +0x24 fp=0xc001fb4df8 sp=0xc001fb4de0 pc=0x9a6ae4
+net/http.(*Server).Serve(0xc001fa0000, {0x6dcaf20, 0xc0018e2800})
+\t/usr/local/go/src/net/http/server.go:3463 +0x30c fp=0xc001fb4f28 sp=0xc001fb4df8 pc=0x97decc
+net/http.(*Server).ListenAndServe(0xc001fa0000)
+\t/usr/local/go/src/net/http/server.go:3389 +0x72 fp=0xc001fb4f58 sp=0xc001fb4f28 pc=0x97dab2
+net/http.ListenAndServe(...)
+\t/usr/local/go/src/net/http/server.go:3704
+github.com/DataDog/dd-go/pkg/ddapp.(*App).RunDebugHTTP.func4()
+\t/go/src/github.com/DataDog/dd-go/pkg/ddapp/bootstrap.go:878 +0xfa fp=0xc001fb4fe0 sp=0xc001fb4f58 pc=0x259a3da
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001fb4fe8 sp=0xc001fb4fe0 pc=0x625de1
+created by github.com/DataDog/dd-go/pkg/ddapp.(*App).RunDebugHTTP in goroutine 1
+\t/go/src/github.com/DataDog/dd-go/pkg/ddapp/bootstrap.go:873 +0x167
+
+goroutine 67 gp=0xc00134ee00 m=nil [select]:
+runtime.gopark(0x76fd8b572108?, 0x76fd422f44e0?, 0x80?, 0x8a?, 0x10?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0002a0d80 sp=0xc0002a0d60 pc=0x61bf2e
+runtime.selectgo(0xc0002a0f68, 0xc0002a0f54, 0xc0002a0f20?, 0x0, 0xe9aef5?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0002a0f20 sp=0xc0002a0d80 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*sender).sendLoop(0xc0017ffe80)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:106 +0xc5 fp=0xc0002a0fc8 sp=0xc0002a0f20 pc=0x78e205
+github.com/DataDog/datadog-go/v5/statsd.newSender.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x25 fp=0xc0002a0fe0 sp=0xc0002a0fc8 pc=0x78dce5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0002a0fe8 sp=0xc0002a0fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.newSender in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x17f
+
+goroutine 68 gp=0xc00134efc0 m=nil [select]:
+runtime.gopark(0xc000729580?, 0xc000729500?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0000a35c8 sp=0xc0000a35a8 pc=0x61bf2e
+runtime.selectgo(0xc0000a37b0, 0xc0000a3798, 0x158c8?, 0x0, 0xc0001d4c40?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0000a3768 sp=0xc0000a35c8 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).start.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:65 +0x78 fp=0xc0000a37e0 sp=0xc0000a3768 pc=0x7828d8
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0000a37e8 sp=0xc0000a37e0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).start in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:63 +0x6e
+
+goroutine 69 gp=0xc00134f180 m=nil [select]:
+runtime.gopark(0xc001fb5c38?, 0x3e8?, 0xff?, 0xff?, 0x6b942bd48fb1ec15?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001fb5c08 sp=0xc001fb5be8 pc=0x61bf2e
+runtime.selectgo(0xc001fb5ec8, 0xc001fb5df0, 0x2d?, 0x0, 0xc000ce60c0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001fb5da8 sp=0xc001fb5c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001fb5fc8 sp=0xc001fb5da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001fb5fe0 sp=0xc001fb5fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001fb5fe8 sp=0xc001fb5fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 70 gp=0xc00134f340 m=nil [select]:
+runtime.gopark(0xc001fb6c38?, 0x3e8?, 0xff?, 0xff?, 0xd901de2b31fdfa4b?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001fb6c08 sp=0xc001fb6be8 pc=0x61bf2e
+runtime.selectgo(0xc001fb6ec8, 0xc001fb6df0, 0x2d?, 0x0, 0xc000ce64e0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001fb6da8 sp=0xc001fb6c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001fb6fc8 sp=0xc001fb6da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001fb6fe0 sp=0xc001fb6fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001fb6fe8 sp=0xc001fb6fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 71 gp=0xc00134f500 m=nil [select]:
+runtime.gopark(0xc001fb7c38?, 0x3e8?, 0xff?, 0xff?, 0xe5bf06389b9bbed2?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001fb7c08 sp=0xc001fb7be8 pc=0x61bf2e
+runtime.selectgo(0xc001fb7ec8, 0xc001fb7df0, 0x33?, 0x0, 0xc000661560?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001fb7da8 sp=0xc001fb7c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001fb7fc8 sp=0xc001fb7da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001fb7fe0 sp=0xc001fb7fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001fb7fe8 sp=0xc001fb7fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 72 gp=0xc00134f6c0 m=nil [select]:
+runtime.gopark(0xc000876c38?, 0x61f6bc?, 0x40?, 0x55?, 0xa0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000876c08 sp=0xc000876be8 pc=0x61bf2e
+runtime.selectgo(0xc000876ec8, 0xc000876df0, 0x2d?, 0x0, 0xc003f09440?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000876da8 sp=0xc000876c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc000876fc8 sp=0xc000876da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc000876fe0 sp=0xc000876fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000876fe8 sp=0xc000876fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 73 gp=0xc00134f880 m=nil [select]:
+runtime.gopark(0xc000877c38?, 0x3e8?, 0xff?, 0xff?, 0xee49ae2cdfe6daaf?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000877c08 sp=0xc000877be8 pc=0x61bf2e
+runtime.selectgo(0xc000877ec8, 0xc000877df0, 0x2d?, 0x0, 0xc003f09860?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000877da8 sp=0xc000877c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc000877fc8 sp=0xc000877da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc000877fe0 sp=0xc000877fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000877fe8 sp=0xc000877fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 74 gp=0xc00134fa40 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001fb2c08 sp=0xc001fb2be8 pc=0x61bf2e
+runtime.selectgo(0xc001fb2ec8, 0xc0008a75f0, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001fb2da8 sp=0xc001fb2c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001fb2fc8 sp=0xc001fb2da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001fb2fe0 sp=0xc001fb2fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001fb2fe8 sp=0xc001fb2fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 75 gp=0xc00134fc00 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001fb3c08 sp=0xc001fb3be8 pc=0x61bf2e
+runtime.selectgo(0xc001fb3ec8, 0xc0008a7df0, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001fb3da8 sp=0xc001fb3c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001fb3fc8 sp=0xc001fb3da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001fb3fe0 sp=0xc001fb3fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001fb3fe8 sp=0xc001fb3fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 76 gp=0xc00134fdc0 m=nil [select]:
+runtime.gopark(0x16?, 0x5e37060?, 0x80?, 0x38?, 0x45287b103c7f1b09?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000872c08 sp=0xc000872be8 pc=0x61bf2e
+runtime.selectgo(0xc000872ec8, 0xc00029a5f0, 0x19?, 0x0, 0xc000277e60?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000872da8 sp=0xc000872c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc000872fc8 sp=0xc000872da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc000872fe0 sp=0xc000872fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000872fe8 sp=0xc000872fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 77 gp=0xc0018c0000 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000873c08 sp=0xc000873be8 pc=0x61bf2e
+runtime.selectgo(0xc000873ec8, 0xc00029adf0, 0x11?, 0x0, 0xc000190cc0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000873da8 sp=0xc000873c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc000873fc8 sp=0xc000873da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc000873fe0 sp=0xc000873fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000873fe8 sp=0xc000873fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 78 gp=0xc0018c01c0 m=nil [select]:
+runtime.gopark(0xc0003a3240?, 0x1?, 0x1?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000874c08 sp=0xc000874be8 pc=0x61bf2e
+runtime.selectgo(0xc000874ec8, 0xc0008a15f0, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000874da8 sp=0xc000874c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc000874fc8 sp=0xc000874da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc000874fe0 sp=0xc000874fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000874fe8 sp=0xc000874fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 79 gp=0xc0018c0380 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000875c08 sp=0xc000875be8 pc=0x61bf2e
+runtime.selectgo(0xc000875ec8, 0xc0008a1df0, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000875da8 sp=0xc000875c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc000875fc8 sp=0xc000875da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc000875fe0 sp=0xc000875fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000875fe8 sp=0xc000875fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 80 gp=0xc0018c0540 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0xc000b6d640?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0013fec08 sp=0xc0013febe8 pc=0x61bf2e
+runtime.selectgo(0xc0013feec8, 0xc0008a25f0, 0xc0008a2570?, 0x0, 0x1?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0013feda8 sp=0xc0013fec08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc0013fefc8 sp=0xc0013feda8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc0013fefe0 sp=0xc0013fefc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0013fefe8 sp=0xc0013fefe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 81 gp=0xc0018c0700 m=nil [select]:
+runtime.gopark(0x4?, 0x4?, 0x80?, 0xaf?, 0xc0003a33f0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0013ffc08 sp=0xc0013ffbe8 pc=0x61bf2e
+runtime.selectgo(0xc0013ffec8, 0xc0008a2df0, 0x4?, 0x0, 0x549af80?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0013ffda8 sp=0xc0013ffc08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc0013fffc8 sp=0xc0013ffda8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc0013fffe0 sp=0xc0013fffc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0013fffe8 sp=0xc0013fffe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 82 gp=0xc0018c08c0 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0xa?, 0x4?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000870c08 sp=0xc000870be8 pc=0x61bf2e
+runtime.selectgo(0xc000870ec8, 0xc0008a35f0, 0x0?, 0x0, 0x1?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000870da8 sp=0xc000870c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc000870fc8 sp=0xc000870da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc000870fe0 sp=0xc000870fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000870fe8 sp=0xc000870fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 83 gp=0xc0018c0a80 m=nil [select]:
+runtime.gopark(0x549af80?, 0xc000726030?, 0x0?, 0x0?, 0xc00089bd80?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000871c08 sp=0xc000871be8 pc=0x61bf2e
+runtime.selectgo(0xc000871ec8, 0xc0008a3df0, 0xc00052a500?, 0x0, 0x273?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000871da8 sp=0xc000871c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc000871fc8 sp=0xc000871da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc000871fe0 sp=0xc000871fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000871fe8 sp=0xc000871fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 84 gp=0xc0018c0c40 m=nil [select]:
+runtime.gopark(0x1?, 0xc00087ebbd?, 0x5?, 0x0?, 0x175?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0013fac08 sp=0xc0013fabe8 pc=0x61bf2e
+runtime.selectgo(0xc0013faec8, 0xc0008a45f0, 0x4?, 0x0, 0x1?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0013fada8 sp=0xc0013fac08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc0013fafc8 sp=0xc0013fada8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc0013fafe0 sp=0xc0013fafc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0013fafe8 sp=0xc0013fafe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 85 gp=0xc0018c0e00 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0013fbc08 sp=0xc0013fbbe8 pc=0x61bf2e
+runtime.selectgo(0xc0013fbec8, 0xc0008a4df0, 0x16?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0013fbda8 sp=0xc0013fbc08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc0013fbfc8 sp=0xc0013fbda8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc0013fbfe0 sp=0xc0013fbfc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0013fbfe8 sp=0xc0013fbfe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 86 gp=0xc000890000 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0013fcc08 sp=0xc0013fcbe8 pc=0x61bf2e
+runtime.selectgo(0xc0013fcec8, 0xc0009155f0, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0013fcda8 sp=0xc0013fcc08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc0013fcfc8 sp=0xc0013fcda8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc0013fcfe0 sp=0xc0013fcfc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0013fcfe8 sp=0xc0013fcfe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 87 gp=0xc0008901c0 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0013fdc08 sp=0xc0013fdbe8 pc=0x61bf2e
+runtime.selectgo(0xc0013fdec8, 0xc000915df0, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0013fdda8 sp=0xc0013fdc08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc0013fdfc8 sp=0xc0013fdda8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc0013fdfe0 sp=0xc0013fdfc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0013fdfe8 sp=0xc0013fdfe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 88 gp=0xc000890380 m=nil [select]:
+runtime.gopark(0x549af80?, 0xc0002658f0?, 0xf?, 0x0?, 0xc0009163c0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001418c08 sp=0xc001418be8 pc=0x61bf2e
+runtime.selectgo(0xc001418ec8, 0xc0009165f0, 0x549af80?, 0x0, 0x5df7740?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001418da8 sp=0xc001418c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001418fc8 sp=0xc001418da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001418fe0 sp=0xc001418fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001418fe8 sp=0xc001418fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 89 gp=0xc000890540 m=nil [select]:
+runtime.gopark(0x4?, 0x4?, 0x80?, 0xaf?, 0xc000265bc0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001419c08 sp=0xc001419be8 pc=0x61bf2e
+runtime.selectgo(0xc001419ec8, 0xc000916df0, 0x4?, 0x0, 0x549af80?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001419da8 sp=0xc001419c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001419fc8 sp=0xc001419da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001419fe0 sp=0xc001419fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001419fe8 sp=0xc001419fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 90 gp=0xc000890700 m=nil [select]:
+runtime.gopark(0x585?, 0xc0009097e0?, 0x4?, 0x0?, 0x4?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0013f8c08 sp=0xc0013f8be8 pc=0x61bf2e
+runtime.selectgo(0xc0013f8ec8, 0xc0009175f0, 0xc00026168e?, 0x0, 0x4?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0013f8da8 sp=0xc0013f8c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc0013f8fc8 sp=0xc0013f8da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc0013f8fe0 sp=0xc0013f8fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0013f8fe8 sp=0xc0013f8fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 91 gp=0xc0008908c0 m=nil [select]:
+runtime.gopark(0xc000917bc0?, 0x1?, 0x1?, 0x0?, 0xc000909e00?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0013f9c08 sp=0xc0013f9be8 pc=0x61bf2e
+runtime.selectgo(0xc0013f9ec8, 0xc000917df0, 0xc000895700?, 0x0, 0x579?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc0013f9da8 sp=0xc0013f9c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc0013f9fc8 sp=0xc0013f9da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc0013f9fe0 sp=0xc0013f9fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0013f9fe8 sp=0xc0013f9fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 92 gp=0xc000890a80 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001414c08 sp=0xc001414be8 pc=0x61bf2e
+runtime.selectgo(0xc001414ec8, 0xc0008a05f0, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001414da8 sp=0xc001414c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001414fc8 sp=0xc001414da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001414fe0 sp=0xc001414fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001414fe8 sp=0xc001414fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 93 gp=0xc000890c40 m=nil [select]:
+runtime.gopark(0xc000893600?, 0x55d?, 0x73?, 0x5?, 0xc000893604?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001415c08 sp=0xc001415be8 pc=0x61bf2e
+runtime.selectgo(0xc001415ec8, 0xc0008a0df0, 0x0?, 0x0, 0x1?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001415da8 sp=0xc001415c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001415fc8 sp=0xc001415da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001415fe0 sp=0xc001415fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001415fe8 sp=0xc001415fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 94 gp=0xc000890e00 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001416c08 sp=0xc001416be8 pc=0x61bf2e
+runtime.selectgo(0xc001416ec8, 0xc0009115f0, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001416da8 sp=0xc001416c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001416fc8 sp=0xc001416da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001416fe0 sp=0xc001416fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001416fe8 sp=0xc001416fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 95 gp=0xc000890fc0 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001417c08 sp=0xc001417be8 pc=0x61bf2e
+runtime.selectgo(0xc001417ec8, 0xc000911df0, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001417da8 sp=0xc001417c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001417fc8 sp=0xc001417da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001417fe0 sp=0xc001417fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001417fe8 sp=0xc001417fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 96 gp=0xc000891180 m=nil [select]:
+runtime.gopark(0x819a0e29c51ca9e9?, 0x2ca9439623dfac3a?, 0x8c?, 0x81?, 0xfbb02b53a4926269?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001434c08 sp=0xc001434be8 pc=0x61bf2e
+runtime.selectgo(0xc001434ec8, 0xc0009125f0, 0xdaecfee87e8fe42f?, 0x0, 0x2ca80e1d93b618b7?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001434da8 sp=0xc001434c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001434fc8 sp=0xc001434da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001434fe0 sp=0xc001434fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001434fe8 sp=0xc001434fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 97 gp=0xc000891340 m=nil [select]:
+runtime.gopark(0x1c1d6ef0b8bbf8de?, 0x245b61b3e0111141?, 0xfc?, 0xd1?, 0x241739913366e9be?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001435c08 sp=0xc001435be8 pc=0x61bf2e
+runtime.selectgo(0xc001435ec8, 0xc000912df0, 0x0?, 0x0, 0x24b06b0350c12d3c?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001435da8 sp=0xc001435c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001435fc8 sp=0xc001435da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001435fe0 sp=0xc001435fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001435fe8 sp=0xc001435fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 98 gp=0xc000891500 m=nil [select]:
+runtime.gopark(0xd7d89d789e9f863e?, 0x347cbe484fe25a39?, 0x6f?, 0xb2?, 0x7c81f372709e6ffe?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001412c08 sp=0xc001412be8 pc=0x61bf2e
+runtime.selectgo(0xc001412ec8, 0xc0009135f0, 0xd9fa721af722151c?, 0x0, 0x53d5c31444b886a5?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001412da8 sp=0xc001412c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001412fc8 sp=0xc001412da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001412fe0 sp=0xc001412fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001412fe8 sp=0xc001412fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 99 gp=0xc0008916c0 m=nil [select]:
+runtime.gopark(0x9d3df5c197385805?, 0x2956936ab3c16a3a?, 0x3b?, 0xdc?, 0xd71d8a83a5fb2b90?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001413c08 sp=0xc001413be8 pc=0x61bf2e
+runtime.selectgo(0xc001413ec8, 0xc000913df0, 0x934bbbe9668aee9d?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001413da8 sp=0xc001413c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001413fc8 sp=0xc001413da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001413fe0 sp=0xc001413fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001413fe8 sp=0xc001413fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 100 gp=0xc000891880 m=nil [select]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001430c08 sp=0xc001430be8 pc=0x61bf2e
+runtime.selectgo(0xc001430ec8, 0xc0009145f0, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001430da8 sp=0xc001430c08 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).pullMetric(0xc001914c00)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:95 +0xcd fp=0xc001430fc8 sp=0xc001430da8 pc=0x782b8d
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x25 fp=0xc001430fe0 sp=0xc001430fc8 pc=0x782a25
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001430fe8 sp=0xc001430fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).startReceivingMetric in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:80 +0x65
+
+goroutine 101 gp=0xc000891a40 m=nil [select]:
+runtime.gopark(0xc000728710?, 0xc000728690?, 0xf0?, 0x7f?, 0xc000914e68?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000914d90 sp=0xc000914d70 pc=0x61bf2e
+runtime.selectgo(0xc000914fa0, 0xc000914f68, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000914f30 sp=0xc000914d90 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*ClientEx).watch(...)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:572
+github.com/DataDog/datadog-go/v5/statsd.newWithWriter.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:549 +0xce fp=0xc000914fe0 sp=0xc000914f30 pc=0x79150e
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000914fe8 sp=0xc000914fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.newWithWriter in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:547 +0x8d2
+
+goroutine 102 gp=0xc000891c00 m=nil [select]:
+runtime.gopark(0x2?, 0x5?, 0x4?, 0x0?, 0x7?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000c65580 sp=0xc000c65560 pc=0x61bf2e
+runtime.selectgo(0xc000c65768, 0xc000c65754, 0x4?, 0x0, 0x2?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000c65720 sp=0xc000c65580 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*sender).sendLoop(0xc0018e2780)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:106 +0xc5 fp=0xc000c657c8 sp=0xc000c65720 pc=0x78e205
+github.com/DataDog/datadog-go/v5/statsd.newSender.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x25 fp=0xc000c657e0 sp=0xc000c657c8 pc=0x78dce5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000c657e8 sp=0xc000c657e0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.newSender in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x17f
+
+goroutine 103 gp=0xc000891dc0 m=nil [select]:
+runtime.gopark(0xc0007287f0?, 0xc000728770?, 0xf0?, 0x7f?, 0xc000c65e78?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000c65da0 sp=0xc000c65d80 pc=0x61bf2e
+runtime.selectgo(0xc000c65f98, 0xc000c65f78, 0xc000c31808?, 0x0, 0x2?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000c65f40 sp=0xc000c65da0 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*telemetryClient).run.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/telemetry.go:167 +0xc6 fp=0xc000c65fe0 sp=0xc000c65f40 pc=0x795766
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000c65fe8 sp=0xc000c65fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*telemetryClient).run in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/telemetry.go:163 +0x90
+
+goroutine 104 gp=0xc0009c0000 m=nil [select]:
+runtime.gopark(0xc000478eb9?, 0x7?, 0x10?, 0xe5?, 0x21?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000c66580 sp=0xc000c66560 pc=0x61bf2e
+runtime.selectgo(0xc000c66768, 0xc000c66754, 0xc000478f78?, 0x0, 0xc000c65060?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000c66720 sp=0xc000c66580 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*sender).sendLoop(0xc0018e2840)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:106 +0xc5 fp=0xc000c667c8 sp=0xc000c66720 pc=0x78e205
+github.com/DataDog/datadog-go/v5/statsd.newSender.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x25 fp=0xc000c667e0 sp=0xc000c667c8 pc=0x78dce5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000c667e8 sp=0xc000c667e0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.newSender in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x17f
+
+goroutine 105 gp=0xc0009c01c0 m=nil [select]:
+runtime.gopark(0xc000729820?, 0xc0007297a0?, 0x2?, 0x0?, 0xc000479590?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000c66dc8 sp=0xc000c66da8 pc=0x61bf2e
+runtime.selectgo(0xc000c66fb0, 0xc000c66f98, 0x15?, 0x0, 0x2?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000c66f68 sp=0xc000c66dc8 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*aggregator).start.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:65 +0x78 fp=0xc000c66fe0 sp=0xc000c66f68 pc=0x7828d8
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000c66fe8 sp=0xc000c66fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*aggregator).start in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/aggregator.go:63 +0x6e
+
+goroutine 106 gp=0xc0009c0380 m=nil [select]:
+runtime.gopark(0xc0007288d0?, 0xc000728850?, 0xf0?, 0x7f?, 0xc000c67668?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000c67590 sp=0xc000c67570 pc=0x61bf2e
+runtime.selectgo(0xc000c677a0, 0xc000c67768, 0xc000015888?, 0x0, 0xc0000158a0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000c67730 sp=0xc000c67590 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*ClientEx).watch(...)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:572
+github.com/DataDog/datadog-go/v5/statsd.newWithWriter.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:549 +0xce fp=0xc000c677e0 sp=0xc000c67730 pc=0x79150e
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000c677e8 sp=0xc000c677e0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.newWithWriter in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/statsdex.go:547 +0x8d2
+
+goroutine 107 gp=0xc0009c0540 m=nil [select]:
+runtime.gopark(0xc000015d00?, 0x8?, 0x8?, 0x5d?, 0x7?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000c67d80 sp=0xc000c67d60 pc=0x61bf2e
+runtime.selectgo(0xc000c67f68, 0xc000c67f54, 0xc000015eca?, 0x0, 0xc000015f50?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000c67f20 sp=0xc000c67d80 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*sender).sendLoop(0xc0018e3ac0)
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:106 +0xc5 fp=0xc000c67fc8 sp=0xc000c67f20 pc=0x78e205
+github.com/DataDog/datadog-go/v5/statsd.newSender.gowrap1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x25 fp=0xc000c67fe0 sp=0xc000c67fc8 pc=0x78dce5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000c67fe8 sp=0xc000c67fe0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.newSender in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/sender.go:56 +0x17f
+
+goroutine 108 gp=0xc0009c0700 m=nil [select]:
+runtime.gopark(0xc0007289b0?, 0xc000728930?, 0xf0?, 0x7f?, 0xc000910678?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc0009105a0 sp=0xc000910580 pc=0x61bf2e
+runtime.selectgo(0xc000910798, 0xc000910778, 0x0?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000910740 sp=0xc0009105a0 pc=0x5f28b8
+github.com/DataDog/datadog-go/v5/statsd.(*telemetryClient).run.func1()
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/telemetry.go:167 +0xc6 fp=0xc0009107e0 sp=0xc000910740 pc=0x795766
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc0009107e8 sp=0xc0009107e0 pc=0x625de1
+created by github.com/DataDog/datadog-go/v5/statsd.(*telemetryClient).run in goroutine 1
+\t/go/pkg/mod/github.com/jprobinson/datadog-go/v5@v5.8.2-dd-race-fix/statsd/telemetry.go:163 +0x90
+
+goroutine 109 gp=0xc0009c08c0 m=nil [sleep]:
+runtime.gopark(0x2b3da44774f?, 0x0?, 0x60?, 0x0?, 0xc0008f68c0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000910ed8 sp=0xc000910eb8 pc=0x61bf2e
+time.Sleep(0x2540be400)
+\t/usr/local/go/src/runtime/time.go:363 +0x165 fp=0xc000910f30 sp=0xc000910ed8 pc=0x6219e5
+go.ddbuild.io/dd-source/x/libs/go/statsd/metrics.(*Reporter).runInBackground(0xc001916bb0)
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/statsd/metrics/reporter.go:268 +0x25 fp=0xc000910fa8 sp=0xc000910f30 pc=0x7eb585
+go.ddbuild.io/dd-source/x/libs/go/statsd/metrics.(*Reporter).Start.func1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/statsd/metrics/reporter.go:262 +0x49 fp=0xc000910fe0 sp=0xc000910fa8 pc=0x7eb4c9
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000910fe8 sp=0xc000910fe0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/statsd/metrics.(*Reporter).Start in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/statsd/metrics/reporter.go:260 +0xee
+
+goroutine 110 gp=0xc0009c0a80 m=nil [select]:
+runtime.gopark(0xc0007299e0?, 0xc000729960?, 0x0?, 0x12?, 0x1?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001432ba0 sp=0xc001432b80 pc=0x61bf2e
+runtime.selectgo(0xc001432f78, 0xc001432dd0, 0x1?, 0x0, 0xc000d41830?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001432d40 sp=0xc001432ba0 pc=0x5f28b8
+go.ddbuild.io/dd-source/x/libs/go/runtimex.(*LoadReporter).start(0xc0018e3c00, 0xc000729960, 0x6a98370)
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/runtimex/load.go:115 +0x94 fp=0xc001432fb8 sp=0xc001432d40 pc=0x15274f4
+go.ddbuild.io/dd-source/x/libs/go/runtimex.newLoadReporter.gowrap1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/runtimex/load.go:108 +0x2b fp=0xc001432fe0 sp=0xc001432fb8 pc=0x152742b
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001432fe8 sp=0xc001432fe0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/runtimex.newLoadReporter in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/runtimex/load.go:108 +0x30d
+
+goroutine 111 gp=0xc0009c0c40 m=nil [chan receive]:
+runtime.gopark(0xc000728b70?, 0xc000728a80?, 0x0?, 0x58?, 0x6a98268?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000c61ee0 sp=0xc000c61ec0 pc=0x61bf2e
+runtime.chanrecv(0xc000728a80, 0xc000c61f98, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc000c61f58 sp=0xc000c61ee0 pc=0x5a2bd3
+runtime.chanrecv2(0xdf8475800?, 0x4924924924924924?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc000c61f80 sp=0xc000c61f58 pc=0x5a2752
+go.ddbuild.io/dd-source/x/libs/go/util.Every(0x2492492492492492?, 0xc000923800)
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/util/time.go:84 +0x6e fp=0xc000c61fc0 sp=0xc000c61f80 pc=0x128ae6e
+go.ddbuild.io/dd-source/x/libs/go/ddapp/metrics.Init.gowrap1()
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/ddapp/metrics/metrics.go:61 +0x2a fp=0xc000c61fe0 sp=0xc000c61fc0 pc=0x25959ea
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000c61fe8 sp=0xc000c61fe0 pc=0x625de1
+created by go.ddbuild.io/dd-source/x/libs/go/ddapp/metrics.Init in goroutine 1
+\t/go/pkg/mod/go.ddbuild.io/dd-source/x@v0.0.0-release.0.20260226115851-93ad3bad0b0d/libs/go/ddapp/metrics/metrics.go:61 +0x225
+
+goroutine 112 gp=0xc0009c0e00 m=nil [chan receive]:
+runtime.gopark(0xc000728cc0?, 0xc000728bd0?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00190dd30 sp=0xc00190dd10 pc=0x61bf2e
+runtime.chanrecv(0xc000728bd0, 0x0, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc00190dda8 sp=0xc00190dd30 pc=0x5a2bd3
+runtime.chanrecv1(0x5f51783?, 0x6dd22f8?)
+\t/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0xc00190ddd0 sp=0xc00190dda8 pc=0x5a2732
+github.com/DataDog/dd-go/config/features.(*Features).runDistCache(0xc001f90900)
+\t/go/src/github.com/DataDog/dd-go/config/features/features.go:548 +0x8d fp=0xc00190dfc8 sp=0xc00190ddd0 pc=0x12ce2ed
+github.com/DataDog/dd-go/config/features.NewWithAppMode.gowrap1()
+\t/go/src/github.com/DataDog/dd-go/config/features/features.go:316 +0x25 fp=0xc00190dfe0 sp=0xc00190dfc8 pc=0x12cd0c5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00190dfe8 sp=0xc00190dfe0 pc=0x625de1
+created by github.com/DataDog/dd-go/config/features.NewWithAppMode in goroutine 1
+\t/go/src/github.com/DataDog/dd-go/config/features/features.go:316 +0xc3c
+
+goroutine 113 gp=0xc0009c0fc0 m=nil [select]:
+runtime.gopark(0xc000729b30?, 0xc000729ab0?, 0xc0?, 0x10?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001433d40 sp=0xc001433d20 pc=0x61bf2e
+runtime.selectgo(0xc001433f48, 0xc001433f14, 0xb?, 0x0, 0x5eaaaeb?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc001433ee0 sp=0xc001433d40 pc=0x5f28b8
+github.com/DataDog/dd-go/config/features.(*FeatureReporter).run(0xc0009239b0)
+\t/go/src/github.com/DataDog/dd-go/config/features/features_reporter.go:84 +0xed fp=0xc001433fc8 sp=0xc001433ee0 pc=0x12d2c8d
+github.com/DataDog/dd-go/config/features.NewReporter.gowrap1()
+\t/go/src/github.com/DataDog/dd-go/config/features/features_reporter.go:110 +0x25 fp=0xc001433fe0 sp=0xc001433fc8 pc=0x12d3065
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001433fe8 sp=0xc001433fe0 pc=0x625de1
+created by github.com/DataDog/dd-go/config/features.NewReporter in goroutine 1
+\t/go/src/github.com/DataDog/dd-go/config/features/features_reporter.go:110 +0x25b
+
+goroutine 132 gp=0xc0009c1180 m=nil [chan receive]:
+runtime.gopark(0x0?, 0x0?, 0xf0?, 0xa?, 0xc0037b7ee0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00029d6a8 sp=0xc00029d688 pc=0x61bf2e
+runtime.chanrecv(0xc00039a700, 0xc00029d790, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc00029d720 sp=0xc00029d6a8 pc=0x5a2bd3
+runtime.chanrecv2(0x6dd2368?, 0xc0006f0af0?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc00029d748 sp=0xc00029d720 pc=0x5a2752
+google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run(0xc0037b7de0, {0x6dd2368, 0xc0006f0af0})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:88 +0xe5 fp=0xc00029d7b8 sp=0xc00029d748 pc=0xe9af05
+google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x28 fp=0xc00029d7e0 sp=0xc00029d7b8 pc=0xe9ad08
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00029d7e8 sp=0xc00029d7e0 pc=0x625de1
+created by google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer in goroutine 130
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x11a
+
+goroutine 117 gp=0xc0009c1340 m=nil [chan receive]:
+runtime.gopark(0x0?, 0x0?, 0xf0?, 0x80?, 0xc0006bd070?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000c626a8 sp=0xc000c62688 pc=0x61bf2e
+runtime.chanrecv(0xc000729e30, 0xc000c62790, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc000c62720 sp=0xc000c626a8 pc=0x5a2bd3
+runtime.chanrecv2(0x6dd2368?, 0xc0019f80f0?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc000c62748 sp=0xc000c62720 pc=0x5a2752
+google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run(0xc0006bcd10, {0x6dd2368, 0xc0019f80f0})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:88 +0xe5 fp=0xc000c627b8 sp=0xc000c62748 pc=0xe9af05
+google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x28 fp=0xc000c627e0 sp=0xc000c627b8 pc=0xe9ad08
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000c627e8 sp=0xc000c627e0 pc=0x625de1
+created by google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer in goroutine 112
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x11a
+
+goroutine 118 gp=0xc0009c1500 m=nil [chan receive]:
+runtime.gopark(0xc0018dc0c0?, 0xb?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00086dea8 sp=0xc00086de88 pc=0x61bf2e
+runtime.chanrecv(0xc000729ea0, 0xc00086df90, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc00086df20 sp=0xc00086dea8 pc=0x5a2bd3
+runtime.chanrecv2(0x6dd2368?, 0xc0019f85f0?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc00086df48 sp=0xc00086df20 pc=0x5a2752
+google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run(0xc0006bcd40, {0x6dd2368, 0xc0019f85f0})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:88 +0xe5 fp=0xc00086dfb8 sp=0xc00086df48 pc=0xe9af05
+google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x28 fp=0xc00086dfe0 sp=0xc00086dfb8 pc=0xe9ad08
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00086dfe8 sp=0xc00086dfe0 pc=0x625de1
+created by google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer in goroutine 112
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x11a
+
+goroutine 119 gp=0xc0009c16c0 m=nil [chan receive]:
+runtime.gopark(0x0?, 0xc0018dc0cf?, 0x42?, 0x0?, 0xc0018dc0cf?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc001907ea8 sp=0xc001907e88 pc=0x61bf2e
+runtime.chanrecv(0xc000729f10, 0xc001907f90, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc001907f20 sp=0xc001907ea8 pc=0x5a2bd3
+runtime.chanrecv2(0x6dd2368?, 0xc0019f8640?)
+\t/usr/local/go/src/runtime/chan.go:514 +0x12 fp=0xc001907f48 sp=0xc001907f20 pc=0x5a2752
+google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run(0xc0006bcdb0, {0x6dd2368, 0xc0019f8640})
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:88 +0xe5 fp=0xc001907fb8 sp=0xc001907f48 pc=0xe9af05
+google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer.gowrap1()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x28 fp=0xc001907fe0 sp=0xc001907fb8 pc=0xe9ad08
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc001907fe8 sp=0xc001907fe0 pc=0x625de1
+created by google.golang.org/grpc/internal/grpcsync.NewCallbackSerializer in goroutine 112
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/grpcsync/callback_serializer.go:52 +0x11a
+
+goroutine 130 gp=0xc0009c1880 m=nil [chan receive]:
+runtime.gopark(0xc004a06320?, 0xc004a062a0?, 0x0?, 0x0?, 0x6a98268?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00190bd20 sp=0xc00190bd00 pc=0x61bf2e
+runtime.chanrecv(0xc004a062a0, 0x0, 0x1)
+\t/usr/local/go/src/runtime/chan.go:667 +0x473 fp=0xc00190bd98 sp=0xc00190bd20 pc=0x5a2bd3
+runtime.chanrecv1(0xdf8475800?, 0x5f1920a?)
+\t/usr/local/go/src/runtime/chan.go:509 +0x12 fp=0xc00190bdc0 sp=0xc00190bd98 pc=0x5a2732
+github.com/DataDog/dd-go/config/consulconfig.(*ConsulConfig).runDistCache(0xc00377f4d0)
+\t/go/src/github.com/DataDog/dd-go/config/consulconfig/consul_config.go:812 +0x68f fp=0xc00190bfc8 sp=0xc00190bdc0 pc=0x12f5dcf
+github.com/DataDog/dd-go/config/consulconfig.New.gowrap2()
+\t/go/src/github.com/DataDog/dd-go/config/consulconfig/consul_config.go:280 +0x25 fp=0xc00190bfe0 sp=0xc00190bfc8 pc=0x12f17a5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00190bfe8 sp=0xc00190bfe0 pc=0x625de1
+created by github.com/DataDog/dd-go/config/consulconfig.New in goroutine 129
+\t/go/src/github.com/DataDog/dd-go/config/consulconfig/consul_config.go:280 +0x50c
+
+goroutine 126 gp=0xc0009c1a40 m=nil [select]:
+runtime.gopark(0xc0003e4e10?, 0xc0003e4d90?, 0xf0?, 0x7f?, 0xc000c615f0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000c61518 sp=0xc000c614f8 pc=0x61bf2e
+runtime.selectgo(0xc000c61778, 0xc000c616f0, 0xc0006bd830?, 0x0, 0x0?, 0x1)
+\t/usr/local/go/src/runtime/select.go:351 +0xbb8 fp=0xc000c616b8 sp=0xc000c61518 pc=0x5f28b8
+google.golang.org/grpc/internal/transport.(*http2Client).keepalive(0xc00191cd88)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:1738 +0x186 fp=0xc000c617c8 sp=0xc000c616b8 pc=0xf1da66
+google.golang.org/grpc/internal/transport.NewHTTP2Client.gowrap3()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:401 +0x25 fp=0xc000c617e0 sp=0xc000c617c8 pc=0xf13345
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000c617e8 sp=0xc000c617e0 pc=0x625de1
+created by google.golang.org/grpc/internal/transport.NewHTTP2Client in goroutine 120
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:401 +0x1ddd
+
+goroutine 127 gp=0xc000ce0000 m=nil [IO wait]:
+runtime.gopark(0x640558?, 0xc0013e2e08?, 0x0?, 0xa0?, 0xc000cce740?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc000cce670 sp=0xc000cce650 pc=0x61bf2e
+runtime.netpollblock(0xc000cce7b0?, 0x59f9e6?, 0x0?)
+\t/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0xc000cce6a8 sp=0xc000cce670 pc=0x5d6297
+internal/poll.runtime_pollWait(0x76fd422a7600, 0x72)
+\t/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0xc000cce6c8 sp=0xc000cce6a8 pc=0x61b105
+internal/poll.(*pollDesc).wait(0x6a99c90?, 0xf?, 0x0)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0xc000cce6f0 sp=0xc000cce6c8 pc=0x6aab07
+internal/poll.(*pollDesc).waitRead(...)
+\t/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0xc000049c80, {0xc000d0a000, 0xa000, 0xa000})
+\t/usr/local/go/src/internal/poll/fd_unix.go:165 +0x25e fp=0xc000cce780 sp=0xc000cce6f0 pc=0x6abdde
+net.(*netFD).Read(0xc000049c80, {0xc000d0a000?, 0xc000d0a000?, 0x5?})
+\t/usr/local/go/src/net/fd_posix.go:68 +0x25 fp=0xc000cce7c8 sp=0xc000cce780 pc=0x753da5
+net.(*conn).Read(0xc00188c2c8, {0xc000d0a000?, 0x61741a?, 0xc000cce8a0?})
+\t/usr/local/go/src/net/net.go:196 +0x45 fp=0xc000cce810 sp=0xc000cce7c8 pc=0x764ce5
+crypto/tls.(*atLeastReader).Read(0xc003659170, {0xc000d0a000?, 0xc003659170?, 0x56bbd00?})
+\t/usr/local/go/src/crypto/tls/conn.go:819 +0x3b fp=0xc000cce858 sp=0xc000cce810 pc=0x8a4cdb
+bytes.(*Buffer).ReadFrom(0xc0019649a8, {0x6d7df80, 0xc003659170})
+\t/usr/local/go/src/bytes/buffer.go:217 +0xa9 fp=0xc000cce8b0 sp=0xc000cce858 pc=0x6f37a9
+crypto/tls.(*Conn).readFromUntil(...)
+\t/usr/local/go/src/crypto/tls/conn.go:841
+crypto/tls.(*Conn).readRecordOrCCS(0xc001964708, 0x0)
+\t/usr/local/go/src/crypto/tls/conn.go:630 +0x4de fp=0xc000ccec38 sp=0xc000cce8b0 pc=0x8a149e
+crypto/tls.(*Conn).readRecord(...)
+\t/usr/local/go/src/crypto/tls/conn.go:592
+crypto/tls.(*Conn).Read(0xc001964708, {0xc000cd0000, 0x8000, 0xc000ccece0?})
+\t/usr/local/go/src/crypto/tls/conn.go:1397 +0x145 fp=0xc000cceca0 sp=0xc000ccec38 pc=0x8a9845
+google.golang.org/grpc/internal/credentials.(*syscallConn).Read(0x5ab5c40?, {0xc000cd0000?, 0xc000cced00?, 0xee14a5?})
+\t\u003cautogenerated\u003e:1 +0x29 fp=0xc000ccecd0 sp=0xc000cceca0 pc=0xe89429
+bufio.(*Reader).Read(0xc000d41980, {0xc0018b64a4, 0x9, 0x18?})
+\t/usr/local/go/src/bufio/bufio.go:245 +0x197 fp=0xc000cced08 sp=0xc000ccecd0 pc=0x6f9557
+io.ReadAtLeast(...)
+\t/usr/local/go/src/io/io.go:335
+io.ReadFull({0x6d7c100, 0xc000d41980}, {0xc0018b64a4, 0x9, 0x9})
+\t/usr/local/go/src/io/io.go:354 +0x6a fp=0xc000cced50 sp=0xc000cced08 pc=0x69d7ea
+golang.org/x/net/http2.readFrameHeader({0xc0018b64a4, 0x9, 0xc000000000?}, {0x6d7c100?, 0xc000d41980?})
+\t/go/pkg/mod/golang.org/x/net@v0.49.0/http2/frame.go:242 +0x5c fp=0xc000cced98 sp=0xc000cced50 pc=0xede9dc
+golang.org/x/net/http2.(*Framer).ReadFrameHeader(0xc0018b6460)
+\t/go/pkg/mod/golang.org/x/net@v0.49.0/http2/frame.go:505 +0x6b fp=0xc000ccee20 sp=0xc000cced98 pc=0xedf0ab
+google.golang.org/grpc/internal/transport.(*framer).readFrame(0xc0003d2580)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http_util.go:480 +0x45 fp=0xc000ccee60 sp=0xc000ccee20 pc=0xf2a625
+google.golang.org/grpc/internal/transport.(*http2Client).reader(0xc00191cd88, 0xc0003e4d20)
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:1664 +0x1c5 fp=0xc000ccefc0 sp=0xc000ccee60 pc=0xf1d245
+google.golang.org/grpc/internal/transport.NewHTTP2Client.gowrap4()
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:411 +0x25 fp=0xc000ccefe0 sp=0xc000ccefc0 pc=0xf132e5
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc000ccefe8 sp=0xc000ccefe0 pc=0x625de1
+created by google.golang.org/grpc/internal/transport.NewHTTP2Client in goroutine 120
+\t/go/pkg/mod/github.com/!data!dog/grpc-go-private@v1.78.0-dd3/internal/transport/http2_client.go:411 +0x1e53
+
+goroutine 131 gp=0xc000ce01c0 m=nil [sleep]:
+runtime.gopark(0x2b3de659539?, 0x7?, 0x5?, 0x0?, 0xc0034eeab6?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc00142ef10 sp=0xc00142eef0 pc=0x61bf2e
+time.Sleep(0x45d964b800)
+\t/usr/local/go/src/runtime/time.go:363 +0x165 fp=0xc00142ef68 sp=0xc00142ef10 pc=0x6219e5
+github.com/DataDog/dd-go/config/consulconfig.(*ConsulConfig).report(0xc00377f4d0)
+\t/go/src/github.com/DataDog/dd-go/config/consulconfig/consul_config.go:862 +0x28 fp=0xc00142efc8 sp=0xc00142ef68 pc=0x12f7048
+github.com/DataDog/dd-go/config/consulconfig.New.gowrap3()
+\t/go/src/github.com/DataDog/dd-go/config/consulconfig/consul_config.go:287 +0x25 fp=0xc00142efe0 sp=0xc00142efc8 pc=0x12f1745
+runtime.goexit({})
+\t/usr/local/go/src/runtime/asm_amd64.s:1693 +0x1 fp=0xc00142efe8 sp=0xc00142efe0 pc=0x625de1
+created by github.com/DataDog/dd-go/config/consulconfig.New in goroutine 129
+\t/go/src/github.com/DataDog/dd-go/config/consulconfig/consul_config.go:287 +0x599
+
+goroutine 133 gp=0xc000ce0380 m=nil [chan receive]:
+runtime.gopark(0xc0018dd6e0?, 0xb?, 0x0?, 0x0?, 0x0?)
+\t/usr/local/go/src/runtime/proc.go:460 +0xce fp=0xc003ef3ea8 sp=0xc003ef3e88 pc=0x61bf2e
+runtime.chanrecv(0xc00039a770, 0xc003ef3f90,

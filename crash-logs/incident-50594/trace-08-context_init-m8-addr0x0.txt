@@ -1,0 +1,7 @@
+Source: Datadog prod logs, 2026-03-05T22:14:36Z
+Host: us5-prod-dog-zorua-a-k8s-be5f1c9958908775-nlsc
+Function: ddwaf_context_init (via WAFLib.ContextInit, waf_dl.go:210)
+addr=0x0, m=8
+
+goroutine 1578 → Handle.NewContext → ContextInit
+Call path: BatchAddNodes_Handler → grpcsec → waf.Feature.onStart → Handle.NewContext
