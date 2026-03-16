@@ -2,6 +2,8 @@ module github.com/DataDog/go-libddwaf/_tools/libddwaf-updater
 
 go 1.23.0
 
+toolchain go1.26.0
+
 require (
 	github.com/bitfield/script v0.22.0
 	github.com/google/go-github/v56 v56.0.0
