@@ -25,6 +25,9 @@ jobs:
 
   test:
     needs: go-versions-matrix
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -49,15 +52,12 @@ jobs:
         run: sudo apt update && sudo apt install -y build-essential
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
-      - name: Generate a GitHub token
+      - name: Get GitHub token (DataDog/appsec-event-rules)
         id: generate-token
-        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        uses: DataDog/dd-octo-sts-action@96a25462dbcb10ebf0bfd6e2ccc917d2ab235b9a # v1.0.4
         with:
-          app-id: ${{ vars.DD_K9_LIBRARY_GO_APP_ID }}
-          private-key: ${{ secrets.DD_K9_LIBRARY_GO_APP_PRIVATE_KEY }}
-          owner: DataDog
-          repositories: appsec-event-rules
-          permission-contents: read
+          scope: DataDog/appsec-event-rules
+          policy: go-libddwaf.github.read-rules
       - name: go test
         shell: bash
         run: ./.github/workflows/ci.sh

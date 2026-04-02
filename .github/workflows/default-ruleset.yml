@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Update
     permissions:
+      id-token: write
       contents: write
     steps:
       - name: Checkout
@@ -21,15 +22,12 @@ jobs:
         with:
           go-version: oldstable
           cache-dependency-path: _tools/ruleset-updater/go.mod
-      - name: Generate a GitHub token (DataDog/appsec-event-rules)
+      - name: Get GitHub token (DataDog/appsec-event-rules)
         id: generate-token
-        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        uses: DataDog/dd-octo-sts-action@96a25462dbcb10ebf0bfd6e2ccc917d2ab235b9a # v1.0.4
         with:
-          app-id: ${{ vars.DD_K9_LIBRARY_GO_APP_ID }}
-          private-key: ${{ secrets.DD_K9_LIBRARY_GO_APP_PRIVATE_KEY }}
-          owner: DataDog
-          repositories: appsec-event-rules
-          permission-contents: read
+          scope: DataDog/appsec-event-rules
+          policy: go-libddwaf.github.read-rules
       - name: Update Default Ruleset
         id: ruleset
         run: |-
@@ -57,15 +55,13 @@ jobs:
           git fetch origin "${branch}"
         env:
           VERSION: ${{ steps.ruleset.outputs.version }}
-      - name: Generate a GitHub token (${{ github.repository_owner }}/go-libddwaf)
+      - name: Get GitHub token (DataDog/go-libddwaf)
         if: fromJson(steps.detect.outputs.mutation-happened)
         id: generate-token-pr
-        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        uses: DataDog/dd-octo-sts-action@96a25462dbcb10ebf0bfd6e2ccc917d2ab235b9a # v1.0.4
         with:
-          app-id: ${{ vars.DD_K9_LIBRARY_GO_APP_ID }}
-          private-key: ${{ secrets.DD_K9_LIBRARY_GO_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: go-libddwaf
+          scope: DataDog/go-libddwaf
+          policy: self.github.update-ruleset.schedule
       # We use ghcommit to create signed commits directly using the GitHub API
       - name: Create Commit on PR Branch
         if: fromJson(steps.detect.outputs.mutation-happened)
