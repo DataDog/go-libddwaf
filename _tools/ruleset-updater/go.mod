@@ -2,6 +2,8 @@ module github.com/DataDog/go-libddwaf/_tools/ruleset-updater
 
 go 1.23.0
 
+toolchain go1.26.1
+
 require (
 	github.com/google/go-github/v72 v72.0.0
 	github.com/iancoleman/orderedmap v0.3.0
