@@ -33,6 +33,8 @@ type Context struct {
 	handle *Handle // Instance of the WAF
 
 	root        *contextRoot           // Shared root state for the C ddwaf_context pointer
+	isSubCtx    bool                    // Whether this Context represents a subcontext
+	closed      bool                    // Whether this Context or subcontext has been closed
 	cSubcontext bindings.WAFSubcontext // The C ddwaf_subcontext pointer (nil for root context)
 
 	// mutex protecting local fields such as truncations, pinner and cSubcontext.
@@ -98,11 +100,11 @@ func (d RunAddressData) newTimer(parent timer.NodeTimer) (timer.NodeTimer, error
 
 // isSubcontext returns true if this context is a subcontext.
 func (context *Context) isSubcontext() bool {
-	return context.cSubcontext != 0
+	return context.isSubCtx
 }
 
 func (context *Context) isClosedLocked() bool {
-	return context.root.closed || context.root.cContext == 0 || (context.isSubcontext() && context.cSubcontext == 0)
+	return context.root.closed || context.root.cContext == 0 || context.closed || (context.isSubcontext() && context.cSubcontext == 0)
 }
 
 // SubContext creates a subcontext derived from this context.
@@ -121,10 +123,6 @@ func (context *Context) isClosedLocked() bool {
 func (context *Context) SubContext() (*Context, error) {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
-
-	if context.isSubcontext() {
-		return nil, fmt.Errorf("cannot create subcontext from subcontext; create from root context")
-	}
 
 	context.root.mu.Lock()
 	defer context.root.mu.Unlock()
@@ -167,6 +165,7 @@ func (context *Context) SubContext() (*Context, error) {
 		Timer:       subTimer,
 		handle:      context.handle,
 		root:        context.root,
+		isSubCtx:    true,
 		cSubcontext: cSubcontext,
 	}, nil
 }
@@ -446,6 +445,7 @@ func (context *Context) Close() {
 		if context.cSubcontext != 0 && !context.root.closed && context.root.cContext != 0 {
 			bindings.Lib.SubcontextDestroy(context.cSubcontext)
 		}
+		context.closed = true
 		context.cSubcontext = 0
 		context.pinner.Unpin()
 		return
@@ -456,6 +456,7 @@ func (context *Context) Close() {
 		context.root.cContext = 0
 		context.root.closed = true
 	}
+	context.closed = true
 
 	context.pinner.Unpin()
 }

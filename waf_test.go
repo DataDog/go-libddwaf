@@ -829,7 +829,6 @@ func TestKnownActions(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
-	t.Skip("TODO: re-enable after subcontext concurrency model is finalized and race conditions are resolved")
 
 	// Start 200 goroutines that will use the WAF 500 times each
 	nbUsers := 200
@@ -839,6 +838,7 @@ func TestConcurrency(t *testing.T) {
 		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 		defer waf.Close()
+		errCh := make(chan error, nbUsers)
 
 		wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
@@ -862,20 +862,25 @@ func TestConcurrency(t *testing.T) {
 				startBarrier.Wait()      // Sync the starts of the goroutines
 				defer stopBarrier.Done() // Signal we are done when returning
 
-				for c := range nbRun {
-					i := c % length
-					data := map[string]any{
-						"server.request.headers.no_cookies": map[string]string{
-							"user-agent": userAgents[i],
-						},
+				if err := captureWorkerError(func() error {
+					for c := range nbRun {
+						i := c % length
+						data := map[string]any{
+							"server.request.headers.no_cookies": map[string]string{
+								"user-agent": userAgents[i],
+							},
+						}
+						res, err := wafCtx.Run(RunAddressData{Data: data})
+						if err != nil {
+							return err
+						}
+						if len(res.Events) > 0 {
+							return fmt.Errorf("c=%d events=`%v`", c, res.Events)
+						}
 					}
-					res, err := wafCtx.Run(RunAddressData{Data: data})
-					if err != nil {
-						panic(err)
-					}
-					if len(res.Events) > 0 {
-						panic(fmt.Errorf("c=%d events=`%v`", c, res.Events))
-					}
+					return nil
+				}); err != nil {
+					errCh <- err
 				}
 			}()
 		}
@@ -894,6 +899,10 @@ func TestConcurrency(t *testing.T) {
 		res, err := wafCtx.Run(RunAddressData{Data: data})
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
+		close(errCh)
+		for err := range errCh {
+			require.NoError(t, err)
+		}
 	})
 
 	t.Run("concurrent-waf-instance-usage", func(t *testing.T) {
@@ -927,41 +936,42 @@ func TestConcurrency(t *testing.T) {
 				}
 				defer wafCtx.Close()
 
-				for c := range nbRun {
-					i := c % length
+				if err := captureWorkerError(func() error {
+					for c := range nbRun {
+						i := c % length
+						data := map[string]any{
+							"server.request.headers.no_cookies": map[string]string{
+								"user-agent": userAgents[i],
+							},
+						}
+						res, err := wafCtx.Run(RunAddressData{Data: data})
+						if err != nil {
+							return err
+						}
+						if len(res.Events) > 0 {
+							return fmt.Errorf("c=%d events=`%v`", c, res.Events)
+						}
+					}
+
+					// Test the rule matches Arachni in the end
 					data := map[string]any{
 						"server.request.headers.no_cookies": map[string]string{
-							"user-agent": userAgents[i],
+							"user-agent": "Arachni",
 						},
 					}
-
 					res, err := wafCtx.Run(RunAddressData{Data: data})
-
 					if err != nil {
-						panic(err)
+						return fmt.Errorf("Run failed: %w", err)
 					}
-					if len(res.Events) > 0 {
-						panic(fmt.Errorf("c=%d events=`%v`", c, res.Events))
+					if len(res.Events) == 0 {
+						return fmt.Errorf("expected events after final run")
 					}
-				}
-
-				// Test the rule matches Arachni in the end
-				data := map[string]any{
-					"server.request.headers.no_cookies": map[string]string{
-						"user-agent": "Arachni",
-					},
-				}
-				res, err := wafCtx.Run(RunAddressData{Data: data})
-				if err != nil {
-					errCh <- fmt.Errorf("Run failed: %w", err)
-					return
-				}
-				if len(res.Events) == 0 {
-					errCh <- fmt.Errorf("expected events after final run")
-					return
-				}
-				if res.Actions != nil {
-					errCh <- fmt.Errorf("expected nil actions, got %v", res.Actions)
+					if res.Actions != nil {
+						return fmt.Errorf("expected nil actions, got %v", res.Actions)
+					}
+					return nil
+				}); err != nil {
+					errCh <- err
 				}
 			}()
 		}
@@ -1014,41 +1024,43 @@ func TestConcurrency(t *testing.T) {
 				}
 				defer wafSubCtx.Close()
 
-				for c := range nbRun {
-					i := c % length
+				if err := captureWorkerError(func() error {
+					for c := range nbRun {
+						i := c % length
+						data := map[string]any{
+							"server.request.headers.no_cookies": map[string]string{
+								"user-agent": userAgents[i],
+							},
+						}
+
+						res, err := wafSubCtx.Run(RunAddressData{Data: data})
+						if err != nil {
+							return err
+						}
+						if len(res.Events) > 0 {
+							return fmt.Errorf("c=%d events=`%v`", c, res.Events)
+						}
+					}
+
+					// Test the rule matches Arachni in the end
 					data := map[string]any{
 						"server.request.headers.no_cookies": map[string]string{
-							"user-agent": userAgents[i],
+							"user-agent": "Arachni",
 						},
 					}
-
 					res, err := wafSubCtx.Run(RunAddressData{Data: data})
-
 					if err != nil {
-						panic(err)
+						return fmt.Errorf("SubContext Run failed: %w", err)
 					}
-					if len(res.Events) > 0 {
-						panic(fmt.Errorf("c=%d events=`%v`", c, res.Events))
+					if len(res.Events) == 0 {
+						return fmt.Errorf("expected events after final subcontext run")
 					}
-				}
-
-				// Test the rule matches Arachni in the end
-				data := map[string]any{
-					"server.request.headers.no_cookies": map[string]string{
-						"user-agent": "Arachni",
-					},
-				}
-				res, err := wafSubCtx.Run(RunAddressData{Data: data})
-				if err != nil {
-					errCh <- fmt.Errorf("SubContext Run failed: %w", err)
-					return
-				}
-				if len(res.Events) == 0 {
-					errCh <- fmt.Errorf("expected events after final subcontext run")
-					return
-				}
-				if res.Actions != nil {
-					errCh <- fmt.Errorf("expected nil actions, got %v", res.Actions)
+					if res.Actions != nil {
+						return fmt.Errorf("expected nil actions, got %v", res.Actions)
+					}
+					return nil
+				}); err != nil {
+					errCh <- err
 				}
 			}()
 		}
