@@ -21,7 +21,7 @@ func decodeErrors(obj *bindings.WAFObject) (map[string][]string, error) {
 		return nil, fmt.Errorf("decodeErrors: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type())
 	}
 
-	// v2: Maps use MapEntries() to get WAFObjectKV pairs
+
 	entries, err := obj.MapEntries()
 	if err != nil {
 		return nil, fmt.Errorf("decodeErrors: failed to get map entries: %w", err)
@@ -54,7 +54,7 @@ func decodeDiagnostics(obj *bindings.WAFObject) (Diagnostics, error) {
 		return Diagnostics{}, fmt.Errorf("decodeDiagnostics: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type())
 	}
 
-	// v2: Maps use MapEntries() to get WAFObjectKV pairs
+
 	entries, err := obj.MapEntries()
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to get map entries: %w", err)
@@ -64,7 +64,7 @@ func decodeDiagnostics(obj *bindings.WAFObject) (Diagnostics, error) {
 	for _, entry := range entries {
 		key, err := entry.Key.StringValue()
 		if err != nil {
-			continue // Skip entries with non-string keys
+			return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
 		}
 
 		switch key {
@@ -106,7 +106,7 @@ func decodeFeature(obj *bindings.WAFObject) (*Feature, error) {
 		return nil, fmt.Errorf("decodeFeature: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type())
 	}
 
-	// v2: Maps use MapEntries() to get WAFObjectKV pairs
+
 	entries, err := obj.MapEntries()
 	if err != nil {
 		return nil, fmt.Errorf("decodeFeature: failed to get map entries: %w", err)
@@ -154,7 +154,7 @@ func decodeStringArray(obj *bindings.WAFObject) ([]string, error) {
 		return nil, fmt.Errorf("decodeStringArray: %w: expected array, got %s", waferrors.ErrInvalidObjectType, obj.Type())
 	}
 
-	// v2: Arrays use ArrayValues() to get WAFObject slice
+
 	items, err := obj.ArrayValues()
 	if err != nil {
 		return nil, fmt.Errorf("decodeStringArray: failed to get array values: %w", err)

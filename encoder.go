@@ -31,6 +31,8 @@ type EncoderConfig struct {
 	MaxStringSize uint16
 	// MaxObjectDepth is the maximum depth of the object that will be encoded.
 	MaxObjectDepth uint16
+
+	unlimited bool
 }
 
 // encoder encodes Go values into wafObjects. Only the subset of Go types representable into wafObjects
@@ -134,7 +136,29 @@ func newUnlimitedEncoderConfig(pinner pin.Pinner) EncoderConfig {
 		MaxContainerSize: math.MaxUint16,
 		MaxStringSize:    math.MaxUint16,
 		MaxObjectDepth:   math.MaxUint16,
+		unlimited:        true,
 	}
+}
+
+func (config EncoderConfig) maxContainerSize() int {
+	if config.unlimited {
+		return math.MaxInt
+	}
+	return int(config.MaxContainerSize)
+}
+
+func (config EncoderConfig) maxStringSize() int {
+	if config.unlimited {
+		return math.MaxInt
+	}
+	return int(config.MaxStringSize)
+}
+
+func (config EncoderConfig) maxObjectDepth() int {
+	if config.unlimited {
+		return math.MaxInt
+	}
+	return int(config.MaxObjectDepth)
 }
 
 // Encode takes a Go value and returns a wafObject pointer and an error.
@@ -145,7 +169,7 @@ func (encoder *encoder) Encode(data any) (*bindings.WAFObject, error) {
 	value := reflect.ValueOf(data)
 	wo := &bindings.WAFObject{}
 
-	err := encoder.encode(value, wo, int(encoder.config.MaxObjectDepth))
+	err := encoder.encode(value, wo, encoder.config.maxObjectDepth())
 
 	if _, ok := encoder.truncations[ObjectTooDeep]; ok && !encoder.config.Timer.Exhausted() {
 		ctx, cancelCtx := context.WithTimeout(context.Background(), encoder.config.Timer.Remaining())
@@ -282,8 +306,8 @@ func (encoder *encoder) encodeJSONNumber(num json.Number, obj *bindings.WAFObjec
 
 func (encoder *encoder) encodeString(str string, obj *bindings.WAFObject) {
 	size := len(str)
-	if size > int(encoder.config.MaxStringSize) {
-		str = str[:encoder.config.MaxStringSize]
+	if size > encoder.config.maxStringSize() {
+		str = str[:encoder.config.maxStringSize()]
 		encoder.addTruncation(StringTooLong, size)
 	}
 	obj.SetString(encoder.config.Pinner, str)
@@ -359,8 +383,11 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 
 	capacity := nbFields
 	length := 0
-	if capacity > int(encoder.config.MaxContainerSize) {
-		capacity = int(encoder.config.MaxContainerSize)
+	if capacity > encoder.config.maxContainerSize() {
+		capacity = encoder.config.maxContainerSize()
+	}
+	if capacity > math.MaxUint16 {
+		capacity = math.MaxUint16
 	}
 
 	kvArray := obj.SetMap(encoder.config.Pinner, uint16(capacity))
@@ -404,8 +431,11 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 // - Even if the element values are invalid or null we still keep them to report the map key
 func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	capacity := value.Len()
-	if capacity > int(encoder.config.MaxContainerSize) {
-		capacity = int(encoder.config.MaxContainerSize)
+	if capacity > encoder.config.maxContainerSize() {
+		capacity = encoder.config.maxContainerSize()
+	}
+	if capacity > math.MaxUint16 {
+		capacity = math.MaxUint16
 	}
 
 	// Maps use WAFObjectKV pairs
@@ -440,7 +470,7 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, 
 }
 
 // encodeMapKey takes a reflect.Value and encodes it as a map key WAFObject.
-// v2: Keys are now full WAFObjects (typically strings).
+
 func (encoder *encoder) encodeMapKey(value reflect.Value, keyObj *bindings.WAFObject) error {
 	value, kind := resolvePointer(value)
 
@@ -461,11 +491,11 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, keyObj *bindings.WAFOb
 }
 
 // encodeMapKeyString encodes a string as a map key WAFObject.
-// v2: Keys are full WAFObjects, so we set it as a string.
+
 func (encoder *encoder) encodeMapKeyString(keyStr string, keyObj *bindings.WAFObject) {
 	size := len(keyStr)
-	if size > int(encoder.config.MaxStringSize) {
-		keyStr = keyStr[:encoder.config.MaxStringSize]
+	if size > encoder.config.maxStringSize() {
+		keyStr = keyStr[:encoder.config.maxStringSize()]
 		encoder.addTruncation(StringTooLong, size)
 	}
 
@@ -480,8 +510,11 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject
 	length := value.Len()
 
 	capacity := length
-	if capacity > int(encoder.config.MaxContainerSize) {
-		capacity = int(encoder.config.MaxContainerSize)
+	if capacity > encoder.config.maxContainerSize() {
+		capacity = encoder.config.maxContainerSize()
+	}
+	if capacity > math.MaxUint16 {
+		capacity = math.MaxUint16
 	}
 
 	currIndex := 0

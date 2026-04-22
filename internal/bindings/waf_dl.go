@@ -48,11 +48,15 @@ func newWAFLib() (dl *WAFLib, err error) {
 		return nil, fmt.Errorf("load a dynamic library file: %w", err)
 	}
 
+	closeOnError := func() {
+		if closeErr := purego.Dlclose(handle); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("error closing the shared libddwaf library: %w", closeErr))
+		}
+	}
+
 	var symbols wafSymbols
 	if symbols, err = newWafSymbols(handle); err != nil {
-		if closeErr := purego.Dlclose(handle); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("error released the shared libddwaf library: %w", closeErr))
-		}
+		closeOnError()
 		return
 	}
 
@@ -60,14 +64,12 @@ func newWAFLib() (dl *WAFLib, err error) {
 
 	// Try calling the waf to make sure everything is fine
 	if _, err = tryCall(dl.GetVersion); err != nil {
-		if closeErr := purego.Dlclose(handle); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("error released the shared libddwaf library: %w", closeErr))
-		}
+		closeOnError()
 		return
 	}
 
-	// v2: Get and store the default allocator
-	dl.defaultAllocator = dl.GetDefaultAllocator()
+
+	dl.defaultAllocator = dl.loadDefaultAllocator()
 
 	if val := os.Getenv(log.EnvVarLogLevel); val != "" {
 		logLevel := log.LevelNamed(val)
@@ -88,9 +90,9 @@ func (waf *WAFLib) GetVersion() string {
 	return unsafe.Gostring(unsafe.Cast[byte](waf.syscall(waf.getVersion)))
 }
 
-// GetDefaultAllocator returns the default allocator used by the library.
+// loadDefaultAllocator returns the default allocator used by the library.
 // This is called once at load time; use DefaultAllocator() for the cached value.
-func (waf *WAFLib) GetDefaultAllocator() WAFAllocator {
+func (waf *WAFLib) loadDefaultAllocator() WAFAllocator {
 	return WAFAllocator(waf.syscall(waf.getDefaultAllocator))
 }
 
@@ -205,11 +207,7 @@ func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 	pinner.Pin(&nbAddresses)
 
 	arrayVoidC := waf.syscall(symbol, uintptr(handle), unsafe.PtrToUintptr(&nbAddresses))
-	if arrayVoidC == 0 {
-		return nil
-	}
-
-	if nbAddresses == 0 {
+	if arrayVoidC == 0 || nbAddresses == 0 {
 		return nil
 	}
 

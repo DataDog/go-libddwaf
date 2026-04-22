@@ -105,5 +105,5 @@ func (e *PanicError) Unwrap() error {
 
 // Error returns the error string representation.
 func (e *PanicError) Error() string {
-	return fmt.Sprintf("panic while executing %s: %#+v", e.In, e.Err)
+	return fmt.Sprintf("panic while executing %s: %v", e.In, e.Err)
 }

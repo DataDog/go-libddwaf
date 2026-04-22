@@ -36,13 +36,11 @@ func wafTest(t *testing.T, obj *bindings.WAFObject) {
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()
 
-	// v2: Run with persistent data first
 	_, err = wafCtx.Run(RunAddressData{
 		Data: map[string]any{"my.input": obj},
 	})
 	require.NoError(t, err)
 
-	// v2: Use subcontext for ephemeral data
 	subCtx, err := wafCtx.SubContext()
 	require.NoError(t, err)
 	defer subCtx.Close()
@@ -706,7 +704,7 @@ func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WAFObject
 	actualType := actual.Type()
 	expectedType := expected._type
 
-	// v2: Small string optimization means short strings use WAFSmallStringType.
+	// Small strings (<=14 bytes) use WAFSmallStringType via inline storage.
 	// Treat WAFSmallStringType as equivalent to WAFStringType for comparison.
 	if expectedType == bindings.WAFStringType && actualType == bindings.WAFSmallStringType {
 		actualType = bindings.WAFStringType
@@ -718,7 +716,7 @@ func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WAFObject
 		return
 	}
 
-	// v2: Get container size based on type
+	
 	var actualSize int
 	if expected._type == bindings.WAFArrayType {
 		size, _ := actual.ArraySize()
@@ -732,7 +730,7 @@ func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WAFObject
 		t.Fatalf("expected len %v, got len %v", len(expected.children), actualSize)
 	}
 
-	// v2: Iterate using new methods
+	
 	if expected._type == bindings.WAFArrayType {
 		items, _ := actual.ArrayValues()
 		for i := range expected.children {

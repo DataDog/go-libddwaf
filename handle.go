@@ -53,7 +53,6 @@ func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error)
 		return nil, fmt.Errorf("WAF handle has been released")
 	}
 
-	// v2: Pass default allocator for output objects
 	cContext := bindings.Lib.ContextInit(handle.cHandle, bindings.Lib.DefaultAllocator())
 	if cContext == 0 {
 		handle.Close() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
@@ -62,12 +61,14 @@ func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error)
 
 	rootTimer, err := timer.NewTreeTimer(timerOptions...)
 	if err != nil {
-		return nil, err
+		bindings.Lib.ContextDestroy(cContext)
+		handle.Close()
+		return nil, fmt.Errorf("failed to create WAF context timer: %w", err)
 	}
 
 	return &Context{
 		handle:      handle,
-		cContext:    cContext,
+		root:        &contextRoot{cContext: cContext},
 		Timer:       rootTimer,
 		truncations: make(map[TruncationReason][]int, 3),
 	}, nil

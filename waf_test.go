@@ -9,8 +9,8 @@ package libddwaf
 
 import (
 	"bytes"
-	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -391,7 +391,6 @@ func TestTimeout(t *testing.T) {
 }
 
 func TestMatching(t *testing.T) {
-
 	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
@@ -743,20 +742,20 @@ func TestSubContext(t *testing.T) {
 		subCtx2.Close()
 	})
 
-	t.Run("subcontext-close-returns-nil", func(t *testing.T) {
+	t.Run("subcontext-close-then-run-returns-error", func(t *testing.T) {
 		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 
 		subCtx, err := ctx.SubContext()
 		require.NoError(t, err)
 
-		// Close should return nil
-		ret := subCtx.Close()
-		require.Nil(t, ret)
+		subCtx.Close()
 
-		// Root context close should also return nil
-		nilCtx := ctx.Close()
-		require.Nil(t, nilCtx)
+		// Run on closed subcontext should return an error
+		_, err = subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		require.ErrorIs(t, err, waferrors.ErrContextClosed)
+
+		ctx.Close()
 	})
 
 	t.Run("run-on-closed-subcontext", func(t *testing.T) {
@@ -779,7 +778,6 @@ func TestSubContext(t *testing.T) {
 func TestActions(t *testing.T) {
 	testActions := func(expectedActions []string, expectedActionsTypes []string) func(t *testing.T) {
 		return func(t *testing.T) {
-
 			waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, expectedActions))
 			require.NoError(t, err)
 			require.NotNil(t, waf)
@@ -831,7 +829,7 @@ func TestKnownActions(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
-	t.Skip()
+	t.Skip("TODO: re-enable after subcontext concurrency model is finalized and race conditions are resolved")
 
 	// Start 200 goroutines that will use the WAF 500 times each
 	nbUsers := 200
@@ -902,6 +900,7 @@ func TestConcurrency(t *testing.T) {
 		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 		defer waf.Close()
+		errCh := make(chan error, nbUsers)
 
 		// User agents that won't match the rule so that it doesn't get pruned.
 		// Said otherwise, the User-Agent rule will run as long as it doesn't match, otherwise it gets ignored.
@@ -922,7 +921,10 @@ func TestConcurrency(t *testing.T) {
 				defer stopBarrier.Done() // Signal we are done when returning
 
 				wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
-				require.NoError(t, err)
+				if err != nil {
+					errCh <- fmt.Errorf("NewContext failed: %w", err)
+					return
+				}
 				defer wafCtx.Close()
 
 				for c := range nbRun {
@@ -950,9 +952,17 @@ func TestConcurrency(t *testing.T) {
 					},
 				}
 				res, err := wafCtx.Run(RunAddressData{Data: data})
-				require.NoError(t, err)
-				require.NotEmpty(t, res.Events)
-				require.Nil(t, res.Actions)
+				if err != nil {
+					errCh <- fmt.Errorf("Run failed: %w", err)
+					return
+				}
+				if len(res.Events) == 0 {
+					errCh <- fmt.Errorf("expected events after final run")
+					return
+				}
+				if res.Actions != nil {
+					errCh <- fmt.Errorf("expected nil actions, got %v", res.Actions)
+				}
 			}()
 		}
 
@@ -960,12 +970,17 @@ func TestConcurrency(t *testing.T) {
 		// that should be latter.
 		startBarrier.Done() // Unblock the user goroutines
 		stopBarrier.Wait()  // Wait for the user goroutines to be done
+		close(errCh)
+		for err := range errCh {
+			require.NoError(t, err)
+		}
 	})
 
 	t.Run("concurrent-waf-subcontext-usage", func(t *testing.T) {
 		waf, _, err := newDefaultHandle(testArachniRule)
 		require.NoError(t, err)
 		defer waf.Close()
+		errCh := make(chan error, nbUsers)
 
 		// User agents that won't match the rule so that it doesn't get pruned.
 		// Said otherwise, the User-Agent rule will run as long as it doesn't match, otherwise it gets ignored.
@@ -986,10 +1001,17 @@ func TestConcurrency(t *testing.T) {
 				defer stopBarrier.Done() // Signal we are done when returning
 
 				wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
-				require.NoError(t, err)
+				if err != nil {
+					errCh <- fmt.Errorf("NewContext failed: %w", err)
+					return
+				}
 				defer wafCtx.Close()
 
 				wafSubCtx, err := wafCtx.SubContext()
+				if err != nil {
+					errCh <- fmt.Errorf("SubContext failed: %w", err)
+					return
+				}
 				defer wafSubCtx.Close()
 
 				for c := range nbRun {
@@ -1017,9 +1039,17 @@ func TestConcurrency(t *testing.T) {
 					},
 				}
 				res, err := wafSubCtx.Run(RunAddressData{Data: data})
-				require.NoError(t, err)
-				require.NotEmpty(t, res.Events)
-				require.Nil(t, res.Actions)
+				if err != nil {
+					errCh <- fmt.Errorf("SubContext Run failed: %w", err)
+					return
+				}
+				if len(res.Events) == 0 {
+					errCh <- fmt.Errorf("expected events after final subcontext run")
+					return
+				}
+				if res.Actions != nil {
+					errCh <- fmt.Errorf("expected nil actions, got %v", res.Actions)
+				}
 			}()
 		}
 
@@ -1027,6 +1057,10 @@ func TestConcurrency(t *testing.T) {
 		// that should be latter.
 		startBarrier.Done() // Unblock the user goroutines
 		stopBarrier.Wait()  // Wait for the user goroutines to be done
+		close(errCh)
+		for err := range errCh {
+			require.NoError(t, err)
+		}
 	})
 
 	t.Run("concurrent-waf-handle-close", func(t *testing.T) {
@@ -1089,6 +1123,7 @@ func TestConcurrency(t *testing.T) {
 		wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, wafCtx)
+		errCh := make(chan error, nbUsers)
 
 		var startBarrier, stopBarrier sync.WaitGroup
 		startBarrier.Add(1)
@@ -1116,12 +1151,16 @@ func TestConcurrency(t *testing.T) {
 					// Use SubContext for ephemeral data
 					subCtx, err := wafCtx.SubContext()
 					if err != nil {
-						require.ErrorIs(t, err, waferrors.ErrContextClosed)
+						if !errors.Is(err, waferrors.ErrContextClosed) {
+							errCh <- fmt.Errorf("SubContext failed with unexpected error: %w", err)
+						}
 						return
 					}
 					_, err = subCtx.Run(RunAddressData{Data: data})
 					if err != nil {
-						require.ErrorIs(t, err, waferrors.ErrContextClosed)
+						if !errors.Is(err, waferrors.ErrContextClosed) {
+							errCh <- fmt.Errorf("Run failed with unexpected error: %w", err)
+						}
 					}
 					subCtx.Close()
 				} else {
@@ -1144,6 +1183,10 @@ func TestConcurrency(t *testing.T) {
 
 		startBarrier.Done()
 		stopBarrier.Wait()
+		close(errCh)
+		for err := range errCh {
+			require.NoError(t, err)
+		}
 
 		// Verify the WAF Handle was properly released.
 		require.Zero(t, waf.refCounter.Load())

@@ -24,7 +24,7 @@ var defaultRuleset []byte
 // It is the caller's responsibility to free the returned WAFObject using [bindings.Lib.ObjectDestroy]
 // when it is no longer needed.
 // The returned error is non-nil if the ruleset could not be decompressed or parsed.
-func DefaultRuleset() (bindings.WAFObject, error) {
+func DefaultRuleset() (obj bindings.WAFObject, err error) {
 	if ok, err := bindings.Load(); !ok {
 		return bindings.WAFObject{}, fmt.Errorf("loading default ruleset: %w", err)
 	}
@@ -34,14 +34,18 @@ func DefaultRuleset() (bindings.WAFObject, error) {
 		return bindings.WAFObject{}, fmt.Errorf("failed to create gzip reader for default ruleset: %w", err)
 	}
 
-	defer gz.Close()
+	defer func() {
+		if closeErr := gz.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("failed to close gzip reader: %w", closeErr)
+		}
+	}()
 
 	decompressedRuleset, err := io.ReadAll(gz)
 	if err != nil {
 		return bindings.WAFObject{}, fmt.Errorf("failed to decompress default ruleset: %w", err)
 	}
 
-	// v2: ObjectFromJSON now takes an allocator parameter
+
 	parsedRuleset, ok := bindings.Lib.ObjectFromJSON(decompressedRuleset, bindings.Lib.DefaultAllocator())
 	if !ok {
 		return bindings.WAFObject{}, fmt.Errorf("failed to parse default ruleset: ddwaf_object_from_json returned false")

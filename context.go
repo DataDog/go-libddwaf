@@ -23,7 +23,7 @@ import (
 // its own [Context]. New [Context] instances can be created by calling
 // [Handle.NewContext].
 //
-// v2: Subcontexts can be created via [Context.SubContext]. Data passed to a subcontext is stored
+// Subcontexts can be created via [Context.SubContext]. Data passed to a subcontext is stored
 // and persists across multiple calls to Run on that subcontext, until the subcontext is closed.
 type Context struct {
 	// Timer registers the time spent in the WAF and go-libddwaf. It is created alongside the Context using the options
@@ -32,11 +32,10 @@ type Context struct {
 
 	handle *Handle // Instance of the WAF
 
-	cContext    bindings.WAFContext    // The C ddwaf_context pointer
-	cSubcontext bindings.WAFSubcontext // v2: The C ddwaf_subcontext pointer (nil for root context)
-	parent      *Context               // v2: Parent context (nil for root context)
+	root        *contextRoot           // Shared root state for the C ddwaf_context pointer
+	cSubcontext bindings.WAFSubcontext // The C ddwaf_subcontext pointer (nil for root context)
 
-	// mutex protecting the use of cContext which is not thread-safe and truncations
+	// mutex protecting local fields such as truncations, pinner and cSubcontext.
 	mutex sync.Mutex
 
 	// truncations provides details about truncations that occurred while encoding address data for the WAF execution.
@@ -48,12 +47,18 @@ type Context struct {
 	pinner pin.ConcurrentPinner
 }
 
+type contextRoot struct {
+	mu       sync.Mutex
+	cContext bindings.WAFContext
+	closed   bool
+}
+
 // RunAddressData provides address data to the [Context.Run] method.
 // When encoding Go structs to the WAF-compatible format, fields with the `ddwaf:"ignore"` tag are
 // ignored and will not be visible to the WAF.
 //
-// v2: The Persistent/Ephemeral split has been removed. Data passed to Run is stored and persists
-// for the lifetime of the context or subcontext. Use SubContext() to scope data to a shorter lifetime.
+// Data passed to Run is stored and persists for the lifetime of the context or subcontext.
+// Use SubContext() to scope data to a shorter lifetime.
 type RunAddressData struct {
 	// Data is the address data to pass to the WAF. Data is stored and persists across multiple
 	// calls to Run until the context or subcontext is closed.
@@ -96,6 +101,10 @@ func (context *Context) isSubcontext() bool {
 	return context.cSubcontext != 0
 }
 
+func (context *Context) isClosedLocked() bool {
+	return context.root.closed || context.root.cContext == 0 || (context.isSubcontext() && context.cSubcontext == 0)
+}
+
 // SubContext creates a subcontext derived from this context.
 // Data passed to the subcontext's Run() is stored and persists across multiple calls
 // to Run on that subcontext, but does not persist in the parent context.
@@ -113,23 +122,28 @@ func (context *Context) SubContext() (*Context, error) {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
-	if context.cContext == 0 {
+	if context.isSubcontext() {
+		return nil, fmt.Errorf("cannot create subcontext from subcontext; create from root context")
+	}
+
+	context.root.mu.Lock()
+	defer context.root.mu.Unlock()
+
+	if context.isClosedLocked() {
 		return nil, waferrors.ErrContextClosed
 	}
 
 	if !context.handle.retain() {
 		return nil, fmt.Errorf("WAF handle has been released")
 	}
+	success := false
+	defer func() {
+		if !success {
+			context.handle.Close()
+		}
+	}()
 
-	// v2: Create subcontext from parent context
-	// If this is already a subcontext, we create from its parent's context
-	parentCContext := context.cContext
-	if context.isSubcontext() {
-		// Subcontexts can't create sub-subcontexts; use the root context
-		parentCContext = context.parent.cContext
-	}
-
-	cSubcontext := bindings.Lib.SubcontextInit(parentCContext)
+	cSubcontext := bindings.Lib.SubcontextInit(context.root.cContext)
 	if cSubcontext == 0 {
 		return nil, fmt.Errorf("failed to create subcontext: ddwaf_subcontext_init returned null")
 	}
@@ -148,18 +162,12 @@ func (context *Context) SubContext() (*Context, error) {
 		return nil, fmt.Errorf("failed to create subcontext timer: %w", err)
 	}
 
-	// Determine the actual parent (root context)
-	parent := context
-	if context.isSubcontext() {
-		parent = context.parent
-	}
-
+	success = true
 	return &Context{
 		Timer:       subTimer,
 		handle:      context.handle,
-		cContext:    parentCContext,
+		root:        context.root,
 		cSubcontext: cSubcontext,
-		parent:      parent,
 	}, nil
 }
 
@@ -168,11 +176,16 @@ func (context *Context) SubContext() (*Context, error) {
 // have been able to match some rules and generate events or actions before the error was reached;
 // especially when the error is [waferrors.ErrTimeout].
 func (context *Context) Run(addressData RunAddressData) (res Result, err error) {
-	if context.cContext == 0 {
-		return Result{}, waferrors.ErrContextClosed
-	}
-
 	if addressData.isEmpty() {
+		context.mutex.Lock()
+		defer context.mutex.Unlock()
+
+		context.root.mu.Lock()
+		defer context.root.mu.Unlock()
+
+		if context.isClosedLocked() {
+			return Result{}, waferrors.ErrContextClosed
+		}
 		return Result{}, nil
 	}
 
@@ -190,6 +203,16 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 		res.TimerStats = runTimer.Stats()
 	}()
 
+	context.mutex.Lock()
+	defer context.mutex.Unlock()
+
+	context.root.mu.Lock()
+	if context.isClosedLocked() {
+		context.root.mu.Unlock()
+		return Result{}, waferrors.ErrContextClosed
+	}
+	context.root.mu.Unlock()
+
 	runTimer.Start()
 	defer runTimer.Stop()
 
@@ -206,11 +229,10 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 
 	wafEncodeTimer.Stop()
 
-	// ddwaf_run cannot run concurrently, so we need to lock the context
-	context.mutex.Lock()
-	defer context.mutex.Unlock()
+	context.root.mu.Lock()
+	defer context.root.mu.Unlock()
 
-	if context.cContext == 0 || (context.parent != nil && context.cSubcontext == 0) {
+	if context.isClosedLocked() {
 		// Context or subcontext has been closed, returning an empty result...
 		return Result{}, waferrors.ErrContextClosed
 	}
@@ -263,6 +285,7 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // top level object is a nil map, but this behavior is expected since either persistent or
 // ephemeral addresses are allowed to be null one at a time. In this case, Encode will return nil,
 // which is what we need to send to ddwaf_run to signal that the address data is empty.
+// The caller must hold context.mutex.
 func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[string]any, timer timer.Timer) (*bindings.WAFObject, error) {
 	if addressData == nil {
 		return nil, nil
@@ -275,9 +298,6 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 
 	data, _ := encoder.Encode(addressData)
 	if len(encoder.truncations) > 0 {
-		context.mutex.Lock()
-		defer context.mutex.Unlock()
-
 		context.truncations = merge(context.truncations, encoder.truncations)
 	}
 
@@ -288,8 +308,8 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 	return data, nil
 }
 
-// run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
-// context appropriately around this call.
+// run executes the ddwaf_run call with the provided data on this context.
+// The caller is responsible for holding both context.mutex and context.root.mu.
 func (context *Context) run(data *bindings.WAFObject, runTimer timer.NodeTimer) (Result, error) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
@@ -301,11 +321,12 @@ func (context *Context) run(data *bindings.WAFObject, runTimer timer.NodeTimer) 
 	// The value of the timeout cannot exceed 2^55
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
 	timeout := uint64(runTimer.SumRemaining().Microseconds()) & 0x008FFFFFFFFFFFFF
+	cContext := context.root.cContext
 	var ret bindings.WAFReturnCode
 	if context.isSubcontext() {
 		ret = bindings.Lib.SubcontextEval(context.cSubcontext, data, 0, &result, timeout)
 	} else {
-		ret = bindings.Lib.ContextEval(context.cContext, data, 0, &result, timeout)
+		ret = bindings.Lib.ContextEval(cContext, data, 0, &result, timeout)
 	}
 
 	decodeTimer := runTimer.MustLeaf(DecodeTimeKey)
@@ -334,7 +355,7 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 	for _, entry := range entries {
 		key, err := entry.Key.StringValue()
 		if err != nil {
-			continue // Skip entries with non-string keys
+			return Result{}, 0, fmt.Errorf("failed to decode WAF result key: %w", err)
 		}
 
 		switch key {
@@ -362,7 +383,10 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 			if !entry.Val.IsArray() {
 				return Result{}, 0, fmt.Errorf("invalid events (expected array, got %s)", entry.Val.Type())
 			}
-			size, _ := entry.Val.ArraySize()
+			size, err := entry.Val.ArraySize()
+			if err != nil {
+				return Result{}, 0, fmt.Errorf("failed to get events array size: %w", err)
+			}
 			if size != 0 {
 				events, err := entry.Val.ArrayValue()
 				if err != nil {
@@ -374,7 +398,10 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 			if !entry.Val.IsMap() {
 				return Result{}, 0, fmt.Errorf("invalid actions (expected map, got %s)", entry.Val.Type())
 			}
-			size, _ := entry.Val.MapSize()
+			size, err := entry.Val.MapSize()
+			if err != nil {
+				return Result{}, 0, fmt.Errorf("failed to get actions map size: %w", err)
+			}
 			if size != 0 {
 				actions, err := entry.Val.MapValue()
 				if err != nil {
@@ -386,7 +413,10 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 			if !entry.Val.IsMap() {
 				return Result{}, 0, fmt.Errorf("invalid attributes (expected map, got %s)", entry.Val.Type())
 			}
-			size, _ := entry.Val.MapSize()
+			size, err := entry.Val.MapSize()
+			if err != nil {
+				return Result{}, 0, fmt.Errorf("failed to get attributes map size: %w", err)
+			}
 			if size != 0 {
 				derivatives, err := entry.Val.MapValue()
 				if err != nil {
@@ -403,24 +433,31 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 // Close disposes of the underlying context or subcontext.
 // It destroys the context, releases associated data, and decreases
 // the reference count of the [Handle] created for this [Context].
-func (context *Context) Close() *Context {
+func (context *Context) Close() {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
 	defer context.handle.Close() // Reduce the reference counter of the Handle.
 
+	context.root.mu.Lock()
+	defer context.root.mu.Unlock()
+
 	if context.isSubcontext() {
-		// Destroy subcontext only
-		bindings.Lib.SubcontextDestroy(context.cSubcontext)
+		if context.cSubcontext != 0 && !context.root.closed && context.root.cContext != 0 {
+			bindings.Lib.SubcontextDestroy(context.cSubcontext)
+		}
 		context.cSubcontext = 0
-	} else {
-		bindings.Lib.ContextDestroy(context.cContext)
+		context.pinner.Unpin()
+		return
 	}
 
-	// Root context: full cleanup
-	context.cContext = 0   // makes it easy to spot use-after-free/double-free issues
-	context.pinner.Unpin() // The pinned data is no longer needed, explicitly release
-	return nil
+	if !context.root.closed && context.root.cContext != 0 {
+		bindings.Lib.ContextDestroy(context.root.cContext)
+		context.root.cContext = 0
+		context.root.closed = true
+	}
+
+	context.pinner.Unpin()
 }
 
 // Truncations returns the truncations that occurred while encoding address data for WAF execution.

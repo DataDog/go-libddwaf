@@ -24,9 +24,9 @@ func (*WAFLib) Close() error { return nil }
 
 func (*WAFLib) GetVersion() string { return "" }
 
-// GetDefaultAllocator returns the default allocator used by the library.
+// loadDefaultAllocator returns the default allocator used by the library.
 // This is called once at load time; use DefaultAllocator() for the cached value.
-func (*WAFLib) GetDefaultAllocator() WAFAllocator { return 0 }
+func (*WAFLib) loadDefaultAllocator() WAFAllocator { return 0 }
 
 func (*WAFLib) DefaultAllocator() WAFAllocator { return 0 }
 

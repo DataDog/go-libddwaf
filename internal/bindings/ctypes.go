@@ -8,6 +8,7 @@ package bindings
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"structs"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/pin"
@@ -315,7 +316,7 @@ func (w *WAFObject) SetUint(i uint64) {
 func (w *WAFObject) SetFloat(f float64) {
 	clear(w.data[:])
 	w.setType(WAFFloatType)
-	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], unsafe.NativeToUint64(f))
+	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], math.Float64bits(f))
 }
 
 // SetString sets the receiving [WAFObject] value to the given string.
@@ -539,8 +540,7 @@ func (w *WAFObject) FloatValue() (float64, error) {
 	if !w.IsFloat() {
 		return 0, fmt.Errorf("value is not a float but %s", w.Type().String())
 	}
-	bits := binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:])
-	return *(*float64)(unsafe.Pointer(&bits)), nil
+	return math.Float64frombits(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:])), nil
 }
 
 // StringValue returns the string value of this WAFObject.
@@ -561,6 +561,9 @@ func (w *WAFObject) StringValue() (string, error) {
 			return "", nil
 		}
 		ptr := uintptr(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]))
+		if ptr == 0 {
+			return "", fmt.Errorf("nil pointer in string object with size %d", size)
+		}
 		return string(unsafe.Slice(*(**byte)(unsafe.Pointer(&ptr)), uint64(size))), nil
 
 	default:
@@ -588,6 +591,9 @@ func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 	}
 
 	ptr := uintptr(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]))
+	if ptr == 0 {
+		return nil, fmt.Errorf("nil pointer in array object with size %d", size)
+	}
 	return unsafe.Slice(*(**WAFObject)(unsafe.Pointer(&ptr)), uint64(size)), nil
 }
 
@@ -611,6 +617,9 @@ func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
 	}
 
 	ptr := uintptr(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]))
+	if ptr == 0 {
+		return nil, fmt.Errorf("nil pointer in map object with size %d", size)
+	}
 	return unsafe.Slice(*(**WAFObjectKV)(unsafe.Pointer(&ptr)), uint64(size)), nil
 }
 

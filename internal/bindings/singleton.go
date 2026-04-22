@@ -21,6 +21,7 @@ var (
 	// libddwaf's dlopen error if any. This is only safe to read after calling
 	// [Load] or having acquired [gMu].
 	gWafLoadErr error
+	wafVersion  string
 	// Protects the global variables above.
 	gMu sync.Mutex
 
@@ -60,8 +61,6 @@ func Load() (bool, error) {
 	return Lib != nil, gWafLoadErr
 }
 
-var wafVersion string
-
 // Version returns the version returned by libddwaf.
 // It relies on the dynamic loading of the library, which can fail and return
 // an empty string or the previously loaded version, if any.
@@ -89,5 +88,7 @@ func Usable() (bool, error) {
 	// need to explicitly avoid a race condition with it.
 	gMu.Lock()
 	defer gMu.Unlock()
-	return (Lib != nil || gWafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil, errors.Join(gWafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
+
+	usable := (Lib != nil || gWafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil
+	return usable, errors.Join(gWafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
 }

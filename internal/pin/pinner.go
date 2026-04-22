@@ -42,12 +42,12 @@ type ConcurrentPinner struct {
 
 func (p *ConcurrentPinner) Pin(v any) {
 	p.Lock()
+	defer p.Unlock()
 	p.Pinner.Pin(v)
-	p.Unlock()
 }
 
 func (p *ConcurrentPinner) Unpin() {
 	p.Lock()
+	defer p.Unlock()
 	p.Pinner.Unpin()
-	p.Unlock()
 }

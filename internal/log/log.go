@@ -68,9 +68,9 @@ func (l Level) String() string {
 
 const EnvVarLogLevel = "DD_APPSEC_WAF_LOG_LEVEL"
 
-// getFilter lazily initializes and returns the log filter regexp.
+// logFilter lazily initializes and returns the log filter regexp.
 // This is thread-safe and the initialization happens only once.
-var getFilter = sync.OnceValue(func() *regexp.Regexp {
+var logFilter = sync.OnceValue(func() *regexp.Regexp {
 	const envVarFilter = "DD_APPSEC_WAF_LOG_FILTER"
 
 	if val := os.Getenv(EnvVarLogLevel); val == "" {
@@ -91,7 +91,7 @@ var getFilter = sync.OnceValue(func() *regexp.Regexp {
 func logMessage(level Level, function, file string, line uint, message string) {
 	entry := fmt.Sprintf("[%s] libddwaf @ %s:%d (%s): %s", level, file, line, function, message)
 
-	if filter := getFilter(); filter != nil && !filter.MatchString(entry) {
+	if filter := logFilter(); filter != nil && !filter.MatchString(entry) {
 		return
 	}
 

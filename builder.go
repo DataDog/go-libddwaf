@@ -31,7 +31,6 @@ type Builder struct {
 // an error occurs when initializing the builder. The caller is responsible for
 // calling [Builder.Close] when the builder is no longer needed.
 //
-// v2: Builder no longer takes obfuscator configuration parameters.
 func NewBuilder() (*Builder, error) {
 	if ok, err := Load(); !ok {
 		return nil, err

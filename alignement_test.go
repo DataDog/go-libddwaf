@@ -18,20 +18,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestWafObjectSize verifies that our WAFObject struct matches the v2 16-byte size
-func TestWafObjectSize(t *testing.T) {
+// TestWAFObjectSize verifies that our WAFObject struct matches the v2 16-byte size
+func TestWAFObjectSize(t *testing.T) {
 	_, err := Load()
 	require.NoError(t, err)
 
-	// v2: WAFObject must be exactly 16 bytes
 	require.Equal(t, 16, int(unsafe.Sizeof(bindings.WAFObject{})), "WAFObject must be 16 bytes")
-
-	// v2: WAFObjectKV must be exactly 32 bytes (key + value, both 16 bytes)
 	require.Equal(t, 32, int(unsafe.Sizeof(bindings.WAFObjectKV{})), "WAFObjectKV must be 32 bytes")
 }
 
-// TestWafObjectSetAndGet tests that our Go methods correctly encode and decode values
-func TestWafObjectSetAndGet(t *testing.T) {
+// TestWAFObjectSetAndGet tests that our Go methods correctly encode and decode values
+func TestWAFObjectSetAndGet(t *testing.T) {
 	_, err := Load()
 	require.NoError(t, err)
 
@@ -49,7 +46,7 @@ func TestWafObjectSetAndGet(t *testing.T) {
 		require.Equal(t, bindings.WAFNilType, obj.Type())
 	})
 
-	t.Run("bool_true", func(t *testing.T) {
+	t.Run("bool true", func(t *testing.T) {
 		var obj bindings.WAFObject
 		obj.SetBool(true)
 		require.True(t, obj.IsBool())
@@ -59,7 +56,7 @@ func TestWafObjectSetAndGet(t *testing.T) {
 		require.True(t, val)
 	})
 
-	t.Run("bool_false", func(t *testing.T) {
+	t.Run("bool false", func(t *testing.T) {
 		var obj bindings.WAFObject
 		obj.SetBool(false)
 		require.True(t, obj.IsBool())
@@ -78,7 +75,7 @@ func TestWafObjectSetAndGet(t *testing.T) {
 		require.EqualValues(t, 42, val)
 	})
 
-	t.Run("int_negative", func(t *testing.T) {
+	t.Run("int negative", func(t *testing.T) {
 		var obj bindings.WAFObject
 		obj.SetInt(-12345)
 		require.True(t, obj.IsInt())
@@ -107,7 +104,7 @@ func TestWafObjectSetAndGet(t *testing.T) {
 		require.InDelta(t, 3.14159, val, 0.00001)
 	})
 
-	t.Run("small_string", func(t *testing.T) {
+	t.Run("small string", func(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
@@ -121,7 +118,7 @@ func TestWafObjectSetAndGet(t *testing.T) {
 		require.Equal(t, "hello", val)
 	})
 
-	t.Run("regular_string", func(t *testing.T) {
+	t.Run("regular string", func(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
@@ -136,7 +133,7 @@ func TestWafObjectSetAndGet(t *testing.T) {
 		require.Equal(t, longStr, val)
 	})
 
-	t.Run("empty_string", func(t *testing.T) {
+	t.Run("empty string", func(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
@@ -149,8 +146,8 @@ func TestWafObjectSetAndGet(t *testing.T) {
 	})
 }
 
-// TestWafObjectArrayPadding tests that arrays of WAFObjects work correctly
-func TestWafObjectArrayPadding(t *testing.T) {
+// TestWAFObjectArrayPadding tests that arrays of WAFObjects work correctly
+func TestWAFObjectArrayPadding(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
@@ -177,8 +174,8 @@ func TestWafObjectArrayPadding(t *testing.T) {
 	require.True(t, b)
 }
 
-// TestWafObjectKVPadding tests that arrays of WAFObjectKV work correctly
-func TestWafObjectKVPadding(t *testing.T) {
+// TestWAFObjectKVPadding tests that arrays of WAFObjectKV work correctly
+func TestWAFObjectKVPadding(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
@@ -209,8 +206,8 @@ func TestWafObjectKVPadding(t *testing.T) {
 	require.Equal(t, "value2", val2)
 }
 
-// TestWafObjectContainers tests array and map container functionality
-func TestWafObjectContainers(t *testing.T) {
+// TestWAFObjectContainers tests array and map container functionality
+func TestWAFObjectContainers(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 

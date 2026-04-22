@@ -7,7 +7,11 @@
 
 package bindings
 
-import "github.com/ebitengine/purego"
+import (
+	"fmt"
+
+	"github.com/ebitengine/purego"
+)
 
 type wafSymbols struct {
 	builderInit              uintptr
@@ -21,12 +25,12 @@ type wafSymbols struct {
 	knownActions             uintptr
 	getVersion               uintptr
 	contextInit              uintptr
-	contextEval              uintptr // v2: renamed from ddwaf_run
+	contextEval              uintptr
 	contextDestroy           uintptr
-	subcontextInit           uintptr // v2: new
-	subcontextEval           uintptr // v2: new
-	subcontextDestroy        uintptr // v2: new
-	objectDestroy            uintptr // v2: renamed from ddwaf_object_free
+	subcontextInit           uintptr
+	subcontextEval           uintptr
+	subcontextDestroy        uintptr
+	objectDestroy            uintptr
 	objectFromJSON           uintptr
 	getDefaultAllocator      uintptr
 	setLogCb                 uintptr
@@ -35,6 +39,14 @@ type wafSymbols struct {
 // newWafSymbols resolves the symbols of [wafSymbols] from the provided
 // [purego.Dlopen] handle.
 func newWafSymbols(handle uintptr) (syms wafSymbols, err error) {
+	resolve := func(name string) (uintptr, error) {
+		sym, err := purego.Dlsym(handle, name)
+		if err != nil {
+			return 0, fmt.Errorf("failed to resolve libddwaf symbol %q: %w", name, err)
+		}
+		return sym, nil
+	}
+
 	if syms.builderAddOrUpdateConfig, err = purego.Dlsym(handle, "ddwaf_builder_add_or_update_config"); err != nil {
 		return syms, err
 	}
@@ -59,16 +71,16 @@ func newWafSymbols(handle uintptr) (syms wafSymbols, err error) {
 	if syms.contextInit, err = purego.Dlsym(handle, "ddwaf_context_init"); err != nil {
 		return syms, err
 	}
-	if syms.contextEval, err = purego.Dlsym(handle, "ddwaf_context_eval"); err != nil {
+	if syms.contextEval, err = resolve("ddwaf_context_eval"); err != nil {
 		return syms, err
 	}
-	if syms.subcontextInit, err = purego.Dlsym(handle, "ddwaf_subcontext_init"); err != nil {
+	if syms.subcontextInit, err = resolve("ddwaf_subcontext_init"); err != nil {
 		return syms, err
 	}
-	if syms.subcontextEval, err = purego.Dlsym(handle, "ddwaf_subcontext_eval"); err != nil {
+	if syms.subcontextEval, err = resolve("ddwaf_subcontext_eval"); err != nil {
 		return syms, err
 	}
-	if syms.subcontextDestroy, err = purego.Dlsym(handle, "ddwaf_subcontext_destroy"); err != nil {
+	if syms.subcontextDestroy, err = resolve("ddwaf_subcontext_destroy"); err != nil {
 		return syms, err
 	}
 	if syms.destroy, err = purego.Dlsym(handle, "ddwaf_destroy"); err != nil {
@@ -83,13 +95,13 @@ func newWafSymbols(handle uintptr) (syms wafSymbols, err error) {
 	if syms.knownAddresses, err = purego.Dlsym(handle, "ddwaf_known_addresses"); err != nil {
 		return syms, err
 	}
-	if syms.objectDestroy, err = purego.Dlsym(handle, "ddwaf_object_destroy"); err != nil {
+	if syms.objectDestroy, err = resolve("ddwaf_object_destroy"); err != nil {
 		return syms, err
 	}
-	if syms.objectFromJSON, err = purego.Dlsym(handle, "ddwaf_object_from_json"); err != nil {
+	if syms.objectFromJSON, err = resolve("ddwaf_object_from_json"); err != nil {
 		return syms, err
 	}
-	if syms.getDefaultAllocator, err = purego.Dlsym(handle, "ddwaf_get_default_allocator"); err != nil {
+	if syms.getDefaultAllocator, err = resolve("ddwaf_get_default_allocator"); err != nil {
 		return syms, err
 	}
 	if syms.setLogCb, err = purego.Dlsym(handle, "ddwaf_set_log_cb"); err != nil {

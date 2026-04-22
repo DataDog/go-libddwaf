@@ -35,9 +35,7 @@ func testVerifyELFHeader(t *testing.T) {
 	path, closer, err := lib.DumpEmbeddedWAF()
 	require.NoError(t, err)
 
-	defer func() {
-		_ = closer()
-	}()
+	defer closer()
 
 	elfFile, err := elf.Open(path)
 	require.NoError(t, err)
@@ -62,9 +60,7 @@ func testVerifyMachOHeader(t *testing.T) {
 	path, closer, err := lib.DumpEmbeddedWAF()
 	require.NoError(t, err)
 
-	defer func() {
-		_ = closer()
-	}()
+	defer closer()
 
 	machOFile, err := macho.Open(path)
 	require.NoError(t, err)
