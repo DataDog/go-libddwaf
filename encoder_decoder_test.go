@@ -27,6 +27,7 @@ import (
 )
 
 func wafTest(t *testing.T, obj *bindings.WAFObject) {
+	t.Helper()
 	// Pass the encoded value to the WAF to make sure it doesn't return an error
 	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
 	require.NoError(t, err)
@@ -716,7 +717,6 @@ func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WAFObject
 		return
 	}
 
-	
 	var actualSize int
 	if expected._type == bindings.WAFArrayType {
 		size, _ := actual.ArraySize()
@@ -730,7 +730,6 @@ func assertEqualType(t *testing.T, expected typeTree, actual *bindings.WAFObject
 		t.Fatalf("expected len %v, got len %v", len(expected.children), actualSize)
 	}
 
-	
 	if expected._type == bindings.WAFArrayType {
 		items, _ := actual.ArrayValues()
 		for i := range expected.children {

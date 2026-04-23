@@ -12,7 +12,7 @@ import (
 	"structs"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/pin"
-	"github.com/DataDog/go-libddwaf/v5/internal/unsafe"
+	"github.com/DataDog/go-libddwaf/v5/internal/unsafeutil"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
@@ -341,7 +341,7 @@ func (w *WAFObject) SetFloat(f float64) {
 func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
 	clear(w.data[:])
 
-	header := unsafe.NativeStringUnwrap(str)
+	header := unsafeutil.NativeStringUnwrap(str)
 	length := header.Len
 
 	// Use small string optimization for strings that fit in 14 bytes
@@ -349,7 +349,7 @@ func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
 		w.setType(WAFSmallStringType)
 		w.data[wafObjectSStrSize] = byte(length)
 		if length > 0 {
-			copy(w.data[wafObjectSStrData:], unsafe.Slice((*byte)(unsafe.Pointer(header.Data)), uint64(length)))
+			copy(w.data[wafObjectSStrData:], unsafeutil.Slice((*byte)(unsafeutil.Pointer(header.Data)), uint64(length)))
 		}
 		return
 	}
@@ -357,8 +357,8 @@ func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
 	// Regular string: pin the data pointer
 	w.setType(WAFStringType)
 	binary.NativeEndian.PutUint32(w.data[wafObjectStringSizeOffset:], uint32(length))
-	pinner.Pin(unsafe.Pointer(header.Data))
-	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(unsafe.Pointer(header.Data))))
+	pinner.Pin(unsafeutil.Pointer(header.Data))
+	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(unsafeutil.Pointer(header.Data))))
 }
 
 // SetLiteralString sets the receiving [WAFObject] value to a literal string.
@@ -375,14 +375,14 @@ func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
 func (w *WAFObject) SetLiteralString(pinner pin.Pinner, str string) {
 	clear(w.data[:])
 
-	header := unsafe.NativeStringUnwrap(str)
+	header := unsafeutil.NativeStringUnwrap(str)
 	length := header.Len
 
 	w.setType(WAFLiteralStringType)
 	binary.NativeEndian.PutUint32(w.data[wafObjectStringSizeOffset:], uint32(length))
 	if length > 0 {
-		pinner.Pin(unsafe.Pointer(header.Data))
-		binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(unsafe.Pointer(header.Data))))
+		pinner.Pin(unsafeutil.Pointer(header.Data))
+		binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(unsafeutil.Pointer(header.Data))))
 	}
 }
 
@@ -409,7 +409,7 @@ func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint16) []WAFObject {
 
 	// Clamp capacity to uint16 max
 	arr := make([]WAFObject, 0, capacity)
-	ptr := unsafe.Pointer(unsafe.SliceData(arr))
+	ptr := unsafeutil.Pointer(unsafeutil.SliceData(arr))
 	pinner.Pin(ptr)
 
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], 0)
@@ -422,21 +422,25 @@ func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint16) []WAFObject {
 // SetArrayData sets the receiving [WAFObject] to the provided array items.
 //
 // C layout for array (type=0x20): see SetArray
-func (w *WAFObject) SetArrayData(pinner pin.Pinner, data []WAFObject) {
+func (w *WAFObject) SetArrayData(pinner pin.Pinner, data []WAFObject) error {
 	clear(w.data[:])
 	w.setType(WAFArrayType)
 
 	length := len(data)
 	if length == 0 {
-		return
+		return nil
+	}
+	if length > math.MaxUint16 || cap(data) > math.MaxUint16 {
+		return fmt.Errorf("array too large for WAFObject: len=%d cap=%d (max %d)", length, cap(data), math.MaxUint16)
 	}
 
-	ptr := unsafe.Pointer(unsafe.SliceData(data))
+	ptr := unsafeutil.Pointer(unsafeutil.SliceData(data))
 	pinner.Pin(ptr)
 
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], uint16(length))
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(cap(data)))
 	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
+	return nil
 }
 
 // SetArraySize updates the size field of an array object.
@@ -471,7 +475,7 @@ func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint16) []WAFObjectKV {
 	}
 
 	kvs := make([]WAFObjectKV, 0, capacity)
-	ptr := unsafe.Pointer(unsafe.SliceData(kvs))
+	ptr := unsafeutil.Pointer(unsafeutil.SliceData(kvs))
 	pinner.Pin(ptr)
 
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], 0)
@@ -484,21 +488,25 @@ func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint16) []WAFObjectKV {
 // SetMapData sets the receiving [WAFObject] to the provided map items.
 //
 // C layout for map (type=0x40): see SetMap
-func (w *WAFObject) SetMapData(pinner pin.Pinner, data []WAFObjectKV) {
+func (w *WAFObject) SetMapData(pinner pin.Pinner, data []WAFObjectKV) error {
 	clear(w.data[:])
 	w.setType(WAFMapType)
 
 	length := len(data)
 	if length == 0 {
-		return
+		return nil
+	}
+	if length > math.MaxUint16 || cap(data) > math.MaxUint16 {
+		return fmt.Errorf("map too large for WAFObject: len=%d cap=%d (max %d)", length, cap(data), math.MaxUint16)
 	}
 
-	ptr := unsafe.Pointer(unsafe.SliceData(data))
+	ptr := unsafeutil.Pointer(unsafeutil.SliceData(data))
 	pinner.Pin(ptr)
 
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], uint16(length))
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(cap(data)))
 	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
+	return nil
 }
 
 // SetMapSize updates the size field of a map object.
@@ -564,7 +572,7 @@ func (w *WAFObject) StringValue() (string, error) {
 		if ptr == 0 {
 			return "", fmt.Errorf("nil pointer in string object with size %d", size)
 		}
-		return string(unsafe.Slice(*(**byte)(unsafe.Pointer(&ptr)), uint64(size))), nil
+		return string(unsafeutil.Slice(*(**byte)(unsafeutil.Pointer(&ptr)), uint64(size))), nil
 
 	default:
 		return "", fmt.Errorf("value is not a string but %s", t.String())
@@ -594,7 +602,7 @@ func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 	if ptr == 0 {
 		return nil, fmt.Errorf("nil pointer in array object with size %d", size)
 	}
-	return unsafe.Slice(*(**WAFObject)(unsafe.Pointer(&ptr)), uint64(size)), nil
+	return unsafeutil.Slice(*(**WAFObject)(unsafeutil.Pointer(&ptr)), uint64(size)), nil
 }
 
 // MapSize returns the number of entries in a map.
@@ -620,7 +628,7 @@ func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
 	if ptr == 0 {
 		return nil, fmt.Errorf("nil pointer in map object with size %d", size)
 	}
-	return unsafe.Slice(*(**WAFObjectKV)(unsafe.Pointer(&ptr)), uint64(size)), nil
+	return unsafeutil.Slice(*(**WAFObjectKV)(unsafeutil.Pointer(&ptr)), uint64(size)), nil
 }
 
 // ArrayValue returns the array as a slice of any values (recursive conversion) making a copy of the whole.

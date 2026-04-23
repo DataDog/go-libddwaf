@@ -29,6 +29,10 @@ func TestCaptureWorkerErrorConvertsPanicToError(t *testing.T) {
 func captureWorkerError(fn func() error) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
+			if recoveredErr, ok := recovered.(error); ok {
+				err = fmt.Errorf("worker panic: %w", recoveredErr)
+				return
+			}
 			err = fmt.Errorf("worker panic: %v", recovered)
 		}
 	}()

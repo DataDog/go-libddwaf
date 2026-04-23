@@ -22,7 +22,7 @@ func newWAFLib() (*WAFLib, error) {
 
 func (*WAFLib) Close() error { return nil }
 
-func (*WAFLib) GetVersion() string { return "" }
+func (*WAFLib) Version() string { return "" }
 
 // loadDefaultAllocator returns the default allocator used by the library.
 // This is called once at load time; use DefaultAllocator() for the cached value.
@@ -40,7 +40,7 @@ func (*WAFLib) BuilderRemoveConfig(WAFBuilder, string) bool { return false }
 
 func (*WAFLib) BuilderBuildInstance(WAFBuilder) WAFHandle { return 0 }
 
-func (*WAFLib) BuilderGetConfigPaths(WAFBuilder, string) []string { return nil }
+func (*WAFLib) BuilderGetConfigPaths(WAFBuilder, string) ([]string, error) { return nil, nil }
 
 func (*WAFLib) BuilderDestroy(WAFBuilder) {}
 

@@ -699,7 +699,7 @@ func TestSubContext(t *testing.T) {
 
 		// Creating subcontext from closed context should fail
 		subCtx, err := ctx.SubContext()
-		require.Error(t, err)
+		require.ErrorIs(t, err, waferrors.ErrContextClosed)
 		require.Nil(t, subCtx)
 	})
 
@@ -711,12 +711,15 @@ func TestSubContext(t *testing.T) {
 		// Create multiple subcontexts
 		subCtx1, err := ctx.SubContext()
 		require.NoError(t, err)
+		t.Cleanup(func() { subCtx1.Close() })
 
 		subCtx2, err := ctx.SubContext()
 		require.NoError(t, err)
+		t.Cleanup(func() { subCtx2.Close() })
 
 		subCtx3, err := ctx.SubContext()
 		require.NoError(t, err)
+		t.Cleanup(func() { subCtx3.Close() })
 
 		// All should work independently
 		res1, err := subCtx1.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni-1"}})
@@ -731,9 +734,6 @@ func TestSubContext(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, res3.Events, 1)
 
-		subCtx1.Close()
-		subCtx2.Close()
-		subCtx3.Close()
 	})
 
 	t.Run("subcontext-data-isolation", func(t *testing.T) {
@@ -754,12 +754,12 @@ func TestSubContext(t *testing.T) {
 		// New subcontext should still match (data didn't persist)
 		subCtx2, err := ctx.SubContext()
 		require.NoError(t, err)
+		t.Cleanup(func() { subCtx2.Close() })
 
 		res2, err := subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
 		require.NoError(t, err)
 		require.Len(t, res2.Events, 1) // Still matches because subcontext data is isolated
 
-		subCtx2.Close()
 	})
 
 	t.Run("subcontext-close-then-run-returns-error", func(t *testing.T) {
@@ -790,7 +790,7 @@ func TestSubContext(t *testing.T) {
 
 		// Running on closed subcontext should fail
 		res, err := subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "test"}})
-		require.Error(t, err)
+		require.ErrorIs(t, err, waferrors.ErrContextClosed)
 		require.Empty(t, res.Events)
 	})
 }
@@ -848,381 +848,336 @@ func TestKnownActions(t *testing.T) {
 	require.Equal(t, []string{"block_request"}, waf.Actions())
 }
 
-func TestConcurrency(t *testing.T) {
+func TestConcurrentWAFContextUsage(t *testing.T) {
+	const (
+		nbUsers = 200
+		nbRun   = 500
+	)
 
-	// Start 200 goroutines that will use the WAF 500 times each
-	nbUsers := 200
-	nbRun := 500
+	waf, _, err := newDefaultHandle(testArachniRule)
+	require.NoError(t, err)
+	defer waf.Close()
+	errCh := make(chan error, nbUsers)
 
-	t.Run("concurrent-waf-context-usage", func(t *testing.T) {
-		waf, _, err := newDefaultHandle(testArachniRule)
-		require.NoError(t, err)
-		defer waf.Close()
-		errCh := make(chan error, nbUsers)
+	wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+	defer wafCtx.Close()
 
-		wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
-		require.NoError(t, err)
-		defer wafCtx.Close()
+	userAgents := [...]string{"Foo", "Bar", "Datadog"}
+	length := len(userAgents)
 
-		// User agents that won't match the rule so that it doesn't get pruned.
-		// Said otherwise, the User-Agent rule will run as long as it doesn't match, otherwise it gets ignored.
-		// This is the reason why the following user agent are not Arachni.
-		userAgents := [...]string{"Foo", "Bar", "Datadog"}
-		length := len(userAgents)
+	var startBarrier, stopBarrier sync.WaitGroup
+	startBarrier.Add(1)
+	stopBarrier.Add(nbUsers)
 
-		var startBarrier, stopBarrier sync.WaitGroup
-		// Create a start barrier to synchronize every goroutine's launch and
-		// increase the chances of parallel accesses
-		startBarrier.Add(1)
-		// Create a stopBarrier to signal when all user goroutines are done.
-		stopBarrier.Add(nbUsers)
-
-		for range nbUsers {
-			go func() {
-				startBarrier.Wait()      // Sync the starts of the goroutines
-				defer stopBarrier.Done() // Signal we are done when returning
-
-				if err := captureWorkerError(func() error {
-					for c := range nbRun {
-						i := c % length
-						data := map[string]any{
-							"server.request.headers.no_cookies": map[string]string{
-								"user-agent": userAgents[i],
-							},
-						}
-						res, err := wafCtx.Run(RunAddressData{Data: data})
-						if err != nil {
-							return err
-						}
-						if len(res.Events) > 0 {
-							return fmt.Errorf("c=%d events=`%v`", c, res.Events)
-						}
-					}
-					return nil
-				}); err != nil {
-					errCh <- err
-				}
-			}()
-		}
-
-		// Save the test start time to compare it to the first metricsStore store's
-		// that should be latter.
-		startBarrier.Done() // Unblock the user goroutines
-		stopBarrier.Wait()  // Wait for the user goroutines to be done
-
-		// Test the rule matches Arachni in the end
-		data := map[string]any{
-			"server.request.headers.no_cookies": map[string]string{
-				"user-agent": "Arachni",
-			},
-		}
-		res, err := wafCtx.Run(RunAddressData{Data: data})
-		require.NoError(t, err)
-		require.NotEmpty(t, res.Events)
-		close(errCh)
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	})
-
-	t.Run("concurrent-waf-instance-usage", func(t *testing.T) {
-		waf, _, err := newDefaultHandle(testArachniRule)
-		require.NoError(t, err)
-		defer waf.Close()
-		errCh := make(chan error, nbUsers)
-
-		// User agents that won't match the rule so that it doesn't get pruned.
-		// Said otherwise, the User-Agent rule will run as long as it doesn't match, otherwise it gets ignored.
-		// This is the reason why the following user agent are not Arachni.
-		userAgents := [...]string{"Foo", "Bar", "Datadog"}
-		length := len(userAgents)
-
-		var startBarrier, stopBarrier sync.WaitGroup
-		// Create a start barrier to synchronize every goroutine's launch and
-		// increase the chances of parallel accesses
-		startBarrier.Add(1)
-		// Create a stopBarrier to signal when all user goroutines are done.
-		stopBarrier.Add(nbUsers)
-
-		for range nbUsers {
-			go func() {
-				startBarrier.Wait()      // Sync the starts of the goroutines
-				defer stopBarrier.Done() // Signal we are done when returning
-
-				wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
-				if err != nil {
-					errCh <- fmt.Errorf("NewContext failed: %w", err)
-					return
-				}
-				defer wafCtx.Close()
-
-				if err := captureWorkerError(func() error {
-					for c := range nbRun {
-						i := c % length
-						data := map[string]any{
-							"server.request.headers.no_cookies": map[string]string{
-								"user-agent": userAgents[i],
-							},
-						}
-						res, err := wafCtx.Run(RunAddressData{Data: data})
-						if err != nil {
-							return err
-						}
-						if len(res.Events) > 0 {
-							return fmt.Errorf("c=%d events=`%v`", c, res.Events)
-						}
-					}
-
-					// Test the rule matches Arachni in the end
-					data := map[string]any{
-						"server.request.headers.no_cookies": map[string]string{
-							"user-agent": "Arachni",
-						},
-					}
-					res, err := wafCtx.Run(RunAddressData{Data: data})
-					if err != nil {
-						return fmt.Errorf("Run failed: %w", err)
-					}
-					if len(res.Events) == 0 {
-						return fmt.Errorf("expected events after final run")
-					}
-					if res.Actions != nil {
-						return fmt.Errorf("expected nil actions, got %v", res.Actions)
-					}
-					return nil
-				}); err != nil {
-					errCh <- err
-				}
-			}()
-		}
-
-		// Save the test start time to compare it to the first metricsStore store's
-		// that should be latter.
-		startBarrier.Done() // Unblock the user goroutines
-		stopBarrier.Wait()  // Wait for the user goroutines to be done
-		close(errCh)
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	})
-
-	t.Run("concurrent-waf-subcontext-usage", func(t *testing.T) {
-		waf, _, err := newDefaultHandle(testArachniRule)
-		require.NoError(t, err)
-		defer waf.Close()
-		errCh := make(chan error, nbUsers)
-
-		// User agents that won't match the rule so that it doesn't get pruned.
-		// Said otherwise, the User-Agent rule will run as long as it doesn't match, otherwise it gets ignored.
-		// This is the reason why the following user agent are not Arachni.
-		userAgents := [...]string{"Foo", "Bar", "Datadog"}
-		length := len(userAgents)
-
-		var startBarrier, stopBarrier sync.WaitGroup
-		// Create a start barrier to synchronize every goroutine's launch and
-		// increase the chances of parallel accesses
-		startBarrier.Add(1)
-		// Create a stopBarrier to signal when all user goroutines are done.
-		stopBarrier.Add(nbUsers)
-
-		for range nbUsers {
-			go func() {
-				startBarrier.Wait()      // Sync the starts of the goroutines
-				defer stopBarrier.Done() // Signal we are done when returning
-
-				wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
-				if err != nil {
-					errCh <- fmt.Errorf("NewContext failed: %w", err)
-					return
-				}
-				defer wafCtx.Close()
-
-				wafSubCtx, err := wafCtx.SubContext()
-				if err != nil {
-					errCh <- fmt.Errorf("SubContext failed: %w", err)
-					return
-				}
-				defer wafSubCtx.Close()
-
-				if err := captureWorkerError(func() error {
-					for c := range nbRun {
-						i := c % length
-						data := map[string]any{
-							"server.request.headers.no_cookies": map[string]string{
-								"user-agent": userAgents[i],
-							},
-						}
-
-						res, err := wafSubCtx.Run(RunAddressData{Data: data})
-						if err != nil {
-							return err
-						}
-						if len(res.Events) > 0 {
-							return fmt.Errorf("c=%d events=`%v`", c, res.Events)
-						}
-					}
-
-					// Test the rule matches Arachni in the end
-					data := map[string]any{
-						"server.request.headers.no_cookies": map[string]string{
-							"user-agent": "Arachni",
-						},
-					}
-					res, err := wafSubCtx.Run(RunAddressData{Data: data})
-					if err != nil {
-						return fmt.Errorf("SubContext Run failed: %w", err)
-					}
-					if len(res.Events) == 0 {
-						return fmt.Errorf("expected events after final subcontext run")
-					}
-					if res.Actions != nil {
-						return fmt.Errorf("expected nil actions, got %v", res.Actions)
-					}
-					return nil
-				}); err != nil {
-					errCh <- err
-				}
-			}()
-		}
-
-		// Save the test start time to compare it to the first metricsStore store's
-		// that should be latter.
-		startBarrier.Done() // Unblock the user goroutines
-		stopBarrier.Wait()  // Wait for the user goroutines to be done
-		close(errCh)
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	})
-
-	t.Run("concurrent-waf-handle-close", func(t *testing.T) {
-		// Test that the reference counter of a WAF handle is properly
-		// implemented by running many WAF context creations/deletion
-		// concurrently with their WAF handle closing.
-		// This test's execution order is not deterministic and simply tries to
-		// maximize the chances to highlight ref-counter problems, in particular
-		// the special ref-counter case where the WAF handle gets completely
-		// released when it reaches 0.
-		waf, _, err := newDefaultHandle(testArachniRule)
-		require.NoError(t, err)
-
-		var startBarrier, stopBarrier sync.WaitGroup
-		// Create a start barrier to synchronize every goroutine's launch and
-		// increase the chances of parallel accesses
-		startBarrier.Add(1)
-		// Create a stopBarrier to signal when all user goroutines are done.
-		stopBarrier.Add(nbUsers + 1) // +1 is the goroutine closing the WAF handle
-
-		// Goroutines concurrently creating and destroying WAF contexts so that
-		// the WAF handle ref-counter gets stressed out.
-		for range nbUsers {
-			go func() {
-				startBarrier.Wait()      // Sync the starts of the goroutines
-				defer stopBarrier.Done() // Signal we are done when returning
-
-				wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
-				if wafCtx == nil || err != nil {
-					return
-				}
-				wafCtx.Close()
-			}()
-		}
-
-		// Single goroutine closing the WAF handle
-		go func() {
-			startBarrier.Wait()      // Sync the starts of the goroutines
-			defer stopBarrier.Done() // Signal we are done when returning
-			time.Sleep(time.Microsecond)
-			waf.Close()
-		}()
-
-		// Save the test start time to compare it to the first metricsStore store's
-		// that should be latter.
-		startBarrier.Done() // Unblock the user goroutines
-		stopBarrier.Wait()  // Wait for the user goroutines to be done
-
-		// The test mustn't crash and ref-counter must be 0
-		require.Zero(t, waf.refCounter.Load())
-	})
-
-	t.Run("concurrent-context-use-destroy", func(t *testing.T) {
-		// This test validates that the WAF Context can be used from multiple
-		// threads, with mixed calls to `ddwaf_run` and `ddwaf_context_destroy`,
-		// which are not thread-safe.
-		waf, _, err := newDefaultHandle(testArachniRule)
-		require.NoError(t, err)
-
-		wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
-		require.NoError(t, err)
-		require.NotNil(t, wafCtx)
-		errCh := make(chan error, nbUsers)
-
-		var startBarrier, stopBarrier sync.WaitGroup
-		startBarrier.Add(1)
-		stopBarrier.Add(nbUsers + 1)
-
-		data := map[string]any{
-			"server.request.headers.no_cookies": map[string][]string{
-				"user-agent": {"Arachni/test"},
-			},
-		}
-
-		for n := range nbUsers {
-			go func() {
-				startBarrier.Wait()
-				defer stopBarrier.Done()
-
-				// A microsecond sleep gives us some scheduler-backed order of execution randomization
-				time.Sleep(time.Microsecond)
-
-				// Half of these goroutines will try to use wafCtx.Run(...), while the other half will try
-				// to use wafCtx.Close(). The expected outcome is that exactly one call to wafCtx.Close()
-				// effectively releases the WAF context, and between 0 and N calls to wafCtx.Run(...) are
-				// done (those that land after `wafCtx.Close()` happened will be silent no-ops).
-				if n%2 == 0 {
-					// Use SubContext for ephemeral data
-					subCtx, err := wafCtx.SubContext()
-					if err != nil {
-						if !errors.Is(err, waferrors.ErrContextClosed) {
-							errCh <- fmt.Errorf("SubContext failed with unexpected error: %w", err)
-						}
-						return
-					}
-					_, err = subCtx.Run(RunAddressData{Data: data})
-					if err != nil {
-						if !errors.Is(err, waferrors.ErrContextClosed) {
-							errCh <- fmt.Errorf("Run failed with unexpected error: %w", err)
-						}
-					}
-					subCtx.Close()
-				} else {
-					wafCtx.Close()
-				}
-			}()
-		}
-
+	for range nbUsers {
 		go func() {
 			startBarrier.Wait()
 			defer stopBarrier.Done()
 
-			// A microsecond sleep gives us some scheduler-backed order of execution randomization
+			if err := captureWorkerError(func() error {
+				for c := range nbRun {
+					i := c % length
+					data := map[string]any{
+						"server.request.headers.no_cookies": map[string]string{
+							"user-agent": userAgents[i],
+						},
+					}
+					res, err := wafCtx.Run(RunAddressData{Data: data})
+					if err != nil {
+						return err
+					}
+					if len(res.Events) > 0 {
+						return fmt.Errorf("c=%d events=`%v`", c, res.Events)
+					}
+				}
+				return nil
+			}); err != nil {
+				errCh <- err
+			}
+		}()
+	}
+
+	startBarrier.Done()
+	stopBarrier.Wait()
+
+	data := map[string]any{
+		"server.request.headers.no_cookies": map[string]string{
+			"user-agent": "Arachni",
+		},
+	}
+	res, err := wafCtx.Run(RunAddressData{Data: data})
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Events)
+	close(errCh)
+	for err := range errCh {
+		require.NoError(t, err)
+	}
+}
+
+func TestConcurrentWAFInstanceUsage(t *testing.T) {
+	const (
+		nbUsers = 200
+		nbRun   = 500
+	)
+
+	waf, _, err := newDefaultHandle(testArachniRule)
+	require.NoError(t, err)
+	defer waf.Close()
+	errCh := make(chan error, nbUsers)
+
+	userAgents := [...]string{"Foo", "Bar", "Datadog"}
+	length := len(userAgents)
+
+	var startBarrier, stopBarrier sync.WaitGroup
+	startBarrier.Add(1)
+	stopBarrier.Add(nbUsers)
+
+	for range nbUsers {
+		go func() {
+			startBarrier.Wait()
+			defer stopBarrier.Done()
+
+			wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+			if err != nil {
+				errCh <- fmt.Errorf("NewContext failed: %w", err)
+				return
+			}
+			defer wafCtx.Close()
+
+			if err := captureWorkerError(func() error {
+				for c := range nbRun {
+					i := c % length
+					data := map[string]any{
+						"server.request.headers.no_cookies": map[string]string{
+							"user-agent": userAgents[i],
+						},
+					}
+					res, err := wafCtx.Run(RunAddressData{Data: data})
+					if err != nil {
+						return err
+					}
+					if len(res.Events) > 0 {
+						return fmt.Errorf("c=%d events=`%v`", c, res.Events)
+					}
+				}
+
+				data := map[string]any{
+					"server.request.headers.no_cookies": map[string]string{
+						"user-agent": "Arachni",
+					},
+				}
+				res, err := wafCtx.Run(RunAddressData{Data: data})
+				if err != nil {
+					return fmt.Errorf("Run failed: %w", err)
+				}
+				if len(res.Events) == 0 {
+					return fmt.Errorf("expected events after final run")
+				}
+				if res.Actions != nil {
+					return fmt.Errorf("expected nil actions, got %v", res.Actions)
+				}
+				return nil
+			}); err != nil {
+				errCh <- err
+			}
+		}()
+	}
+
+	startBarrier.Done()
+	stopBarrier.Wait()
+	close(errCh)
+	for err := range errCh {
+		require.NoError(t, err)
+	}
+}
+
+func TestConcurrentWAFSubcontextUsage(t *testing.T) {
+	const (
+		nbUsers = 200
+		nbRun   = 500
+	)
+
+	waf, _, err := newDefaultHandle(testArachniRule)
+	require.NoError(t, err)
+	defer waf.Close()
+	errCh := make(chan error, nbUsers)
+
+	userAgents := [...]string{"Foo", "Bar", "Datadog"}
+	length := len(userAgents)
+
+	var startBarrier, stopBarrier sync.WaitGroup
+	startBarrier.Add(1)
+	stopBarrier.Add(nbUsers)
+
+	for range nbUsers {
+		go func() {
+			startBarrier.Wait()
+			defer stopBarrier.Done()
+
+			wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+			if err != nil {
+				errCh <- fmt.Errorf("NewContext failed: %w", err)
+				return
+			}
+			defer wafCtx.Close()
+
+			wafSubCtx, err := wafCtx.SubContext()
+			if err != nil {
+				errCh <- fmt.Errorf("SubContext failed: %w", err)
+				return
+			}
+			defer wafSubCtx.Close()
+
+			if err := captureWorkerError(func() error {
+				for c := range nbRun {
+					i := c % length
+					data := map[string]any{
+						"server.request.headers.no_cookies": map[string]string{
+							"user-agent": userAgents[i],
+						},
+					}
+
+					res, err := wafSubCtx.Run(RunAddressData{Data: data})
+					if err != nil {
+						return err
+					}
+					if len(res.Events) > 0 {
+						return fmt.Errorf("c=%d events=`%v`", c, res.Events)
+					}
+				}
+
+				data := map[string]any{
+					"server.request.headers.no_cookies": map[string]string{
+						"user-agent": "Arachni",
+					},
+				}
+				res, err := wafSubCtx.Run(RunAddressData{Data: data})
+				if err != nil {
+					return fmt.Errorf("SubContext Run failed: %w", err)
+				}
+				if len(res.Events) == 0 {
+					return fmt.Errorf("expected events after final subcontext run")
+				}
+				if res.Actions != nil {
+					return fmt.Errorf("expected nil actions, got %v", res.Actions)
+				}
+				return nil
+			}); err != nil {
+				errCh <- err
+			}
+		}()
+	}
+
+	startBarrier.Done()
+	stopBarrier.Wait()
+	close(errCh)
+	for err := range errCh {
+		require.NoError(t, err)
+	}
+}
+
+func TestConcurrentWAFHandleClose(t *testing.T) {
+	const nbUsers = 200
+
+	waf, _, err := newDefaultHandle(testArachniRule)
+	require.NoError(t, err)
+
+	var startBarrier, stopBarrier sync.WaitGroup
+	startBarrier.Add(1)
+	stopBarrier.Add(nbUsers + 1)
+
+	for range nbUsers {
+		go func() {
+			startBarrier.Wait()
+			defer stopBarrier.Done()
+
+			wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+			if wafCtx == nil || err != nil {
+				return
+			}
+			wafCtx.Close()
+		}()
+	}
+
+	go func() {
+		startBarrier.Wait()
+		defer stopBarrier.Done()
+		time.Sleep(time.Microsecond)
+		waf.Close()
+	}()
+
+	startBarrier.Done()
+	stopBarrier.Wait()
+
+	require.Zero(t, waf.refCounter.Load())
+}
+
+func TestConcurrentContextUseDestroy(t *testing.T) {
+	const nbUsers = 200
+
+	waf, _, err := newDefaultHandle(testArachniRule)
+	require.NoError(t, err)
+
+	wafCtx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+	require.NotNil(t, wafCtx)
+	errCh := make(chan error, nbUsers)
+
+	var startBarrier, stopBarrier sync.WaitGroup
+	startBarrier.Add(1)
+	stopBarrier.Add(nbUsers + 1)
+
+	data := map[string]any{
+		"server.request.headers.no_cookies": map[string][]string{
+			"user-agent": {"Arachni/test"},
+		},
+	}
+
+	for n := range nbUsers {
+		go func(n int) {
+			startBarrier.Wait()
+			defer stopBarrier.Done()
+
 			time.Sleep(time.Microsecond)
 
-			// We also asynchronously release the WAF handle, which is fine to do as the WAF context is
-			// still in use, as the WAF handle has a reference counter guarding it's destruction.
-			waf.Close()
-		}()
+			if n%2 == 0 {
+				subCtx, err := wafCtx.SubContext()
+				if err != nil {
+					if !errors.Is(err, waferrors.ErrContextClosed) {
+						errCh <- fmt.Errorf("SubContext failed with unexpected error: %w", err)
+					}
+					return
+				}
+				defer subCtx.Close()
 
-		startBarrier.Done()
-		stopBarrier.Wait()
-		close(errCh)
-		for err := range errCh {
-			require.NoError(t, err)
-		}
+				_, err = subCtx.Run(RunAddressData{Data: data})
+				if err != nil && !errors.Is(err, waferrors.ErrContextClosed) {
+					errCh <- fmt.Errorf("Run failed with unexpected error: %w", err)
+				}
+				return
+			}
 
-		// Verify the WAF Handle was properly released.
-		require.Zero(t, waf.refCounter.Load())
-	})
+			wafCtx.Close()
+		}(n)
+	}
+
+	go func() {
+		startBarrier.Wait()
+		defer stopBarrier.Done()
+
+		time.Sleep(time.Microsecond)
+		waf.Close()
+	}()
+
+	startBarrier.Done()
+	stopBarrier.Wait()
+	close(errCh)
+	for err := range errCh {
+		require.NoError(t, err)
+	}
+
+	require.Zero(t, waf.refCounter.Load())
 }
 
 func TestRunError(t *testing.T) {
@@ -1261,7 +1216,7 @@ func TestRunError(t *testing.T) {
 	}
 }
 
-func TestUnwrapWafResult_TimeoutFromResultMap(t *testing.T) {
+func TestUnwrapWafResultTimeoutFromResultMap(t *testing.T) {
 	t.Run("timeout-true-returns-ErrTimeout", func(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()

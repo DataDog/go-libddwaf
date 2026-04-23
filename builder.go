@@ -33,7 +33,10 @@ type Builder struct {
 //
 func NewBuilder() (*Builder, error) {
 	if ok, err := Load(); !ok {
-		return nil, err
+		if err != nil {
+			return nil, fmt.Errorf("failed to load WAF library while creating builder: %w", err)
+		}
+		return nil, errors.New("failed to load WAF library while creating builder")
 	}
 
 	hdl := bindings.Lib.BuilderInit()
@@ -151,9 +154,9 @@ func (b *Builder) RemoveConfig(path string) bool {
 }
 
 // ConfigPaths returns the list of currently loaded configuration paths.
-func (b *Builder) ConfigPaths(filter string) []string {
+func (b *Builder) ConfigPaths(filter string) ([]string, error) {
 	if b == nil || b.handle == 0 {
-		return nil
+		return nil, errBuilderClosed
 	}
 
 	return bindings.Lib.BuilderGetConfigPaths(b.handle, filter)

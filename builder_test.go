@@ -21,6 +21,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func requireConfigPaths(t *testing.T, b *Builder, filter string, expected []string) {
+	t.Helper()
+	paths, err := b.ConfigPaths(filter)
+	require.NoError(t, err)
+	require.Equal(t, expected, paths)
+}
+
 func TestBuilder(t *testing.T) {
 	if supported, err := Usable(); !supported || err != nil {
 		t.Skipf("target is not supported by the WAF: %v", err)
@@ -53,7 +60,7 @@ func TestBuilder(t *testing.T) {
 		defer builder.Close()
 
 		// The config is currently empty...
-		require.Equal(t, []string{}, builder.ConfigPaths(""))
+		requireConfigPaths(t, builder, "", []string{})
 		handle := builder.Build()
 		require.Nil(t, handle)
 
@@ -64,14 +71,14 @@ func TestBuilder(t *testing.T) {
 		assert.NotEmpty(t, diag.Rules.Loaded)
 
 		// The default recommended ruleset is now indeed in there...
-		require.Equal(t, []string{defaultRecommendedRulesetPath}, builder.ConfigPaths(""))
+		requireConfigPaths(t, builder, "", []string{defaultRecommendedRulesetPath})
 
 		// Adding again is idempotent...
 		diag, err = builder.AddDefaultRecommendedRuleset()
 		require.NoError(t, err)
 		assert.NotEmpty(t, diag.Version)
 		assert.NotEmpty(t, diag.Rules.Loaded)
-		require.Equal(t, []string{defaultRecommendedRulesetPath}, builder.ConfigPaths(""))
+		requireConfigPaths(t, builder, "", []string{defaultRecommendedRulesetPath})
 
 		// We can actually build a handle with the default recommended ruleset...
 		hdl := builder.Build()
@@ -80,13 +87,13 @@ func TestBuilder(t *testing.T) {
 
 		// And we can remove it...
 		require.True(t, builder.RemoveDefaultRecommendedRuleset())
-		require.Equal(t, []string{}, builder.ConfigPaths(""))
+		requireConfigPaths(t, builder, "", []string{})
 		hdl = builder.Build()
 		require.Nil(t, hdl)
 
 		// Removing it again is "idempotent" (almost, it returns false)
 		require.False(t, builder.RemoveDefaultRecommendedRuleset())
-		require.Equal(t, []string{}, builder.ConfigPaths(""))
+		requireConfigPaths(t, builder, "", []string{})
 
 		// Finally, we can add the default recommended ruleset again after deleting it...
 		diag, err = builder.AddDefaultRecommendedRuleset()
@@ -105,7 +112,7 @@ func TestBuilder(t *testing.T) {
 		defer builder.Close()
 
 		// The config is currently empty...
-		require.Equal(t, []string{}, builder.ConfigPaths(""))
+		requireConfigPaths(t, builder, "", []string{})
 		handle := builder.Build()
 		require.Nil(t, handle)
 
@@ -118,7 +125,7 @@ func TestBuilder(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, Diagnostics{Rules: &Feature{Loaded: []string{"ua0-600-12x"}}}, diag)
 
-		require.Equal(t, []string{"test/config"}, builder.ConfigPaths(""))
+		requireConfigPaths(t, builder, "", []string{"test/config"})
 		handle = builder.Build()
 		require.NotNil(t, handle)
 		defer handle.Close()

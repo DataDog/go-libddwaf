@@ -55,7 +55,7 @@ func Load() (bool, error) {
 		if gWafLoadErr != nil {
 			return
 		}
-		wafVersion = Lib.GetVersion()
+		wafVersion = Lib.Version()
 	})
 
 	return Lib != nil, gWafLoadErr

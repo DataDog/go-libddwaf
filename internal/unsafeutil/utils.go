@@ -3,7 +3,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-package unsafe
+// Package unsafeutil provides helpers for unsafe pointer operations at the FFI boundary.
+// All functions in this package bypass Go's type system and must be used with care.
+package unsafeutil
 
 import (
 	"runtime"
@@ -75,21 +77,21 @@ func CastNative[N Native, T Native](ptr *N) *T {
 	return (*T)(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)))
 }
 
-// NativeToUintptr is a helper used by populate WafObject values
-// with Go values
-func NativeToUintptr[T any](x T) uintptr {
+// NativeToUintptr reinterprets a scalar native value as a uintptr.
+// Used to populate WAFObject values with Go values.
+func NativeToUintptr[T Native](x T) uintptr {
 	return *(*uintptr)(unsafe.Pointer(&x))
 }
 
-// NativeToUint64 converts a native value to uint64 via reinterpretation.
+// NativeToUint64 reinterprets a scalar native value as uint64.
 // Useful for encoding float64 values into WAFObject data.
-func NativeToUint64[T any](x T) uint64 {
+func NativeToUint64[T Native](x T) uint64 {
 	return *(*uint64)(unsafe.Pointer(&x))
 }
 
-// UintToNative is a helper used retrieve Go values from an uintptr encoded
-// value from a WafObject
-func UintptrToNative[T any](x uintptr) T {
+// UintptrToNative reinterprets a uintptr as a scalar native value.
+// Used to retrieve Go values from a WAFObject.
+func UintptrToNative[T Native](x uintptr) T {
 	return *(*T)(unsafe.Pointer(&x))
 }
 

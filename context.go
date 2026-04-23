@@ -153,13 +153,26 @@ func (context *Context) SubContext() (*Context, error) {
 		return nil, fmt.Errorf("failed to create subcontext: ddwaf_subcontext_init returned null")
 	}
 
-	// Inherit timer from parent
+	parentStats := context.Timer.Stats()
+	components := make([]timer.Key, 0, len(parentStats))
+	for k := range parentStats {
+		components = append(components, k)
+	}
+	hasKey := func(keys []timer.Key, key timer.Key) bool {
+		for _, k := range keys {
+			if k == key {
+				return true
+			}
+		}
+		return false
+	}
+	for _, key := range []timer.Key{EncodeTimeKey, DurationTimeKey, DecodeTimeKey} {
+		if !hasKey(components, key) {
+			components = append(components, key)
+		}
+	}
 	subTimer, err := timer.NewTreeTimer(
-		timer.WithComponents(
-			EncodeTimeKey,
-			DurationTimeKey,
-			DecodeTimeKey,
-		),
+		timer.WithComponents(components...),
 		timer.WithBudget(context.Timer.SumRemaining()),
 	)
 	if err != nil {
@@ -351,7 +364,7 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 
 	entries, err := result.MapEntries()
 	if err != nil {
-		return Result{}, 0, err
+		return Result{}, 0, fmt.Errorf("failed to decode WAF result entries: %w", err)
 	}
 
 	var (
