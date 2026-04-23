@@ -63,10 +63,18 @@ func Cstring(pinner *runtime.Pinner, name string) *byte {
 	return unsafe.SliceData(b)
 }
 
-// Cast is used to centralize unsafe use C of allocated pointer.
-// We take the address and then dereference it to trick go vet from creating a possible misuse of unsafe.Pointer
-func Cast[T any](ptr uintptr) *T {
-	return (*T)(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)))
+// ReadPtr reads a typed pointer stored at the given byte address.
+// Use this instead of materializing a stack-local uintptr from raw bytes
+// and reinterpreting it, which escapes Go's pointer analysis.
+func ReadPtr[T any](from *byte) *T {
+	return *(**T)(unsafe.Pointer(from))
+}
+
+// WritePtr writes a pointer value into the given byte address.
+// This is the inverse of ReadPtr: it stores a pointer into a byte-level
+// memory location (e.g. a C struct overlay) without converting through uintptr.
+func WritePtr(dst *byte, ptr unsafe.Pointer) {
+	*(*unsafe.Pointer)(unsafe.Pointer(dst)) = ptr
 }
 
 type Native interface {
@@ -74,41 +82,7 @@ type Native interface {
 }
 
 func CastNative[N Native, T Native](ptr *N) *T {
-	return (*T)(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)))
-}
-
-// NativeToUintptr reinterprets a scalar native value as a uintptr.
-// Used to populate WAFObject values with Go values.
-func NativeToUintptr[T Native](x T) uintptr {
-	return *(*uintptr)(unsafe.Pointer(&x))
-}
-
-// NativeToUint64 reinterprets a scalar native value as uint64.
-// Useful for encoding float64 values into WAFObject data.
-func NativeToUint64[T Native](x T) uint64 {
-	return *(*uint64)(unsafe.Pointer(&x))
-}
-
-// UintptrToNative reinterprets a uintptr as a scalar native value.
-// Used to retrieve Go values from a WAFObject.
-func UintptrToNative[T Native](x uintptr) T {
-	return *(*T)(unsafe.Pointer(&x))
-}
-
-// CastWithOffset is the same as cast but adding an offset to the pointer by a multiple of the size
-// of the type pointed.
-func CastWithOffset[T any](ptr uintptr, offset uint64) *T {
-	return (*T)(unsafe.Add(*(*unsafe.Pointer)(unsafe.Pointer(&ptr)), offset*uint64(unsafe.Sizeof(*new(T)))))
-}
-
-// PtrToUintptr is a helper to centralize of usage of unsafe.Pointer
-// do not use this function to cast interfaces
-func PtrToUintptr[T any](arg *T) uintptr {
-	return uintptr(unsafe.Pointer(arg))
-}
-
-func SliceToUintptr[T any](arg []T) uintptr {
-	return uintptr(unsafe.Pointer(unsafe.SliceData(arg)))
+	return (*T)(unsafe.Pointer(ptr))
 }
 
 func Slice[T any](ptr *T, length uint64) []T {

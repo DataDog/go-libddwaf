@@ -358,7 +358,7 @@ func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
 	w.setType(WAFStringType)
 	binary.NativeEndian.PutUint32(w.data[wafObjectStringSizeOffset:], uint32(length))
 	pinner.Pin(unsafeutil.Pointer(header.Data))
-	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(unsafeutil.Pointer(header.Data))))
+	unsafeutil.WritePtr(&w.data[wafObjectPtrOffset], unsafeutil.Pointer(header.Data))
 }
 
 // SetLiteralString sets the receiving [WAFObject] value to a literal string.
@@ -382,7 +382,7 @@ func (w *WAFObject) SetLiteralString(pinner pin.Pinner, str string) {
 	binary.NativeEndian.PutUint32(w.data[wafObjectStringSizeOffset:], uint32(length))
 	if length > 0 {
 		pinner.Pin(unsafeutil.Pointer(header.Data))
-		binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(unsafeutil.Pointer(header.Data))))
+		unsafeutil.WritePtr(&w.data[wafObjectPtrOffset], unsafeutil.Pointer(header.Data))
 	}
 }
 
@@ -414,7 +414,7 @@ func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint16) []WAFObject {
 
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], 0)
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], capacity)
-	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
+	unsafeutil.WritePtr(&w.data[wafObjectPtrOffset], ptr)
 
 	return arr[:capacity]
 }
@@ -439,7 +439,7 @@ func (w *WAFObject) SetArrayData(pinner pin.Pinner, data []WAFObject) error {
 
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], uint16(length))
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(cap(data)))
-	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
+	unsafeutil.WritePtr(&w.data[wafObjectPtrOffset], ptr)
 	return nil
 }
 
@@ -480,7 +480,7 @@ func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint16) []WAFObjectKV {
 
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], 0)
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], capacity)
-	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
+	unsafeutil.WritePtr(&w.data[wafObjectPtrOffset], ptr)
 
 	return kvs[:capacity]
 }
@@ -505,7 +505,7 @@ func (w *WAFObject) SetMapData(pinner pin.Pinner, data []WAFObjectKV) error {
 
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], uint16(length))
 	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(cap(data)))
-	binary.NativeEndian.PutUint64(w.data[wafObjectPtrOffset:], uint64(uintptr(ptr)))
+	unsafeutil.WritePtr(&w.data[wafObjectPtrOffset], ptr)
 	return nil
 }
 
@@ -568,11 +568,10 @@ func (w *WAFObject) StringValue() (string, error) {
 		if size == 0 {
 			return "", nil
 		}
-		ptr := uintptr(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]))
-		if ptr == 0 {
+		if binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]) == 0 {
 			return "", fmt.Errorf("nil pointer in string object with size %d", size)
 		}
-		return string(unsafeutil.Slice(*(**byte)(unsafeutil.Pointer(&ptr)), uint64(size))), nil
+		return string(unsafeutil.Slice(unsafeutil.ReadPtr[byte](&w.data[wafObjectPtrOffset]), uint64(size))), nil
 
 	default:
 		return "", fmt.Errorf("value is not a string but %s", t.String())
@@ -598,11 +597,10 @@ func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 		return nil, nil
 	}
 
-	ptr := uintptr(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]))
-	if ptr == 0 {
+	if binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]) == 0 {
 		return nil, fmt.Errorf("nil pointer in array object with size %d", size)
 	}
-	return unsafeutil.Slice(*(**WAFObject)(unsafeutil.Pointer(&ptr)), uint64(size)), nil
+	return unsafeutil.Slice(unsafeutil.ReadPtr[WAFObject](&w.data[wafObjectPtrOffset]), uint64(size)), nil
 }
 
 // MapSize returns the number of entries in a map.
@@ -624,11 +622,10 @@ func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
 		return nil, nil
 	}
 
-	ptr := uintptr(binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]))
-	if ptr == 0 {
+	if binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]) == 0 {
 		return nil, fmt.Errorf("nil pointer in map object with size %d", size)
 	}
-	return unsafeutil.Slice(*(**WAFObjectKV)(unsafeutil.Pointer(&ptr)), uint64(size)), nil
+	return unsafeutil.Slice(unsafeutil.ReadPtr[WAFObjectKV](&w.data[wafObjectPtrOffset]), uint64(size)), nil
 }
 
 // ArrayValue returns the array as a slice of any values (recursive conversion) making a copy of the whole.

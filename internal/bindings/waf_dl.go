@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"unsafe"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/lib"
 	"github.com/DataDog/go-libddwaf/v5/internal/log"
@@ -87,7 +88,7 @@ func (waf *WAFLib) Close() error {
 
 // Version returned string is a static string so we do not need to free it
 func (waf *WAFLib) Version() string {
-	return unsafeutil.Gostring(unsafeutil.Cast[byte](waf.syscall(waf.getVersion)))
+	return unsafeutil.Gostring((*byte)(unsafe.Pointer(waf.syscall(waf.getVersion))))
 }
 
 // loadDefaultAllocator returns the default allocator used by the library.
@@ -117,10 +118,10 @@ func (waf *WAFLib) BuilderAddOrUpdateConfig(builder WAFBuilder, path string, con
 
 	res := waf.syscall(waf.builderAddOrUpdateConfig,
 		uintptr(builder),
-		unsafeutil.PtrToUintptr(unsafeutil.Cstring(&pinner, path)),
+		uintptr(unsafe.Pointer(unsafeutil.Cstring(&pinner, path))),
 		uintptr(len(path)),
-		unsafeutil.PtrToUintptr(config),
-		unsafeutil.PtrToUintptr(diags),
+		uintptr(unsafe.Pointer(config)),
+		uintptr(unsafe.Pointer(diags)),
 	)
 	return byte(res) != 0
 }
@@ -133,7 +134,7 @@ func (waf *WAFLib) BuilderRemoveConfig(builder WAFBuilder, path string) bool {
 
 	return byte(waf.syscall(waf.builderRemoveConfig,
 		uintptr(builder),
-		unsafeutil.PtrToUintptr(unsafeutil.Cstring(&pinner, path)),
+		uintptr(unsafe.Pointer(unsafeutil.Cstring(&pinner, path))),
 		uintptr(len(path)),
 	)) != 0
 }
@@ -158,8 +159,8 @@ func (waf *WAFLib) BuilderGetConfigPaths(builder WAFBuilder, filter string) ([]s
 
 	count := waf.syscall(waf.builderGetConfigPaths,
 		uintptr(builder),
-		unsafeutil.PtrToUintptr(&paths),
-		unsafeutil.PtrToUintptr(unsafeutil.StringData(filter)),
+		uintptr(unsafe.Pointer(&paths)),
+		uintptr(unsafe.Pointer(unsafeutil.StringData(filter))),
 		uintptr(len(filter)),
 	)
 	defer waf.ObjectDestroy(&paths, waf.defaultAllocator)
@@ -209,15 +210,17 @@ func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 	defer pinner.Unpin()
 	pinner.Pin(&nbAddresses)
 
-	arrayVoidC := waf.syscall(symbol, uintptr(handle), unsafeutil.PtrToUintptr(&nbAddresses))
+	arrayVoidC := waf.syscall(symbol, uintptr(handle), uintptr(unsafe.Pointer(&nbAddresses)))
 	if arrayVoidC == 0 || nbAddresses == 0 {
 		return nil
 	}
 
 	// These C strings are static strings so we do not need to free them
+	arrayPtr := unsafe.Pointer(arrayVoidC)
 	addresses := make([]string, int(nbAddresses))
-	for i := 0; i < int(nbAddresses); i++ {
-		addresses[i] = unsafeutil.Gostring(*unsafeutil.CastWithOffset[*byte](arrayVoidC, uint64(i)))
+	for i := range int(nbAddresses) {
+		charPtr := *(**byte)(unsafe.Add(arrayPtr, uintptr(i)*unsafe.Sizeof(uintptr(0))))
+		addresses[i] = unsafeutil.Gostring(charPtr)
 	}
 
 	return addresses
@@ -246,9 +249,9 @@ func (waf *WAFLib) ContextEval(context WAFContext, data *WAFObject, alloc WAFAll
 
 	return WAFReturnCode(waf.syscall(waf.contextEval,
 		uintptr(context),
-		unsafeutil.PtrToUintptr(data),
+		uintptr(unsafe.Pointer(data)),
 		uintptr(alloc),
-		unsafeutil.PtrToUintptr(result),
+		uintptr(unsafe.Pointer(result)),
 		uintptr(timeout),
 	))
 }
@@ -279,9 +282,9 @@ func (waf *WAFLib) SubcontextEval(subcontext WAFSubcontext, data *WAFObject, all
 
 	return WAFReturnCode(waf.syscall(waf.subcontextEval,
 		uintptr(subcontext),
-		unsafeutil.PtrToUintptr(data),
+		uintptr(unsafe.Pointer(data)),
 		uintptr(alloc),
-		unsafeutil.PtrToUintptr(result),
+		uintptr(unsafe.Pointer(result)),
 		uintptr(timeout),
 	))
 }
@@ -299,7 +302,7 @@ func (waf *WAFLib) ObjectDestroy(obj *WAFObject, alloc WAFAllocator) {
 	defer pinner.Unpin()
 	pinner.Pin(obj)
 
-	waf.syscall(waf.objectDestroy, unsafeutil.PtrToUintptr(obj), uintptr(alloc))
+	waf.syscall(waf.objectDestroy, uintptr(unsafe.Pointer(obj)), uintptr(alloc))
 }
 
 func (waf *WAFLib) Handle() uintptr {
@@ -322,8 +325,8 @@ func (waf *WAFLib) ObjectFromJSON(json []byte, alloc WAFAllocator) (WAFObject, b
 	}
 
 	success := waf.syscall(waf.objectFromJSON,
-		unsafeutil.PtrToUintptr(&obj),
-		unsafeutil.SliceToUintptr(json),
+		uintptr(unsafe.Pointer(&obj)),
+		uintptr(unsafe.Pointer(unsafe.SliceData(json))),
 		uintptr(len(json)),
 		uintptr(alloc),
 	) != 0
