@@ -33,8 +33,8 @@ type Context struct {
 	handle *Handle // Instance of the WAF
 
 	root        *contextRoot           // Shared root state for the C ddwaf_context pointer
-	isSubCtx    bool                    // Whether this Context represents a subcontext
-	closed      bool                    // Whether this Context or subcontext has been closed
+	isSubCtx    bool                   // Whether this Context represents a subcontext
+	closed      bool                   // Whether this Context or subcontext has been closed
 	cSubcontext bindings.WAFSubcontext // The C ddwaf_subcontext pointer (nil for root context)
 
 	// mutex protecting local fields such as truncations, pinner and cSubcontext.
@@ -103,7 +103,16 @@ func (context *Context) isSubcontext() bool {
 	return context.isSubCtx
 }
 
-func (context *Context) isClosedLocked() bool {
+// isClosedAssumingBothLocked reports whether this context (or subcontext) is no
+// longer usable because either itself or its underlying C context has been
+// released.
+//
+// The caller MUST hold BOTH locks before calling this method:
+//   - context.mutex (guards context.closed and context.cSubcontext)
+//   - context.root.mu (guards context.root.closed and context.root.cContext)
+//
+// Lock order is always context.mutex then context.root.mu.
+func (context *Context) isClosedAssumingBothLocked() bool {
 	return context.root.closed || context.root.cContext == 0 || context.closed || (context.isSubcontext() && context.cSubcontext == 0)
 }
 
@@ -134,13 +143,16 @@ func (context *Context) SubContext() (*Context, error) {
 	context.root.mu.Lock()
 	defer context.root.mu.Unlock()
 
-	if context.isClosedLocked() {
+	if context.isClosedAssumingBothLocked() {
 		return nil, waferrors.ErrContextClosed
 	}
 
 	if !context.handle.retain() {
 		return nil, fmt.Errorf("WAF handle has been released")
 	}
+	// Refcount bookkeeping: retain() above is released by the deferred Close()
+	// below on any failure path. On success, the returned subcontext owns the
+	// reference and will release it when its own Close() is called.
 	success := false
 	defer func() {
 		if !success {
@@ -202,7 +214,7 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 		context.root.mu.Lock()
 		defer context.root.mu.Unlock()
 
-		if context.isClosedLocked() {
+		if context.isClosedAssumingBothLocked() {
 			return Result{}, waferrors.ErrContextClosed
 		}
 		return Result{}, nil
@@ -226,7 +238,7 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	defer context.mutex.Unlock()
 
 	context.root.mu.Lock()
-	if context.isClosedLocked() {
+	if context.isClosedAssumingBothLocked() {
 		context.root.mu.Unlock()
 		return Result{}, waferrors.ErrContextClosed
 	}
@@ -251,7 +263,7 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	context.root.mu.Lock()
 	defer context.root.mu.Unlock()
 
-	if context.isClosedLocked() {
+	if context.isClosedAssumingBothLocked() {
 		// Context or subcontext has been closed, returning an empty result...
 		return Result{}, waferrors.ErrContextClosed
 	}
@@ -297,13 +309,19 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 	return
 }
 
-// encodeOneAddressType encodes the given addressData values and returns the corresponding WAF
-// object and its refs. If the addressData is empty, it returns nil for the WAF object and an empty
-// ref pool.
-// At this point, if the encoder does not timeout, the only error we can get is an error in case the
-// top level object is a nil map, but this behavior is expected since either persistent or
-// ephemeral addresses are allowed to be null one at a time. In this case, Encode will return nil,
-// which is what we need to send to ddwaf_run to signal that the address data is empty.
+// encodeOneAddressType encodes a single address-data map into its WAF object
+// representation for a single [Context.Run] call. It returns nil for the WAF
+// object when addressData is nil/empty; this is intentional and is what
+// ddwaf_context_eval / ddwaf_subcontext_eval expect to signal that no new
+// address data is being supplied for this evaluation.
+//
+// Note: in v5, a single [RunAddressData.Data] map is encoded per call.
+// Ephemeral data is no longer a separate field and is instead scoped via
+// [Context.SubContext].
+//
+// If the encoder times out, [waferrors.ErrTimeout] is returned. Any truncations
+// recorded by the encoder are merged into context.truncations.
+//
 // The caller must hold context.mutex.
 func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[string]any, timer timer.Timer) (*bindings.WAFObject, error) {
 	if addressData == nil {

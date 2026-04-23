@@ -17,6 +17,16 @@ import (
 // Handle represents an instance of the WAF for a given ruleset. It is obtained
 // from [Builder.Build]; and must be disposed of by calling [Handle.Close]
 // once no longer in use.
+//
+// Library lifetime boundary: [Handle.retain] and [Handle.Close] only govern the
+// lifetime of the underlying C ddwaf_handle. They do not keep the libddwaf
+// shared library loaded. That shared library is a process-wide singleton
+// loaded once via purego.Dlopen (see internal/bindings) and is never Dlclosed
+// during normal operation. As a consequence, symbols such as
+// bindings.Lib.ContextDestroy or bindings.Lib.SubcontextDestroy remain
+// resolvable for the entire lifetime of the process, and Context/SubContext
+// teardown paths that call into bindings.Lib after the Handle's refcount has
+// reached zero are safe with respect to the library itself.
 type Handle struct {
 	// Lock-less reference counter avoiding blocking calls to the [Handle.Close]
 	// method while WAF [Context]s are still using the WAF handle. Instead, we let
