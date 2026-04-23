@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestWAFObjectSize verifies that our WAFObject struct matches the v2 16-byte size
 func TestWAFObjectSize(t *testing.T) {
 	_, err := Load()
 	require.NoError(t, err)
@@ -27,7 +26,6 @@ func TestWAFObjectSize(t *testing.T) {
 	require.Equal(t, 32, int(unsafe.Sizeof(bindings.WAFObjectKV{})), "WAFObjectKV must be 32 bytes")
 }
 
-// TestWAFObjectSetAndGet tests that our Go methods correctly encode and decode values
 func TestWAFObjectSetAndGet(t *testing.T) {
 	_, err := Load()
 	require.NoError(t, err)
@@ -109,7 +107,6 @@ func TestWAFObjectSetAndGet(t *testing.T) {
 		defer pinner.Unpin()
 
 		var obj bindings.WAFObject
-		// Small string <= 14 bytes should use small string optimization
 		obj.SetString(&pinner, "hello")
 		require.True(t, obj.IsString())
 		require.Equal(t, bindings.WAFSmallStringType, obj.Type())
@@ -123,7 +120,6 @@ func TestWAFObjectSetAndGet(t *testing.T) {
 		defer pinner.Unpin()
 
 		var obj bindings.WAFObject
-		// String > 14 bytes should use regular string type
 		longStr := "this is a long string that exceeds 14 bytes"
 		obj.SetString(&pinner, longStr)
 		require.True(t, obj.IsString())
@@ -146,7 +142,6 @@ func TestWAFObjectSetAndGet(t *testing.T) {
 	})
 }
 
-// TestWAFObjectArrayPadding tests that arrays of WAFObjects work correctly
 func TestWAFObjectArrayPadding(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
@@ -157,7 +152,6 @@ func TestWAFObjectArrayPadding(t *testing.T) {
 	objects[1].SetInt(42)
 	objects[2].SetBool(true)
 
-	// Verify each object is properly set
 	require.True(t, objects[0].IsString())
 	str, err := objects[0].StringValue()
 	require.NoError(t, err)
@@ -174,7 +168,6 @@ func TestWAFObjectArrayPadding(t *testing.T) {
 	require.True(t, b)
 }
 
-// TestWAFObjectKVPadding tests that arrays of WAFObjectKV work correctly
 func TestWAFObjectKVPadding(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
@@ -187,7 +180,6 @@ func TestWAFObjectKVPadding(t *testing.T) {
 	kvs[1].Key.SetString(&pinner, "key2")
 	kvs[1].Val.SetString(&pinner, "value2")
 
-	// Verify first KV pair
 	key1, err := kvs[0].Key.StringValue()
 	require.NoError(t, err)
 	require.Equal(t, "key1", key1)
@@ -196,7 +188,6 @@ func TestWAFObjectKVPadding(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 100, val1)
 
-	// Verify second KV pair
 	key2, err := kvs[1].Key.StringValue()
 	require.NoError(t, err)
 	require.Equal(t, "key2", key2)
@@ -206,7 +197,6 @@ func TestWAFObjectKVPadding(t *testing.T) {
 	require.Equal(t, "value2", val2)
 }
 
-// TestWAFObjectContainers tests array and map container functionality
 func TestWAFObjectContainers(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
@@ -261,7 +251,6 @@ func TestWAFObjectContainers(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, entries, 2)
 
-		// Verify map can be converted to Go map
 		goMap, err := m.MapValue()
 		require.NoError(t, err)
 		require.EqualValues(t, 1, goMap["a"])

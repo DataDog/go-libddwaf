@@ -345,7 +345,6 @@ func getFieldNameFromType(field reflect.StructField) (string, bool) {
 		tag, _, _ = strings.Cut(tag, ",")
 		switch tag {
 		case "":
-			// Nothing to do
 			continue
 		default:
 			return tag, true
@@ -381,17 +380,12 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 	typ := value.Type()
 	nbFields := typ.NumField()
 
-	capacity := nbFields
+	capacity := min(nbFields, encoder.config.maxContainerSize())
+	capacity = min(capacity, math.MaxUint16)
 	length := 0
-	if capacity > encoder.config.maxContainerSize() {
-		capacity = encoder.config.maxContainerSize()
-	}
-	if capacity > math.MaxUint16 {
-		capacity = math.MaxUint16
-	}
 
 	kvArray := obj.SetMap(encoder.config.Pinner, uint16(capacity))
-	for i := 0; i < nbFields; i++ {
+	for i := range nbFields {
 		if encoder.config.Timer.Exhausted() {
 			return
 		}
@@ -410,7 +404,6 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 		}
 
 		kv := &kvArray[length]
-		// Set the key as a string
 		encoder.encodeMapKeyString(fieldName, &kv.Key)
 
 		if err := encoder.encode(value.Field(i), &kv.Val, depth); err != nil {
@@ -421,7 +414,6 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 		length++
 	}
 
-	// Set the length to the final number of successfully encoded elements
 	obj.SetMapSize(uint16(length))
 }
 
@@ -431,14 +423,9 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 // - Even if the element values are invalid or null we still keep them to report the map key
 func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	capacity := value.Len()
-	if capacity > encoder.config.maxContainerSize() {
-		capacity = encoder.config.maxContainerSize()
-	}
-	if capacity > math.MaxUint16 {
-		capacity = math.MaxUint16
-	}
+	capacity = min(capacity, encoder.config.maxContainerSize())
+	capacity = min(capacity, math.MaxUint16)
 
-	// Maps use WAFObjectKV pairs
 	kvArray := obj.SetMap(encoder.config.Pinner, uint16(capacity))
 
 	length := 0
@@ -465,7 +452,6 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, 
 		length++
 	}
 
-	// Fix the size because we skipped map entries
 	obj.SetMapSize(uint16(length))
 }
 
@@ -509,19 +495,14 @@ func (encoder *encoder) encodeMapKeyString(keyStr string, keyObj *bindings.WAFOb
 func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	length := value.Len()
 
-	capacity := length
-	if capacity > encoder.config.maxContainerSize() {
-		capacity = encoder.config.maxContainerSize()
-	}
-	if capacity > math.MaxUint16 {
-		capacity = math.MaxUint16
-	}
+	capacity := min(length, encoder.config.maxContainerSize())
+	capacity = min(capacity, math.MaxUint16)
 
 	currIndex := 0
 
 	objArray := obj.SetArray(encoder.config.Pinner, uint16(capacity))
 
-	for i := 0; i < length; i++ {
+	for i := range length {
 		if encoder.config.Timer.Exhausted() {
 			return
 		}

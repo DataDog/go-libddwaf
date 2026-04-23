@@ -146,7 +146,6 @@ type WAFObject struct {
 	data [16]byte
 }
 
-// Byte offset constants for WAFObject fields
 const (
 	wafObjectTypeOffset = 0  // uint8_t type at byte 0
 	wafObjectBoolOffset = 1  // bool val at byte 1
@@ -407,7 +406,6 @@ func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint16) []WAFObject {
 		return nil
 	}
 
-	// Clamp capacity to uint16 max
 	arr := make([]WAFObject, 0, capacity)
 	ptr := unsafeutil.Pointer(unsafeutil.SliceData(arr))
 	pinner.Pin(ptr)
@@ -698,20 +696,17 @@ func (w *WAFObject) AnyValue() (any, error) {
 	}
 }
 
-// WAFBuilder is a forward declaration in ddwaf.h header
-// We basically don't need to modify it, only to give it to the waf
+// WAFBuilder is a forward declaration in ddwaf.h header.
 type WAFBuilder uintptr
 
-// WAFHandle is a forward declaration in ddwaf.h header
-// We basically don't need to modify it, only to give it to the waf
+// WAFHandle is a forward declaration in ddwaf.h header.
 type WAFHandle uintptr
 
-// WAFContext is a forward declaration in ddwaf.h header
-// We basically don't need to modify it, only to give it to the waf
+// WAFContext is a forward declaration in ddwaf.h header.
 type WAFContext uintptr
 
-// WAFSubcontext is a forward declaration in ddwaf.h header for subcontexts
+// WAFSubcontext is a forward declaration in ddwaf.h header for subcontexts.
 type WAFSubcontext uintptr
 
-// WAFAllocator is an opaque handle to a WAF allocator
+// WAFAllocator is an opaque handle to a WAF allocator.
 type WAFAllocator uintptr

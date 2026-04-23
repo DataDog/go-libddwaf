@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"maps"
 	"runtime"
+	"slices"
 	"sync"
 	"time"
 
@@ -98,7 +99,6 @@ func (d RunAddressData) newTimer(parent timer.NodeTimer) (timer.NodeTimer, error
 	)
 }
 
-// isSubcontext returns true if this context is a subcontext.
 func (context *Context) isSubcontext() bool {
 	return context.isSubCtx
 }
@@ -170,16 +170,8 @@ func (context *Context) SubContext() (*Context, error) {
 	for k := range parentStats {
 		components = append(components, k)
 	}
-	hasKey := func(keys []timer.Key, key timer.Key) bool {
-		for _, k := range keys {
-			if k == key {
-				return true
-			}
-		}
-		return false
-	}
 	for _, key := range []timer.Key{EncodeTimeKey, DurationTimeKey, DecodeTimeKey} {
-		if !hasKey(components, key) {
+		if !slices.Contains(components, key) {
 			components = append(components, key)
 		}
 	}
@@ -264,7 +256,6 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	defer context.root.mu.Unlock()
 
 	if context.isClosedAssumingBothLocked() {
-		// Context or subcontext has been closed, returning an empty result...
 		return Result{}, waferrors.ErrContextClosed
 	}
 
@@ -476,7 +467,7 @@ func (context *Context) Close() {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
-	defer context.handle.Close() // Reduce the reference counter of the Handle.
+	defer context.handle.Close()
 
 	context.root.mu.Lock()
 	defer context.root.mu.Unlock()

@@ -69,7 +69,6 @@ func newWAFLib() (dl *WAFLib, err error) {
 		return
 	}
 
-
 	dl.defaultAllocator = dl.loadDefaultAllocator()
 
 	if val := os.Getenv(log.EnvVarLogLevel); val != "" {
@@ -320,7 +319,7 @@ func (waf *WAFLib) ObjectFromJSON(json []byte, alloc WAFAllocator) (WAFObject, b
 	pinner.Pin(&obj)
 
 	// Pin the slice backing data, not the header
-	if jsonData := unsafeutil.SliceData[byte](json); jsonData != nil {
+	if jsonData := unsafeutil.SliceData(json); jsonData != nil {
 		pinner.Pin(jsonData)
 	}
 

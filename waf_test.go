@@ -54,7 +54,6 @@ func TestUsable(t *testing.T) {
 }
 
 func TestVersion(t *testing.T) {
-	// Ensures the library version matches the expected version...
 	require.Equal(t, lib.EmbeddedWAFVersion, Version())
 }
 
@@ -385,8 +384,7 @@ func TestTimeout(t *testing.T) {
 	})
 
 	t.Run("both-timeout", func(t *testing.T) {
-		// TODO(eliott.bouhana): APPSEC-58637
-		t.Skip("TODO(eliott.bouhana): This test is flaky and needs to be fixed")
+		t.Skip("APPSEC-58637: flaky test")
 
 		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey, raspTimerKey))
 		require.NoError(t, err)
@@ -502,7 +500,7 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 				"address":   "my.input",
 				"highlight": []any{"Arachni"},
 				"key_path":  []any{},
-				"value":     "Arachni/persistent", // <-- The important bit, really
+				"value":     "Arachni/persistent",
 			}},
 		}},
 		event["rule_matches"],

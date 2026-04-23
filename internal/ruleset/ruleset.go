@@ -10,7 +10,7 @@ package ruleset
 import (
 	"bytes"
 	"compress/gzip"
-	_ "embed" // For go:embed
+	_ "embed"
 	"fmt"
 	"io"
 
@@ -44,7 +44,6 @@ func DefaultRuleset() (obj bindings.WAFObject, err error) {
 	if err != nil {
 		return bindings.WAFObject{}, fmt.Errorf("failed to decompress default ruleset: %w", err)
 	}
-
 
 	parsedRuleset, ok := bindings.Lib.ObjectFromJSON(decompressedRuleset, bindings.Lib.DefaultAllocator())
 	if !ok {

@@ -34,10 +34,10 @@ var (
 	ErrTooManyIndirections = errors.New("too many indirections")
 )
 
-// RunError the WAF can return when running it.
+// RunError represents an error returned by the WAF during a run.
 type RunError int
 
-// Errors the WAF can return when running it.
+// RunError values returned by the WAF.
 const (
 	// ErrInternal denotes a WAF internal error.
 	ErrInternal RunError = iota + 1

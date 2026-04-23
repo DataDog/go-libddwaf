@@ -41,7 +41,7 @@ func (timer *nodeTimer) NewNode(name Key, options ...Option) (NodeTimer, error) 
 		return nil, errors.New("NewNode: node timer must have at least one component, otherwise use NewLeaf()")
 	}
 
-	_, ok := timer.components.lookup[name]
+	_, ok := timer.lookup[name]
 	if !ok {
 		return nil, fmt.Errorf("NewNode: component %s not found", name)
 	}
@@ -63,7 +63,7 @@ func (timer *nodeTimer) NewLeaf(name Key, options ...Option) (Timer, error) {
 		return nil, errors.New("NewLeaf: leaf timer cannot have components, otherwise use NewNode()")
 	}
 
-	_, ok := timer.components.lookup[name]
+	_, ok := timer.lookup[name]
 	if !ok {
 		return nil, fmt.Errorf("NewLeaf: component %s not found", name)
 	}
@@ -91,7 +91,7 @@ func (timer *nodeTimer) childStopped(componentName Key, duration time.Duration) 
 }
 
 func (timer *nodeTimer) AddTime(name Key, duration time.Duration) {
-	value, ok := timer.components.lookup[name]
+	value, ok := timer.lookup[name]
 	if !ok {
 		return
 	}
@@ -100,8 +100,8 @@ func (timer *nodeTimer) AddTime(name Key, duration time.Duration) {
 }
 
 func (timer *nodeTimer) Stats() map[Key]time.Duration {
-	stats := make(map[Key]time.Duration, len(timer.components.lookup))
-	for name, component := range timer.components.lookup {
+	stats := make(map[Key]time.Duration, len(timer.lookup))
+	for name, component := range timer.lookup {
 		stats[name] = time.Duration(component.Load())
 	}
 
@@ -110,7 +110,7 @@ func (timer *nodeTimer) Stats() map[Key]time.Duration {
 
 func (timer *nodeTimer) SumSpent() time.Duration {
 	var sum time.Duration
-	for _, component := range timer.components.lookup {
+	for _, component := range timer.lookup {
 		sum += time.Duration(component.Load())
 	}
 	return sum

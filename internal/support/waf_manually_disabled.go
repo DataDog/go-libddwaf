@@ -3,7 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Manually set datadog.no_waf build tag
 //go:build datadog.no_waf
 
 package support

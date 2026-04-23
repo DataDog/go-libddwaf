@@ -14,23 +14,15 @@ import (
 	"github.com/DataDog/go-libddwaf/v5/internal/ruleset"
 )
 
-// Builder manages an evolving WAF configuration over time. Its lifecycle is
-// typically tied to that of a remote configuration client, as its purpose is to
-// keep an up-to-date view of the current coniguration with low overhead. This
-// type is not safe for concurrent use, and users should protect it with a mutex
-// or similar when sharing it across multiple goroutines. All methods of this
-// type are safe to call with a nil receiver.
+// Builder manages an evolving WAF configuration.
+// It is not safe for concurrent use.
 type Builder struct {
 	handle        bindings.WAFBuilder
 	defaultLoaded bool
 }
 
-// NewBuilder creates a new [Builder] instance. Its lifecycle is typically tied
-// to that of a remote configuration client, as its purpose is to keep an
-// up-to-date view of the current coniguration with low overhead. Returns nil if
-// an error occurs when initializing the builder. The caller is responsible for
-// calling [Builder.Close] when the builder is no longer needed.
-//
+// NewBuilder creates a new [Builder] instance.
+// The caller must call [Builder.Close] when it is no longer needed.
 func NewBuilder() (*Builder, error) {
 	if ok, err := Load(); !ok {
 		if err != nil {
@@ -165,7 +157,6 @@ func (b *Builder) ConfigPaths(filter string) ([]string, error) {
 // Build creates a new [Handle] instance that uses the current configuration.
 // Returns nil if an error occurs when building the handle. The caller is
 // responsible for calling [Handle.Close] when the handle is no longer needed.
-// This function may return nil.
 func (b *Builder) Build() *Handle {
 	if b == nil || b.handle == 0 {
 		return nil

@@ -19,7 +19,6 @@ var (
 	once = sync.OnceValue(func() uintptr {
 		return purego.NewCallback(ddwafLogCallbackFn)
 	})
-	functionPointer uintptr
 )
 
 // CallbackFunctionPointer returns a pointer to the log callback function which

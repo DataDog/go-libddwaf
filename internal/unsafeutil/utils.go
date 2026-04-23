@@ -31,7 +31,6 @@ func Gostring(ptr *byte) string {
 	for *(*byte)(unsafe.Add(unsafe.Pointer(ptr), uintptr(length))) != '\x00' {
 		length++
 	}
-	//string builtin copies the slice
 	return string(unsafe.Slice(ptr, length))
 }
 

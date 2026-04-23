@@ -42,16 +42,14 @@ func testVerifyELFHeader(t *testing.T) {
 
 	switch runtime.GOARCH {
 	case "amd64":
-		require.Equal(t, elf.EM_X86_64, elfFile.Machine, "Wrong architecture")
+		require.Equal(t, elf.EM_X86_64, elfFile.Machine)
 	case "arm64":
-		require.Equal(t, elf.EM_AARCH64, elfFile.Machine, "Wrong architecture")
+		require.Equal(t, elf.EM_AARCH64, elfFile.Machine)
 	default:
 		panic(fmt.Sprintf("unexpected GOARCH=%s", runtime.GOARCH))
 	}
 
-	require.Equal(t, elf.ET_DYN, elfFile.Type, "Is not a shared library")
-
-	//TODO(eliott.bouhana) add more checks
+	require.Equal(t, elf.ET_DYN, elfFile.Type)
 }
 
 // testVerifyMachOHeader is here to ease the debug cases that will likely need
@@ -67,14 +65,12 @@ func testVerifyMachOHeader(t *testing.T) {
 
 	switch runtime.GOARCH {
 	case "amd64":
-		require.Equal(t, macho.CpuAmd64, machOFile.Cpu, "Wrong architecture")
+		require.Equal(t, macho.CpuAmd64, machOFile.Cpu)
 	case "arm64":
-		require.Equal(t, macho.CpuArm64, machOFile.Cpu, "Wrong architecture")
+		require.Equal(t, macho.CpuArm64, machOFile.Cpu)
 	default:
 		panic(fmt.Sprintf("unexpected GOARCH=%s", runtime.GOARCH))
 	}
 
-	require.Equal(t, macho.TypeDylib, machOFile.Type, "Is not a shared library")
-
-	//TODO(eliott.bouhana) add more checks
+	require.Equal(t, macho.TypeDylib, machOFile.Type)
 }

@@ -20,8 +20,6 @@ func decodeErrors(obj *bindings.WAFObject) (map[string][]string, error) {
 	if !obj.IsMap() {
 		return nil, fmt.Errorf("decodeErrors: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type())
 	}
-
-
 	entries, err := obj.MapEntries()
 	if err != nil {
 		return nil, fmt.Errorf("decodeErrors: failed to get map entries: %w", err)
@@ -53,8 +51,6 @@ func decodeDiagnostics(obj *bindings.WAFObject) (Diagnostics, error) {
 	if !obj.IsMap() {
 		return Diagnostics{}, fmt.Errorf("decodeDiagnostics: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type())
 	}
-
-
 	entries, err := obj.MapEntries()
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to get map entries: %w", err)
@@ -91,7 +87,6 @@ func decodeDiagnostics(obj *bindings.WAFObject) (Diagnostics, error) {
 		case "ruleset_version":
 			diags.Version, err = entry.Val.StringValue()
 		default:
-			// ignore unknown keys
 		}
 		if err != nil {
 			return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", key, err)
@@ -105,8 +100,6 @@ func decodeFeature(obj *bindings.WAFObject) (*Feature, error) {
 	if !obj.IsMap() {
 		return nil, fmt.Errorf("decodeFeature: %w: expected map, got %s", waferrors.ErrInvalidObjectType, obj.Type())
 	}
-
-
 	entries, err := obj.MapEntries()
 	if err != nil {
 		return nil, fmt.Errorf("decodeFeature: failed to get map entries: %w", err)
@@ -116,7 +109,7 @@ func decodeFeature(obj *bindings.WAFObject) (*Feature, error) {
 	for _, entry := range entries {
 		key, err := entry.Key.StringValue()
 		if err != nil {
-			continue // Skip entries with non-string keys
+			continue
 		}
 
 		switch key {
@@ -145,7 +138,6 @@ func decodeFeature(obj *bindings.WAFObject) (*Feature, error) {
 }
 
 func decodeStringArray(obj *bindings.WAFObject) ([]string, error) {
-	// We consider that nil is an empty array
 	if obj.IsNil() {
 		return nil, nil
 	}
@@ -153,8 +145,6 @@ func decodeStringArray(obj *bindings.WAFObject) ([]string, error) {
 	if !obj.IsArray() {
 		return nil, fmt.Errorf("decodeStringArray: %w: expected array, got %s", waferrors.ErrInvalidObjectType, obj.Type())
 	}
-
-
 	items, err := obj.ArrayValues()
 	if err != nil {
 		return nil, fmt.Errorf("decodeStringArray: failed to get array values: %w", err)

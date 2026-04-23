@@ -41,9 +41,9 @@ extern "C"
  **/
 typedef enum
 {
-    /** Unkmown or uninitialised type **/
+    /** Unknown or uninitialised type **/
     DDWAF_OBJ_INVALID  = 0,
-    /** Null type, only used for its semantical value **/
+    /** Null type, only used for its semantic value **/
     DDWAF_OBJ_NULL     = 0x01,
     /** Boolean type **/
     DDWAF_OBJ_BOOL     = 0x02,
@@ -211,8 +211,8 @@ static_assert(sizeof(struct _ddwaf_object_kv) == 32);
  *
  * @param level The logging level.
  * @param function The native function that emitted the message. (nonnull)
- * @param file The file of the native function that emmitted the message. (nonnull)
- * @param line The line where the message was emmitted.
+ * @param file The file of the native function that emitted the message. (nonnull)
+ * @param line The line where the message was emitted.
  * @param message The size of the logging message. NUL-terminated
  * @param message_len The length of the logging message (excluding NUL terminator).
  */
@@ -427,7 +427,7 @@ DDWAF_RET_CODE ddwaf_subcontext_eval(ddwaf_subcontext subcontext, ddwaf_object *
 
 /**
  * Performs the destruction of the subcontext, freeing the data passed to it through
- * ddwaf_subcontext_eval using the used-defined allocator.
+ * ddwaf_subcontext_eval using the user-defined allocator.
  *
  * @param subcontext subcontext to destroy. (nonnull)
  **/
@@ -435,9 +435,9 @@ void ddwaf_subcontext_destroy(ddwaf_subcontext subcontext);
 
 
 /**
- * Initialize an instace of the waf builder.
+ * Initialize an instance of the waf builder.
  *
- * @return Handle to the builer instance or NULL on error.
+ * @return Handle to the builder instance or NULL on error.
  *
  * @note If config is NULL, default values will be used
  **/
@@ -652,7 +652,7 @@ void ddwaf_allocator_destroy(ddwaf_allocator alloc);
 ddwaf_object* ddwaf_object_set_invalid(ddwaf_object *object);
 
 /**
- * Creates an null object. Provides a different semantical value to invalid as
+ * Creates a null object. Provides a different semantic value to invalid as
  * it can be used to signify that a value is null rather than of an unknown type.
  *
  * @param object Object to perform the operation on. (nonnull)

@@ -68,13 +68,10 @@ func (l Level) String() string {
 
 const EnvVarLogLevel = "DD_APPSEC_WAF_LOG_LEVEL"
 
-// logFilter lazily initializes and returns the log filter regexp.
-// This is thread-safe and the initialization happens only once.
 var logFilter = sync.OnceValue(func() *regexp.Regexp {
 	const envVarFilter = "DD_APPSEC_WAF_LOG_FILTER"
 
 	if val := os.Getenv(EnvVarLogLevel); val == "" {
-		// No log level configured, don't even attempt parsing the regexp.
 		return nil
 	}
 

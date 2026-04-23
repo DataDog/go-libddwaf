@@ -45,7 +45,6 @@ func TestBasic(t *testing.T) {
 		spent := newTimer.Stop()
 		require.Equal(t, newTimer.Spent(), spent)
 
-		// The timer was indeed stopped
 		time.Sleep(1 * time.Millisecond)
 		require.Equal(t, newTimer.Spent(), spent)
 	})
@@ -344,7 +343,7 @@ func BenchmarkContext(b *testing.B) {
 			timer.WithComponents("Run"))
 
 		// Let's say we do 4 calls to run in the WAF
-		for i := 0; i < 4; i++ {
+		for range 4 {
 			runTimer, _ := contextTimer.NewNode("Run",
 				timer.WithBudget(1*time.Millisecond),
 				timer.WithComponents("persistent-encoder"),
@@ -356,7 +355,7 @@ func BenchmarkContext(b *testing.B) {
 			runTimer.Start()
 
 			runTimer.MustLeaf("persistent-encoder").Timed(func(timer timer.Timer) {
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					runtime.KeepAlive(timer.Exhausted())
 				}
 			})
@@ -366,7 +365,7 @@ func BenchmarkContext(b *testing.B) {
 			}
 
 			runTimer.MustLeaf("ephemera-encoder").Timed(func(timer timer.Timer) {
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					runtime.KeepAlive(timer.Exhausted())
 				}
 			})
@@ -401,31 +400,27 @@ func BenchmarkRun(b *testing.B) {
 		runTimer.Start()
 
 		runTimer.MustLeaf("persistent-encoder").Timed(func(timer timer.Timer) {
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				runtime.KeepAlive(timer.Exhausted())
 			}
 		})
 
 		if runTimer.SumExhausted() {
-			// return
 		}
 
 		runTimer.MustLeaf("ephemera-encoder").Timed(func(timer timer.Timer) {
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				runtime.KeepAlive(timer.Exhausted())
 			}
 		})
 
 		if runTimer.SumExhausted() {
-			// return
 		}
 
 		runTimer.MustLeaf("waiting", timer.WithUnlimitedBudget()).Timed(func(timer timer.Timer) {
-			// do some work
 		})
 
 		runTimer.MustLeaf("run").Timed(func(timer timer.Timer) {
-			// do some work
 		})
 
 		runTimer.Stop()

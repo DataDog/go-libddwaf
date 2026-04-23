@@ -40,7 +40,6 @@ type Handle struct {
 	// block the request handlers for the time of the security rules update.
 	refCounter atomic.Int32
 
-	// Instance of the WAF
 	cHandle bindings.WAFHandle
 }
 
@@ -50,7 +49,7 @@ type Handle struct {
 // on it.
 func wrapHandle(cHandle bindings.WAFHandle) *Handle {
 	handle := &Handle{cHandle: cHandle}
-	handle.refCounter.Store(1) // We count the handle itself in the counter
+	handle.refCounter.Store(1)
 	return handle
 }
 
@@ -58,7 +57,6 @@ func wrapHandle(cHandle bindings.WAFHandle) *Handle {
 // An error is returned when the WAF handle was released or when the WAF context
 // couldn't be created.
 func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error) {
-	// Handle has been released
 	if !handle.retain() {
 		return nil, fmt.Errorf("WAF handle has been released")
 	}
@@ -100,13 +98,11 @@ func (handle *Handle) Actions() []string {
 // and all the resources associated with it to be released.
 func (handle *Handle) Close() {
 	if handle.addRefCounter(-1) != 0 {
-		// Either the counter is still positive (this Handle is still referenced), or it had previously
-		// reached 0 and some other call has done the cleanup already.
 		return
 	}
 
 	bindings.Lib.Destroy(handle.cHandle)
-	handle.cHandle = 0 // Makes it easy to spot use-after-free/double-free issues
+	handle.cHandle = 0
 }
 
 // retain increments the reference counter of this [Handle]. Returns true if the
@@ -155,7 +151,6 @@ func goRunError(rc bindings.WAFReturnCode) error {
 	case bindings.WAFErrInvalidArgument:
 		return waferrors.ErrInvalidArgument
 	case bindings.WAFOK, bindings.WAFMatch:
-		// No error...
 		return nil
 	default:
 		return fmt.Errorf("unknown waf return code %d", int(rc))

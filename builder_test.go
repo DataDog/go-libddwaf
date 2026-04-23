@@ -59,43 +59,35 @@ func TestBuilder(t *testing.T) {
 		require.NotNil(t, builder)
 		defer builder.Close()
 
-		// The config is currently empty...
 		requireConfigPaths(t, builder, "", []string{})
 		handle := builder.Build()
 		require.Nil(t, handle)
 
-		// We can add the default recommended ruleset alright...
 		diag, err := builder.AddDefaultRecommendedRuleset()
 		require.NoError(t, err)
 		assert.NotEmpty(t, diag.Version)
 		assert.NotEmpty(t, diag.Rules.Loaded)
 
-		// The default recommended ruleset is now indeed in there...
 		requireConfigPaths(t, builder, "", []string{defaultRecommendedRulesetPath})
 
-		// Adding again is idempotent...
 		diag, err = builder.AddDefaultRecommendedRuleset()
 		require.NoError(t, err)
 		assert.NotEmpty(t, diag.Version)
 		assert.NotEmpty(t, diag.Rules.Loaded)
 		requireConfigPaths(t, builder, "", []string{defaultRecommendedRulesetPath})
 
-		// We can actually build a handle with the default recommended ruleset...
 		hdl := builder.Build()
 		require.NotNil(t, hdl)
 		hdl.Close()
 
-		// And we can remove it...
 		require.True(t, builder.RemoveDefaultRecommendedRuleset())
 		requireConfigPaths(t, builder, "", []string{})
 		hdl = builder.Build()
 		require.Nil(t, hdl)
 
-		// Removing it again is "idempotent" (almost, it returns false)
 		require.False(t, builder.RemoveDefaultRecommendedRuleset())
 		requireConfigPaths(t, builder, "", []string{})
 
-		// Finally, we can add the default recommended ruleset again after deleting it...
 		diag, err = builder.AddDefaultRecommendedRuleset()
 		require.NoError(t, err)
 		assert.NotEmpty(t, diag.Version)
@@ -111,12 +103,10 @@ func TestBuilder(t *testing.T) {
 		require.NotNil(t, builder)
 		defer builder.Close()
 
-		// The config is currently empty...
 		requireConfigPaths(t, builder, "", []string{})
 		handle := builder.Build()
 		require.Nil(t, handle)
 
-		// Let's add some configuration now...
 		rules := map[string]any{
 			"version": "2.1",
 			"rules":   []map[string]any{validRule},
@@ -202,12 +192,9 @@ func TestBuilder(t *testing.T) {
 			require.NoError(t, err)
 
 			t.Run(field, func(t *testing.T) {
-				// Build up a fragment with the invalid field value...
 				rules := map[string]any{"version": "2.1", field: 1337.42}
-				// The builder will reject the broken update...
 				_, err := builder.AddOrUpdateConfig("/broken", rules)
 				require.ErrorIs(t, err, errUpdateFailed)
-				// ... but we can still obtain a valid handle since there is 1 valid rule...
 				waf := builder.Build()
 				require.NotNil(t, waf)
 				waf.Close()
@@ -249,7 +236,6 @@ func TestBuilder(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// Check with the original, non-blocking rules
 		waf := builder.Build()
 		require.NotNil(t, waf)
 		defer waf.Close()
@@ -262,7 +248,6 @@ func TestBuilder(t *testing.T) {
 		require.NotEmpty(t, res.Events)
 		require.Empty(t, res.Actions)
 
-		// Update the rules to block
 		_, err = builder.AddOrUpdateConfig("/", map[string]any{
 			"version": "2.1",
 			"rules": []map[string]any{
@@ -290,7 +275,6 @@ func TestBuilder(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// Check with the updated, blocking rules
 		waf = builder.Build()
 		require.NotNil(t, waf)
 		defer waf.Close()
@@ -311,12 +295,8 @@ func TestBuilder(t *testing.T) {
 	})
 
 	t.Run("DataDog/appsec-event-rules", func(t *testing.T) {
-		// This test validates that external DataDog/appsec-event-rules work with the WAF.
-		// Requires GITHUB_TOKEN since the repo requires authentication.
 		token := os.Getenv("GITHUB_TOKEN")
 		if token == "" {
-			// Without a token, use the bundled default ruleset instead
-			// This still validates the WAF works with a real ruleset
 			builder, err := NewBuilder()
 			require.NoError(t, err)
 			defer builder.Close()
@@ -331,7 +311,6 @@ func TestBuilder(t *testing.T) {
 			return
 		}
 
-		// With a token, fetch from GitHub
 		req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/DataDog/appsec-event-rules/releases/latest", nil)
 		require.NoError(t, err)
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -358,7 +337,6 @@ func TestBuilder(t *testing.T) {
 		var rules map[string]any
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&rules))
 
-		// Now that we have the rules, try them out...
 		builder, err := NewBuilder()
 		require.NoError(t, err)
 		defer builder.Close()

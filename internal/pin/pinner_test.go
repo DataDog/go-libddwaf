@@ -14,23 +14,23 @@ func TestConcurrentPinnerRecoverFromPinPanic(t *testing.T) {
 	func() {
 		defer func() {
 			if recovered := recover(); recovered == nil {
-				t.Fatal("Pin on a non-pointer must panic to exercise the regression path")
+				t.Fatal("expected panic")
 			}
 		}()
-		p.Pin(x) // non-pointer panics in runtime.Pinner.Pin
+		p.Pin(x)
 	}()
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		y := 99
-		p.Pin(&y) // must not deadlock
+		p.Pin(&y)
 	}()
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("Pin deadlocked after a panic in a previous Pin call — mutex was not released")
+		t.Fatal("Pin deadlocked")
 	}
 
 	p.Unpin()

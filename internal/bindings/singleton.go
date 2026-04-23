@@ -28,26 +28,14 @@ var (
 	openWafOnce sync.Once
 )
 
-// Load loads libddwaf's dynamic library. The dynamic library is opened only
-// once by the first call to this function and internally stored globally.
-// No function is currently provided in this API to unload it.
-//
-// This function is automatically called by [NewBuilder], and most users need
-// not explicitly call it. It is however useful in order to explicitly check
-// for the status of the Lib library's initialization.
-//
-// The function returns true when libddwaf was successfully loaded, along with
-// an error value. An error might still be returned even though the Lib load was
-// successful: in such cases the error is indicative that some non-critical
-// features are not available; but the Lib may still be used.
+// Load loads libddwaf's dynamic library once and stores it globally.
+// It returns true when libddwaf was successfully loaded, along with an error.
 func Load() (bool, error) {
 	if ok, err := Usable(); !ok {
 		return false, err
 	}
 
 	openWafOnce.Do(func() {
-		// Acquire the global state mutex so we don't have a race condition with
-		// [Usable] here.
 		gMu.Lock()
 		defer gMu.Unlock()
 
@@ -84,8 +72,6 @@ func Usable() (bool, error) {
 	wafSupportErrors := errors.Join(support.WafSupportErrors()...)
 	wafManuallyDisabledErr := support.WafManuallyDisabledError()
 
-	// Acquire the global state mutex as we are not calling [Load] here, so we
-	// need to explicitly avoid a race condition with it.
 	gMu.Lock()
 	defer gMu.Unlock()
 

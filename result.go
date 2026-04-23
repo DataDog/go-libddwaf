@@ -28,10 +28,10 @@ type Result struct {
 	// parameter values.
 	Actions map[string]any
 
-	// Timer returns the time spend in the different parts of the run. Keys can be found with the suffix [
+	// TimerStats records the time spent in the different parts of the run.
 	TimerStats map[timer.Key]time.Duration
 
-	// Keep is true if the WAF instructs the trace should be set to manual keep priority.
+	// Keep is true if the WAF instructs the trace to be kept with manual priority.
 	Keep bool
 }
 

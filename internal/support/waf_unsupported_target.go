@@ -3,8 +3,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-// Unsupported target OS or architecture
-//            Unsupported OS        Unsupported Arch
 //go:build (!linux && !darwin) || (!amd64 && !arm64)
 
 package support
