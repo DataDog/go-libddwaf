@@ -1261,6 +1261,36 @@ func TestRunError(t *testing.T) {
 	}
 }
 
+func TestUnwrapWafResult_TimeoutFromResultMap(t *testing.T) {
+	t.Run("timeout-true-returns-ErrTimeout", func(t *testing.T) {
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		var result bindings.WAFObject
+		kvs := result.SetMap(&pinner, 1)
+		kvs[0].Key.SetString(&pinner, "timeout")
+		kvs[0].Val.SetBool(true)
+		result.SetMapSize(1)
+
+		_, _, err := unwrapWafResult(bindings.WAFOK, &result)
+		require.ErrorIs(t, err, waferrors.ErrTimeout)
+	})
+
+	t.Run("timeout-false-returns-no-error", func(t *testing.T) {
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		var result bindings.WAFObject
+		kvs := result.SetMap(&pinner, 1)
+		kvs[0].Key.SetString(&pinner, "timeout")
+		kvs[0].Val.SetBool(false)
+		result.SetMapSize(1)
+
+		_, _, err := unwrapWafResult(bindings.WAFOK, &result)
+		require.NoError(t, err)
+	})
+}
+
 func TestMetrics(t *testing.T) {
 	rules := `{
   "version": "2.1",

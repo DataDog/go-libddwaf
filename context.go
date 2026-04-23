@@ -355,8 +355,9 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 	}
 
 	var (
-		res      Result
-		duration time.Duration
+		res        Result
+		duration   time.Duration
+		wafTimeout bool
 	)
 	for _, entry := range entries {
 		key, err := entry.Key.StringValue()
@@ -366,13 +367,11 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 
 		switch key {
 		case "timeout":
-			timeout, err := entry.Val.BoolValue()
+			timeoutVal, err := entry.Val.BoolValue()
 			if err != nil {
 				return Result{}, 0, fmt.Errorf("failed to decode timeout: %w", err)
 			}
-			if timeout {
-				err = waferrors.ErrTimeout
-			}
+			wafTimeout = timeoutVal
 		case "keep":
 			keep, err := entry.Val.BoolValue()
 			if err != nil {
@@ -433,6 +432,9 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 		}
 	}
 
+	if wafTimeout {
+		return res, duration, waferrors.ErrTimeout
+	}
 	return res, duration, goRunError(ret)
 }
 
