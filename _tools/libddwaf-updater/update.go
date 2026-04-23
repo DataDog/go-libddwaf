@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/bitfield/script"
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v85/github"
 )
 
 var (
