@@ -112,6 +112,13 @@ func (context *Context) isClosedLocked() bool {
 // to Run on that subcontext, but does not persist in the parent context.
 // When the subcontext is closed, its data is released.
 //
+// A subcontext gets its own timer whose initial budget is snapshotted from the
+// caller's remaining budget when the subcontext is created.
+//
+// Calling SubContext on an existing subcontext creates another subcontext from
+// the same root WAF context. The new subcontext does not inherit the current
+// subcontext's ephemeral state.
+//
 // Usage:
 //
 //	subCtx, err := ctx.SubContext()

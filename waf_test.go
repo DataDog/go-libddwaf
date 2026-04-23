@@ -308,8 +308,9 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		// Ephemeral data is passed via SubContext
-		// SubContext inherits the budget from the parent but has its own timer
+		// Ephemeral data is passed via SubContext.
+		// A subcontext snapshots the parent's remaining budget when it is created,
+		// then enforces that budget through its own timer.
 		subCtx, err := context.SubContext()
 		require.NoError(t, err)
 		defer subCtx.Close()
@@ -317,6 +318,25 @@ func TestTimeout(t *testing.T) {
 		res, err := subCtx.Run(RunAddressData{Data: largeValue})
 		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
+	})
+
+	t.Run("subcontext-budget-is-snapshotted-at-creation", func(t *testing.T) {
+		context, err := waf.NewContext(timer.WithBudget(time.Millisecond), timer.WithComponents(wafTimerKey))
+		require.NoError(t, err)
+		require.NotNil(t, context)
+		defer context.Close()
+
+		subCtx, err := context.SubContext()
+		require.NoError(t, err)
+		defer subCtx.Close()
+
+		_, err = context.Run(RunAddressData{Data: largeValue, TimerKey: wafTimerKey})
+		require.Equal(t, waferrors.ErrTimeout, err)
+
+		res, err := subCtx.Run(RunAddressData{Data: normalValue})
+		require.NoError(t, err)
+		require.Len(t, res.Events, 1)
+		require.NotZero(t, res.TimerStats[EncodeTimeKey])
 	})
 
 	t.Run("many-runs", func(t *testing.T) {
@@ -645,7 +665,7 @@ func TestSubContext(t *testing.T) {
 	require.NotNil(t, waf)
 	defer waf.Close()
 
-	t.Run("subcontext-from-subcontext", func(t *testing.T) {
+	t.Run("subcontext-from-subcontext-creates-a-sibling", func(t *testing.T) {
 		ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		defer ctx.Close()
@@ -653,22 +673,22 @@ func TestSubContext(t *testing.T) {
 		// Create first subcontext
 		subCtx1, err := ctx.SubContext()
 		require.NoError(t, err)
+		defer subCtx1.Close()
 
-		// Create subcontext from subcontext - should work (uses root context)
+		res, err := subCtx1.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		require.NoError(t, err)
+		require.Len(t, res.Events, 1)
+
+		// Creating a subcontext from another subcontext intentionally creates a new
+		// sibling from the shared root WAF context. It does not inherit subCtx1's
+		// ephemeral state, so the same ephemeral match can happen again.
 		subCtx2, err := subCtx1.SubContext()
 		require.NoError(t, err)
+		defer subCtx2.Close()
 
-		// Both should be able to run
-		res, err := subCtx1.Run(RunAddressData{Data: map[string]any{"my.input": "test1"}})
+		res, err = subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
 		require.NoError(t, err)
-		require.NotNil(t, res)
-
-		res, err = subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "test2"}})
-		require.NoError(t, err)
-		require.NotNil(t, res)
-
-		subCtx2.Close()
-		subCtx1.Close()
+		require.Len(t, res.Events, 1)
 	})
 
 	t.Run("subcontext-on-closed-context", func(t *testing.T) {
