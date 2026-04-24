@@ -14,3 +14,5 @@ func assertImpl(cond bool, format string, args ...any) {
 		panic(fmt.Sprintf("invariant violated: "+format, args...))
 	}
 }
+
+func Active() bool { return true }

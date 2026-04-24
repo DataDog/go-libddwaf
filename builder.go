@@ -9,17 +9,32 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"sync/atomic"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
 	"github.com/DataDog/go-libddwaf/v5/internal/ruleset"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 // Builder manages an evolving WAF configuration.
-// It is not safe for concurrent use.
+// Builder is not thread-safe. Concurrent use panics under `ci` builds.
 type Builder struct {
 	handle        bindings.WAFBuilder
 	defaultLoaded bool
+	inUse         atomic.Bool // detects concurrent use under ci builds
+}
+
+// acquire marks the builder as in use. Panics under ci builds if already in
+// use, indicating a concurrent use violation.
+func (b *Builder) acquire() {
+	if !b.inUse.CompareAndSwap(false, true) {
+		invariant.Assert(false, "Builder used concurrently")
+	}
+}
+
+func (b *Builder) release() {
+	b.inUse.Store(false)
 }
 
 // NewBuilder creates a new [Builder] instance.
@@ -60,6 +75,9 @@ const defaultRecommendedRulesetPath = "::/go-libddwaf/default/recommended.json"
 // AddDefaultRecommendedRuleset adds the default recommended ruleset to the
 // receiving [Builder], and returns the [Diagnostics] produced in the process.
 func (b *Builder) AddDefaultRecommendedRuleset() (Diagnostics, error) {
+	b.acquire()
+	defer b.release()
+
 	defaultRuleset, err := ruleset.DefaultRuleset()
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("failed to load default recommended ruleset: %w", err)
@@ -87,6 +105,9 @@ func (b *Builder) RemoveDefaultRecommendedRuleset() bool {
 // AddOrUpdateConfig adds or updates a configuration fragment to this [Builder].
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, error) {
+	b.acquire()
+	defer b.release()
+
 	if b == nil || b.handle == 0 {
 		return Diagnostics{}, errBuilderClosed
 	}
@@ -139,6 +160,9 @@ func (b *Builder) addOrUpdateConfig(path string, cfg *bindings.WAFObject) (Diagn
 // RemoveConfig removes the configuration associated with the given path from
 // this [Builder]. Returns true if the removal was successful.
 func (b *Builder) RemoveConfig(path string) bool {
+	b.acquire()
+	defer b.release()
+
 	if b == nil || b.handle == 0 {
 		return false
 	}
@@ -148,6 +172,9 @@ func (b *Builder) RemoveConfig(path string) bool {
 
 // ConfigPaths returns the list of currently loaded configuration paths.
 func (b *Builder) ConfigPaths(filter string) ([]string, error) {
+	b.acquire()
+	defer b.release()
+
 	if b == nil || b.handle == 0 {
 		return nil, errBuilderClosed
 	}
@@ -159,6 +186,9 @@ func (b *Builder) ConfigPaths(filter string) ([]string, error) {
 // Returns nil if an error occurs when building the handle. The caller is
 // responsible for calling [Handle.Close] when the handle is no longer needed.
 func (b *Builder) Build() *Handle {
+	b.acquire()
+	defer b.release()
+
 	if b == nil || b.handle == 0 {
 		return nil
 	}

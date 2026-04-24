@@ -13,3 +13,5 @@ func assertImpl(cond bool, format string, args ...any) {
 	_ = format
 	_ = args
 }
+
+func Active() bool { return false }

@@ -13,9 +13,11 @@ import (
 	"maps"
 	"net/http"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -434,4 +436,68 @@ func TestBuilder(t *testing.T) {
 		assert.NotEmpty(t, res.Events)
 		assert.NotEmpty(t, res.Actions)
 	})
+}
+
+func TestBuilderConcurrentUsePanics(t *testing.T) {
+	if !invariant.Active() {
+		t.Skip("requires -tags=ci to verify concurrent-use detection")
+	}
+	if supported, err := Usable(); !supported || err != nil {
+		t.Skipf("target is not supported by the WAF: %v", err)
+	}
+
+	builder, err := NewBuilder()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer builder.Close()
+
+	var wg sync.WaitGroup
+	barrier := make(chan struct{})
+	panicked := make(chan bool, 2)
+
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					panicked <- true
+				}
+			}()
+			<-barrier
+			builder.acquire()
+			time.Sleep(10 * time.Millisecond)
+			builder.release()
+		}()
+	}
+
+	close(barrier)
+	wg.Wait()
+	close(panicked)
+
+	count := 0
+	for range panicked {
+		count++
+	}
+	if count == 0 {
+		t.Fatal("expected at least one panic for concurrent use")
+	}
+}
+
+func TestBuilderSequentialUseOK(t *testing.T) {
+	if supported, err := Usable(); !supported || err != nil {
+		t.Skipf("target is not supported by the WAF: %v", err)
+	}
+
+	builder, err := NewBuilder()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer builder.Close()
+
+	builder.acquire()
+	builder.release()
+	builder.acquire()
+	builder.release()
 }
