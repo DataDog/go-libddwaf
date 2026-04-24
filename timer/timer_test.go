@@ -8,6 +8,7 @@ package timer_test
 import (
 	"runtime"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -333,6 +334,43 @@ func TestTree(t *testing.T) {
 			require.GreaterOrEqual(t, nodes[i-1].Spent(), nodes[i].Spent())
 		}
 	})
+}
+
+func TestBaseTimerConcurrentReadWrite(t *testing.T) {
+	timerNode, err := timer.NewTreeTimer(timer.WithBudget(10*time.Second), timer.WithComponents("test"))
+	require.NoError(t, err)
+
+	leaf, err := timerNode.NewLeaf("test")
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	barrier := make(chan struct{})
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-barrier
+		for i := 0; i < 1000; i++ {
+			leaf.Start()
+			leaf.Stop()
+		}
+	}()
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-barrier
+			for j := 0; j < 100; j++ {
+				_ = leaf.Spent()
+				_ = leaf.Remaining()
+				_ = leaf.Exhausted()
+			}
+		}()
+	}
+
+	close(barrier)
+	wg.Wait()
 }
 
 // Reproduce approximately the same number of calls that the WAF context will do
