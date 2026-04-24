@@ -324,6 +324,7 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 		return nil, fmt.Errorf("could not create encoder: %w", err)
 	}
 
+	// Discard errors so we proceed even with incomplete data. This is fine and better for the customer
 	data, _ := encoder.Encode(addressData)
 	if len(encoder.truncations) > 0 {
 		context.truncations = merge(context.truncations, encoder.truncations)
