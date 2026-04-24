@@ -32,6 +32,33 @@ var (
 	// ErrTooManyIndirections is returned when the WAF encounters a value that
 	// exceeds the maximum number of indirections (pointer to pointer to...).
 	ErrTooManyIndirections = errors.New("too many indirections")
+	// ErrHandleReleased is returned when an operation is attempted on a
+	// [github.com/DataDog/go-libddwaf/v5.Handle] whose reference count has
+	// reached zero.
+	ErrHandleReleased = errors.New("WAF handle has been released")
+
+	// ErrBuilderInitFailed is returned when the C library fails to allocate
+	// a WAF builder.
+	ErrBuilderInitFailed = errors.New("failed to initialize the WAF builder")
+
+	// ErrContextInitFailed is returned when the C library fails to allocate
+	// a WAF context.
+	ErrContextInitFailed = errors.New("failed to initialize WAF context")
+
+	// ErrUnknownReturnCode wraps an unexpected return code from the C library.
+	ErrUnknownReturnCode = errors.New("unknown WAF return code")
+
+	// ErrResultInvalidType is returned when unwrapping a WAF result encounters
+	// an object whose type is not expected for that field.
+	ErrResultInvalidType = errors.New("invalid WAF result object type")
+
+	// ErrNilContext is returned when a nil context.Context is passed where a
+	// non-nil one is required.
+	ErrNilContext = errors.New("nil context.Context")
+
+	// ErrBinaryNotString is returned by the decoder when a value expected to be
+	// a string is not actually a string/[]byte.
+	ErrBinaryNotString = errors.New("WAF object value is not a string")
 )
 
 // RunError represents an error returned by the WAF during a run.
