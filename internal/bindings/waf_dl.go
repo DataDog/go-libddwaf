@@ -36,7 +36,7 @@ type WAFLib struct {
 func newWAFLib() (dl *WAFLib, err error) {
 	path, closer, err := lib.DumpEmbeddedWAF()
 	if err != nil {
-		return nil, fmt.Errorf("dump embedded WAF: %w", err)
+		return nil, fmt.Errorf("failed to dump embedded WAF library: %w", err)
 	}
 	defer func() {
 		if rmErr := closer(); rmErr != nil {
@@ -46,7 +46,7 @@ func newWAFLib() (dl *WAFLib, err error) {
 
 	var handle uintptr
 	if handle, err = purego.Dlopen(path, purego.RTLD_LOCAL|purego.RTLD_NOW); err != nil {
-		return nil, fmt.Errorf("load a dynamic library file: %w", err)
+		return nil, fmt.Errorf("failed to load dynamic library %q: %w", path, err)
 	}
 
 	closeOnError := func() {
@@ -65,6 +65,7 @@ func newWAFLib() (dl *WAFLib, err error) {
 
 	// Try calling the waf to make sure everything is fine
 	if _, err = tryCall(dl.Version); err != nil {
+		err = fmt.Errorf("calling ddwaf_get_version after Dlopen: %w", err)
 		closeOnError()
 		return
 	}
