@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	_ "embed"
+	"errors"
 	"fmt"
 	"io"
 
@@ -47,7 +48,7 @@ func DefaultRuleset() (obj bindings.WAFObject, err error) {
 
 	parsedRuleset, ok := bindings.Lib.ObjectFromJSON(decompressedRuleset, bindings.Lib.DefaultAllocator())
 	if !ok {
-		return bindings.WAFObject{}, fmt.Errorf("failed to parse default ruleset: ddwaf_object_from_json returned false")
+		return bindings.WAFObject{}, errors.New("failed to parse default ruleset: ddwaf_object_from_json returned false")
 	}
 	return parsedRuleset, nil
 }

@@ -1,0 +1,6 @@
+Verification for Task 2.6
+
+- grep -cE 'fmt\.Errorf\("[^%]*"\)' internal/ruleset/ruleset.go => 0
+- go build ./internal/ruleset/ => ok
+- go test ./internal/ruleset/ => ok
+- lsp diagnostics for internal/ruleset/ruleset.go => no diagnostics found
