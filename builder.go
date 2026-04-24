@@ -12,6 +12,7 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/internal/ruleset"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 // Builder manages an evolving WAF configuration.
@@ -34,7 +35,7 @@ func NewBuilder() (*Builder, error) {
 	hdl := bindings.Lib.BuilderInit()
 
 	if hdl == 0 {
-		return nil, errors.New("failed to initialize the WAF builder")
+		return nil, waferrors.ErrBuilderInitFailed
 	}
 
 	return &Builder{handle: hdl}, nil
@@ -60,10 +61,10 @@ const defaultRecommendedRulesetPath = "::/go-libddwaf/default/recommended.json"
 // receiving [Builder], and returns the [Diagnostics] produced in the process.
 func (b *Builder) AddDefaultRecommendedRuleset() (Diagnostics, error) {
 	defaultRuleset, err := ruleset.DefaultRuleset()
-	defer bindings.Lib.ObjectDestroy(&defaultRuleset, bindings.Lib.DefaultAllocator())
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("failed to load default recommended ruleset: %w", err)
 	}
+	defer bindings.Lib.ObjectDestroy(&defaultRuleset, bindings.Lib.DefaultAllocator())
 
 	diag, err := b.addOrUpdateConfig(defaultRecommendedRulesetPath, &defaultRuleset)
 	if err == nil {
@@ -104,7 +105,7 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 
 	frag, err := encoder.Encode(fragment)
 	if err != nil {
-		return Diagnostics{}, fmt.Errorf("could not encode the config fragment into a WAF object; %w", err)
+		return Diagnostics{}, fmt.Errorf("could not encode the config fragment into a WAF object: %w", err)
 	}
 
 	return b.addOrUpdateConfig(path, frag)
