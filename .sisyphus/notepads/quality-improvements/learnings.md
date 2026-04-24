@@ -1,2 +1,3 @@
 - 2026-04-24: Confirmed v5 remains pre-release; decision log captured five architecture choices for downstream implementation waves.
 - 2026-04-24: TOCTOU mitigation should favor throughput-preserving refcounting over lock-heavy serialization.
+- 2026-04-24: Added waferrors sentinels for handle/builder/context/init/result/nil-context/binary typing; go build, go vet, and go test all passed, and errors.Is wrapped sentinels behaved as expected.

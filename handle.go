@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
@@ -58,13 +59,13 @@ func wrapHandle(cHandle bindings.WAFHandle) *Handle {
 // couldn't be created.
 func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error) {
 	if !handle.retain() {
-		return nil, fmt.Errorf("WAF handle has been released")
+		return nil, waferrors.ErrHandleReleased
 	}
 
 	cContext := bindings.Lib.ContextInit(handle.cHandle, bindings.Lib.DefaultAllocator())
 	if cContext == 0 {
 		handle.Close() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
-		return nil, fmt.Errorf("failed to initialize WAF context: ddwaf_context_init returned null")
+		return nil, fmt.Errorf("%w: ddwaf_context_init returned null", waferrors.ErrContextInitFailed)
 	}
 
 	rootTimer, err := timer.NewTreeTimer(timerOptions...)
@@ -131,10 +132,8 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 		next := current + x
 		if swapped := handle.refCounter.CompareAndSwap(current, next); swapped {
 			if next < 0 {
-				// TODO(romain.marcadier): somehow signal unexpected behavior to the
-				// caller (panic? error?). We currently clamp to 0 in order to avoid
-				// causing a customer program crash, but this is the symptom of a bug
-				// and should be investigated (however this clamping hides the issue).
+				// Refcount underflow is surfaced via internal/invariant under ci builds (see ADR-003).
+				invariant.Assert(false, "refCounter went negative: current=%d, delta=%d", current, x)
 				return 0
 			}
 			return next
@@ -153,6 +152,6 @@ func goRunError(rc bindings.WAFReturnCode) error {
 	case bindings.WAFOK, bindings.WAFMatch:
 		return nil
 	default:
-		return fmt.Errorf("unknown waf return code %d", int(rc))
+		return fmt.Errorf("%w: %d", waferrors.ErrUnknownReturnCode, int(rc))
 	}
 }
