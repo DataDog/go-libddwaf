@@ -9,12 +9,14 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
 	"strings"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
 	"github.com/DataDog/go-libddwaf/v5/internal/pin"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
@@ -115,10 +117,12 @@ type Encodable interface {
 
 func newEncoder(config EncoderConfig) (*encoder, error) {
 	if config.Pinner == nil {
-		return nil, fmt.Errorf("pinner cannot be nil")
+		return nil, errors.New("pinner cannot be nil")
 	}
 	if config.Timer == nil {
-		config.Timer, _ = timer.NewTimer(timer.WithUnlimitedBudget())
+		var timerErr error
+		config.Timer, timerErr = timer.NewTimer(timer.WithUnlimitedBudget())
+		invariant.Assert(timerErr == nil, "timer.NewTimer(WithUnlimitedBudget) should not fail: %v", timerErr)
 	}
 
 	return &encoder{config: config}, nil
@@ -179,6 +183,9 @@ func (encoder *encoder) Encode(data any) (*bindings.WAFObject, error) {
 		ctx, cancelCtx := context.WithTimeout(context.Background(), encoder.config.Timer.Remaining())
 		defer cancelCtx()
 
+		// depthOf may return ctx.Err() on timeout; we intentionally use whatever
+		// depth was measured before interruption. The value is published as-is for
+		// truncation reporting. Wave 4.6 will rework this to use the Timer directly.
 		depth, _ := depthOf(ctx, value)
 		encoder.truncations[ObjectTooDeep] = []int{depth}
 	}
