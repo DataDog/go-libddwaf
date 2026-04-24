@@ -665,7 +665,7 @@ func TestEncoderLimits(t *testing.T) {
 
 		require.NoError(t, err)
 
-		encoded := &bindings.WAFObject{}
+		var encoded *bindings.WAFObject
 		encoded, err = encoder.Encode(tc.Input)
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
 			require.Equal(t, tc.Truncations, sortValues(encoder.truncations))

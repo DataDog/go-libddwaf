@@ -344,7 +344,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		for i := 0; i < 1000 && err != waferrors.ErrTimeout; i++ {
+		for i := 0; i < 1000 && !errors.Is(err, waferrors.ErrTimeout); i++ {
 			_, err = context.Run(RunAddressData{Data: normalValue, TimerKey: wafTimerKey})
 		}
 

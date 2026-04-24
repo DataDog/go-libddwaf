@@ -360,7 +360,7 @@ func BenchmarkContext(b *testing.B) {
 				}
 			})
 
-			if contextTimer.SumExhausted() {
+			if contextTimer.SumExhausted() { //nolint:staticcheck // TODO(quality-plan): benchmark intentionally calls SumExhausted for side-effect timing without early exit
 				// return
 			}
 
@@ -370,7 +370,7 @@ func BenchmarkContext(b *testing.B) {
 				}
 			})
 
-			if contextTimer.SumExhausted() {
+			if contextTimer.SumExhausted() { //nolint:staticcheck // TODO(quality-plan): benchmark intentionally calls SumExhausted for side-effect timing without early exit
 				// return
 			}
 
@@ -405,7 +405,7 @@ func BenchmarkRun(b *testing.B) {
 			}
 		})
 
-		if runTimer.SumExhausted() {
+		if runTimer.SumExhausted() { //nolint:staticcheck // TODO(quality-plan): benchmark intentionally calls SumExhausted for side-effect timing without early exit
 		}
 
 		runTimer.MustLeaf("ephemera-encoder").Timed(func(timer timer.Timer) {
@@ -414,7 +414,7 @@ func BenchmarkRun(b *testing.B) {
 			}
 		})
 
-		if runTimer.SumExhausted() {
+		if runTimer.SumExhausted() { //nolint:staticcheck // TODO(quality-plan): benchmark intentionally calls SumExhausted for side-effect timing without early exit
 		}
 
 		runTimer.MustLeaf("waiting", timer.WithUnlimitedBudget()).Timed(func(timer timer.Timer) {

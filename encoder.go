@@ -20,6 +20,10 @@ import (
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
+// maxPointerIndirections limits traversal of chained pointers/interfaces
+// to avoid infinite loops on self-referencing pointers during encoding.
+const maxPointerIndirections = 8
+
 type EncoderConfig struct {
 	// Pinner is used to pin the data referenced by the encoded wafObjects.
 	Pinner pin.Pinner
@@ -380,8 +384,7 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 	typ := value.Type()
 	nbFields := typ.NumField()
 
-	capacity := min(nbFields, encoder.config.maxContainerSize())
-	capacity = min(capacity, math.MaxUint16)
+	capacity := min(nbFields, encoder.config.maxContainerSize(), math.MaxUint16)
 	length := 0
 
 	kvArray := obj.SetMap(encoder.config.Pinner, uint16(capacity))
@@ -422,9 +425,7 @@ func (encoder *encoder) encodeStruct(value reflect.Value, obj *bindings.WAFObjec
 // - It will only take the first encoder.ContainerMaxSize elements of the map
 // - Even if the element values are invalid or null we still keep them to report the map key
 func (encoder *encoder) encodeMap(value reflect.Value, obj *bindings.WAFObject, depth int) {
-	capacity := value.Len()
-	capacity = min(capacity, encoder.config.maxContainerSize())
-	capacity = min(capacity, math.MaxUint16)
+	capacity := min(value.Len(), encoder.config.maxContainerSize(), math.MaxUint16)
 
 	kvArray := obj.SetMap(encoder.config.Pinner, uint16(capacity))
 
@@ -495,8 +496,7 @@ func (encoder *encoder) encodeMapKeyString(keyStr string, keyObj *bindings.WAFOb
 func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject, depth int) {
 	length := value.Len()
 
-	capacity := min(length, encoder.config.maxContainerSize())
-	capacity = min(capacity, math.MaxUint16)
+	capacity := min(length, encoder.config.maxContainerSize(), math.MaxUint16)
 
 	currIndex := 0
 
@@ -596,7 +596,7 @@ func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
 // provided a self-referencing pointer.
 func resolvePointer(obj reflect.Value) (reflect.Value, reflect.Kind) {
 	kind := obj.Kind()
-	for limit := 8; limit > 0 && (kind == reflect.Pointer || kind == reflect.Interface); limit-- {
+	for limit := maxPointerIndirections; limit > 0 && (kind == reflect.Pointer || kind == reflect.Interface); limit-- {
 		if obj.IsNil() {
 			return obj, kind
 		}
