@@ -87,6 +87,8 @@ func decodeDiagnostics(obj *bindings.WAFObject) (Diagnostics, error) {
 		case "ruleset_version":
 			diags.Version, err = entry.Val.StringValue()
 		default:
+			// Unknown diagnostic keys are intentionally ignored so newer libddwaf
+			// versions don't break this decoder.
 		}
 		if err != nil {
 			return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", key, err)
@@ -109,7 +111,7 @@ func decodeFeature(obj *bindings.WAFObject) (*Feature, error) {
 	for _, entry := range entries {
 		key, err := entry.Key.StringValue()
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("decodeFeature: failed to decode key: %w", err)
 		}
 
 		switch key {
@@ -170,8 +172,10 @@ func decodeStringArray(obj *bindings.WAFObject) ([]string, error) {
 	return strArr, nil
 }
 
-// Deprecated: This is merely wrapping [bindings.WAFObject.AnyValue], which should be used directly
-// instead.
+// DecodeObject decodes a [WAFObject] into a generic Go value.
+//
+// Deprecated: This is merely wrapping [WAFObject.AnyValue], which should be
+// used directly instead.
 func DecodeObject(obj *WAFObject) (any, error) {
 	return obj.AnyValue()
 }
