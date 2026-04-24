@@ -1,0 +1,21 @@
+{
+  "scan_date": "2026-04-24",
+  "target_module": "github.com/DataDog/go-libddwaf/v4",
+  "note": "v5 not yet published to deps.dev index. Scanning v4 (current stable) to understand migration impact.",
+  "known_consumers": [
+    {
+      "name": "github.com/DataDog/dd-trace-go",
+      "version": "v4.9.0",
+      "detection_method": "gh_api_go_mod",
+      "detected_at": "2026-04-24"
+    }
+  ],
+  "deps_dev_v4_package": {
+    "packageKey": {
+      "system": "GO",
+      "name": "github.com/DataDog/go-libddwaf/v4"
+    },
+    "total_versions": 203,
+    "default_version": "v4.9.0"
+  }
+}
