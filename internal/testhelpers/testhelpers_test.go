@@ -15,15 +15,18 @@ import (
 	"github.com/DataDog/go-libddwaf/v5/internal/testhelpers"
 )
 
-// mockTB wraps *testing.T and overrides Fatal/Fatalf to record failure without
-// calling runtime.Goexit(), allowing callers to assert that failure was reported.
+// mockTB records failures without aborting the test process.
 type mockTB struct {
 	*testing.T
 	mu     sync.Mutex
 	failed bool
 }
 
-func (m *mockTB) Helper() { m.T.Helper() }
+func (m *mockTB) Helper() {
+	if m.T != nil {
+		m.T.Helper()
+	}
+}
 
 func (m *mockTB) Fatal(args ...any) {
 	m.mu.Lock()

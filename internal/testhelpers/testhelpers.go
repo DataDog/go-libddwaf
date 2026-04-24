@@ -15,14 +15,20 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"testing"
 )
+
+// TB is the minimal testing interface needed by the helpers.
+type TB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+}
 
 // ConcurrentRunner executes iter on numGoroutines goroutines, gating start
 // with a shared barrier. It captures the first non-nil error returned and
 // calls t.Fatal with it. Each test that exercises concurrent behavior should
 // use this helper to avoid reinventing the barrier pattern.
-func ConcurrentRunner(t testing.TB, numGoroutines int, iter func(goroutineIdx int) error) {
+func ConcurrentRunner(t TB, numGoroutines int, iter func(goroutineIdx int) error) {
 	t.Helper()
 	var wg sync.WaitGroup
 	barrier := make(chan struct{})
@@ -53,7 +59,7 @@ func ConcurrentRunner(t testing.TB, numGoroutines int, iter func(goroutineIdx in
 // RequireErrorIs asserts that errors.Is(err, target) is true, failing the
 // test with a descriptive message if not. Prefer this over require.Equal for
 // error matching to be future-proof against error wrapping.
-func RequireErrorIs(t testing.TB, err, target error) {
+func RequireErrorIs(t TB, err, target error) {
 	t.Helper()
 	if !errors.Is(err, target) {
 		t.Fatalf("expected errors.Is(%v, %v) to be true, but it was false\nerr type: %T\ntarget type: %T", err, target, err, target)
@@ -62,7 +68,7 @@ func RequireErrorIs(t testing.TB, err, target error) {
 
 // RequireNoError asserts that err is nil, failing the test with a descriptive
 // message if not.
-func RequireNoError(t testing.TB, err error, msgAndArgs ...any) {
+func RequireNoError(t TB, err error, msgAndArgs ...any) {
 	t.Helper()
 	if err != nil {
 		if len(msgAndArgs) > 0 {
