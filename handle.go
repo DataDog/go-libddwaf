@@ -130,12 +130,16 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 		}
 
 		next := current + x
-		if swapped := handle.refCounter.CompareAndSwap(current, next); swapped {
-			if next < 0 {
+		if next < 0 {
+			if swapped := handle.refCounter.CompareAndSwap(current, 0); swapped {
 				// Refcount underflow is surfaced via internal/invariant under ci builds (see ADR-003).
 				invariant.Assert(false, "refCounter went negative: current=%d, delta=%d", current, x)
 				return 0
 			}
+			continue
+		}
+
+		if swapped := handle.refCounter.CompareAndSwap(current, next); swapped {
 			return next
 		}
 	}
