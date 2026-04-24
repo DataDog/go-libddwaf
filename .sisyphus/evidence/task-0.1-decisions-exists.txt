@@ -1,0 +1,6 @@
+grep -c '^## ' .sisyphus/plans/decisions.md
+5
+grep -E '(pre-release|TOCTOU|Deadline|Refcount|Nil.ctx)' .sisyphus/plans/decisions.md | wc -l
+5
+git tag --list 'v5*'
+(no output)
