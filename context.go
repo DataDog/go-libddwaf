@@ -19,6 +19,10 @@ import (
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
+// numTruncationReasons is the number of known [TruncationReason]s; sized so
+// the truncations map allocated in NewContext/SubContext rarely grows.
+const numTruncationReasons = 3
+
 // Context is a WAF execution context. It allows running the WAF incrementally when calling it
 // multiple times to run its rules every time new addresses become available. Each request must have
 // its own [Context]. New [Context] instances can be created by calling

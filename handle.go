@@ -78,7 +78,7 @@ func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error)
 		handle:      handle,
 		root:        &contextRoot{cContext: cContext},
 		Timer:       rootTimer,
-		truncations: make(map[TruncationReason][]int, 3),
+		truncations: make(map[TruncationReason][]int, numTruncationReasons),
 	}, nil
 }
 
