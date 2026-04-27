@@ -34,14 +34,14 @@ func main() {
     }
     defer wafHandle.Close()
 
-    wafCtx, err := wafHandle.NewContext(timer.WithUnlimitedBudget(), timer.WithComponent("waf", "rasp"))
+    wafCtx, err := wafHandle.NewContext(context.Background(), timer.WithUnlimitedBudget(), timer.WithComponent("waf", "rasp"))
     if err != nil {
         panic(err)
     }
     defer wafCtx.Close()
 
     // v2: Use Data field instead of Persistent
-    result, err := wafCtx.Run(waf.RunAddressData{
+    result, err := wafCtx.Run(context.Background(), waf.RunAddressData{
         Data: map[string]any{
             "server.request.path_params": "/rfiinc.txt",
         },
@@ -49,13 +49,13 @@ func main() {
     })
 
     // v2: For ephemeral data, use SubContext
-    subCtx, err := wafCtx.SubContext()
+    subCtx, err := wafCtx.SubContext(context.Background())
     if err != nil {
         panic(err)
     }
     defer subCtx.Close()
 
-    result, err = subCtx.Run(waf.RunAddressData{
+    result, err = subCtx.Run(context.Background(), waf.RunAddressData{
         Data: map[string]any{
             "server.request.body": "ephemeral data",
         },
@@ -72,6 +72,8 @@ go-libddwaf v5 tracks libddwaf v2 and includes a few breaking API changes:
 - `NewBuilder()` no longer takes obfuscator regex arguments; obfuscation now lives in builder config via `AddOrUpdateConfig(..., "obfuscator/config", ...)`
 - `RunAddressData` now uses a single `Data` field instead of `Persistent` and `Ephemeral`
 - ephemeral evaluation now goes through `SubContext()`
+- `Context.Run`, `Handle.NewContext`, and `Context.SubContext` now require a `context.Context`
+- `Builder.Build()` now returns `(*Handle, error)`
 
 ```go
 // v4
@@ -79,16 +81,17 @@ builder, _ := waf.NewBuilder("keyRegex", "valueRegex")
 ctx.Run(waf.RunAddressData{Persistent: data, Ephemeral: ephemeral})
 
 // v5
-builder, _ := waf.NewBuilder()
+builder, err := waf.NewBuilder()
 builder.AddOrUpdateConfig("obfuscator/config", map[string]any{
     "key_regex": keyRegex,
     "value_regex": valueRegex,
 })
-ctx.Run(waf.RunAddressData{Data: data})
+wafHandle, err := builder.Build()
+ctx.Run(context.Background(), waf.RunAddressData{Data: data})
 
-subCtx, _ := ctx.SubContext()
+subCtx, err := ctx.SubContext(context.Background())
 defer subCtx.Close()
-subCtx.Run(waf.RunAddressData{Data: ephemeral})
+subCtx.Run(context.Background(), waf.RunAddressData{Data: ephemeral})
 ```
 
 For the upstream libddwaf v2 migration details and release notes, prefer the canonical docs in the libddwaf repository:
