@@ -27,6 +27,7 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/internal/lib"
+	"github.com/DataDog/go-libddwaf/v5/internal/testhelpers"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/assert"
@@ -937,49 +938,33 @@ func TestConcurrentWAFContextUsage(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
-	errCh := make(chan error, nbUsers)
 
 	wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 	t.Cleanup(func() { wafCtx.Close() })
 
 	userAgents := [...]string{"Foo", "Bar", "Datadog"}
-	length := len(userAgents)
 
-	var startBarrier, stopBarrier sync.WaitGroup
-	startBarrier.Add(1)
-	stopBarrier.Add(nbUsers)
-
-	for range nbUsers {
-		go func() {
-			startBarrier.Wait()
-			defer stopBarrier.Done()
-
-			if err := captureWorkerError(func() error {
-				for c := range nbRun {
-					i := c % length
-					data := map[string]any{
-						"server.request.headers.no_cookies": map[string]string{
-							"user-agent": userAgents[i],
-						},
-					}
-					res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
-					if err != nil {
-						return err
-					}
-					if len(res.Events) > 0 {
-						return fmt.Errorf("c=%d events=`%v`", c, res.Events)
-					}
+	testhelpers.ConcurrentRunner(t, nbUsers, func(_ int) error {
+		return captureWorkerError(func() error {
+			for c := range nbRun {
+				i := c % len(userAgents)
+				data := map[string]any{
+					"server.request.headers.no_cookies": map[string]string{
+						"user-agent": userAgents[i],
+					},
 				}
-				return nil
-			}); err != nil {
-				errCh <- err
+				res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
+				if err != nil {
+					return err
+				}
+				if len(res.Events) > 0 {
+					return fmt.Errorf("c=%d events=`%v`", c, res.Events)
+				}
 			}
-		}()
-	}
-
-	startBarrier.Done()
-	stopBarrier.Wait()
+			return nil
+		})
+	})
 
 	data := map[string]any{
 		"server.request.headers.no_cookies": map[string]string{
@@ -989,10 +974,6 @@ func TestConcurrentWAFContextUsage(t *testing.T) {
 	res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 	require.NoError(t, err)
 	require.NotEmpty(t, res.Events)
-	close(errCh)
-	for err := range errCh {
-		require.NoError(t, err)
-	}
 }
 
 func TestConcurrentWAFInstanceUsage(t *testing.T) {
@@ -1004,72 +985,51 @@ func TestConcurrentWAFInstanceUsage(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
-	errCh := make(chan error, nbUsers)
 
 	userAgents := [...]string{"Foo", "Bar", "Datadog"}
-	length := len(userAgents)
 
-	var startBarrier, stopBarrier sync.WaitGroup
-	startBarrier.Add(1)
-	stopBarrier.Add(nbUsers)
+	testhelpers.ConcurrentRunner(t, nbUsers, func(_ int) error {
+		wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
+		if err != nil {
+			return fmt.Errorf("NewContext failed: %w", err)
+		}
+		t.Cleanup(func() { wafCtx.Close() })
 
-	for range nbUsers {
-		go func() {
-			startBarrier.Wait()
-			defer stopBarrier.Done()
-
-			wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
-			if err != nil {
-				errCh <- fmt.Errorf("NewContext failed: %w", err)
-				return
-			}
-			t.Cleanup(func() { wafCtx.Close() })
-
-			if err := captureWorkerError(func() error {
-				for c := range nbRun {
-					i := c % length
-					data := map[string]any{
-						"server.request.headers.no_cookies": map[string]string{
-							"user-agent": userAgents[i],
-						},
-					}
-					res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
-					if err != nil {
-						return err
-					}
-					if len(res.Events) > 0 {
-						return fmt.Errorf("c=%d events=`%v`", c, res.Events)
-					}
-				}
-
+		return captureWorkerError(func() error {
+			for c := range nbRun {
+				i := c % len(userAgents)
 				data := map[string]any{
 					"server.request.headers.no_cookies": map[string]string{
-						"user-agent": "Arachni",
+						"user-agent": userAgents[i],
 					},
 				}
 				res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 				if err != nil {
-					return fmt.Errorf("Run failed: %w", err)
+					return err
 				}
-				if len(res.Events) == 0 {
-					return fmt.Errorf("expected events after final run")
+				if len(res.Events) > 0 {
+					return fmt.Errorf("c=%d events=`%v`", c, res.Events)
 				}
-				if res.Actions != nil {
-					return fmt.Errorf("expected nil actions, got %v", res.Actions)
-				}
-				return nil
-			}); err != nil {
-				errCh <- err
 			}
-		}()
-	}
 
-	startBarrier.Done()
-	stopBarrier.Wait()
-	close(errCh)
-	for err := range errCh {
-		require.NoError(t, err)
-	}
+			data := map[string]any{
+				"server.request.headers.no_cookies": map[string]string{
+					"user-agent": "Arachni",
+				},
+			}
+			res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
+			if err != nil {
+				return fmt.Errorf("Run failed: %w", err)
+			}
+			if len(res.Events) == 0 {
+				return fmt.Errorf("expected events after final run")
+			}
+			if res.Actions != nil {
+				return fmt.Errorf("expected nil actions, got %v", res.Actions)
+			}
+			return nil
+		})
+	})
 }
 
 func TestConcurrentWAFSubcontextUsage(t *testing.T) {
@@ -1081,80 +1041,57 @@ func TestConcurrentWAFSubcontextUsage(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
-	errCh := make(chan error, nbUsers)
 
 	userAgents := [...]string{"Foo", "Bar", "Datadog"}
-	length := len(userAgents)
 
-	var startBarrier, stopBarrier sync.WaitGroup
-	startBarrier.Add(1)
-	stopBarrier.Add(nbUsers)
+	testhelpers.ConcurrentRunner(t, nbUsers, func(_ int) error {
+		wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
+		if err != nil {
+			return fmt.Errorf("NewContext failed: %w", err)
+		}
+		t.Cleanup(func() { wafCtx.Close() })
 
-	for range nbUsers {
-		go func() {
-			startBarrier.Wait()
-			defer stopBarrier.Done()
+		wafSubCtx, err := wafCtx.SubContext(stdcontext.Background())
+		if err != nil {
+			return fmt.Errorf("SubContext failed: %w", err)
+		}
+		t.Cleanup(func() { wafSubCtx.Close() })
 
-			wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
-			if err != nil {
-				errCh <- fmt.Errorf("NewContext failed: %w", err)
-				return
-			}
-			t.Cleanup(func() { wafCtx.Close() })
-
-			wafSubCtx, err := wafCtx.SubContext(stdcontext.Background())
-			if err != nil {
-				errCh <- fmt.Errorf("SubContext failed: %w", err)
-				return
-			}
-			t.Cleanup(func() { wafSubCtx.Close() })
-
-			if err := captureWorkerError(func() error {
-				for c := range nbRun {
-					i := c % length
-					data := map[string]any{
-						"server.request.headers.no_cookies": map[string]string{
-							"user-agent": userAgents[i],
-						},
-					}
-
-					res, err := wafSubCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
-					if err != nil {
-						return err
-					}
-					if len(res.Events) > 0 {
-						return fmt.Errorf("c=%d events=`%v`", c, res.Events)
-					}
-				}
-
+		return captureWorkerError(func() error {
+			for c := range nbRun {
+				i := c % len(userAgents)
 				data := map[string]any{
 					"server.request.headers.no_cookies": map[string]string{
-						"user-agent": "Arachni",
+						"user-agent": userAgents[i],
 					},
 				}
 				res, err := wafSubCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 				if err != nil {
-					return fmt.Errorf("SubContext Run failed: %w", err)
+					return err
 				}
-				if len(res.Events) == 0 {
-					return fmt.Errorf("expected events after final subcontext run")
+				if len(res.Events) > 0 {
+					return fmt.Errorf("c=%d events=`%v`", c, res.Events)
 				}
-				if res.Actions != nil {
-					return fmt.Errorf("expected nil actions, got %v", res.Actions)
-				}
-				return nil
-			}); err != nil {
-				errCh <- err
 			}
-		}()
-	}
 
-	startBarrier.Done()
-	stopBarrier.Wait()
-	close(errCh)
-	for err := range errCh {
-		require.NoError(t, err)
-	}
+			data := map[string]any{
+				"server.request.headers.no_cookies": map[string]string{
+					"user-agent": "Arachni",
+				},
+			}
+			res, err := wafSubCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
+			if err != nil {
+				return fmt.Errorf("SubContext Run failed: %w", err)
+			}
+			if len(res.Events) == 0 {
+				return fmt.Errorf("expected events after final subcontext run")
+			}
+			if res.Actions != nil {
+				return fmt.Errorf("expected nil actions, got %v", res.Actions)
+			}
+			return nil
+		})
+	})
 }
 
 func TestConcurrentWAFHandleClose(t *testing.T) {
@@ -1473,65 +1410,33 @@ func TestMetrics(t *testing.T) {
 
 func TestObfuscatorConfig(t *testing.T) {
 	rule := newArachniTestRule(t, []ruleInput{{Address: "my.addr", KeyPath: []string{"key"}}}, nil)
-	t.Run("key", func(t *testing.T) {
-		waf, _, err := newDefaultHandle(t, rule)
-		require.NoError(t, err)
-		t.Cleanup(func() { waf.Close() })
-		wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
-		require.NoError(t, err)
-		require.NotNil(t, wafCtx)
-		t.Cleanup(func() { wafCtx.Close() })
-		data := map[string]any{
-			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
-		}
-		res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
-		require.NoError(t, err)
-		require.NotNil(t, res.Events)
-		require.Nil(t, res.Actions)
-		events, err := json.Marshal(res.Events)
-		require.NoError(t, err)
-		require.NotContains(t, events, "sensitive")
-	})
-
-	t.Run("val", func(t *testing.T) {
-		waf, _, err := newDefaultHandle(t, rule)
-		require.NoError(t, err)
-		t.Cleanup(func() { waf.Close() })
-		wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
-		require.NoError(t, err)
-		require.NotNil(t, wafCtx)
-		t.Cleanup(func() { wafCtx.Close() })
-		data := map[string]any{
-			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
-		}
-		res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
-		require.NoError(t, err)
-		require.NotNil(t, res.Events)
-		require.Nil(t, res.Actions)
-		events, err := json.Marshal(res.Events)
-		require.NoError(t, err)
-		require.NotContains(t, events, "sensitive")
-	})
-
-	t.Run("off", func(t *testing.T) {
-		waf, _, err := newDefaultHandle(t, rule)
-		require.NoError(t, err)
-		t.Cleanup(func() { waf.Close() })
-		wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
-		require.NoError(t, err)
-		require.NotNil(t, wafCtx)
-		t.Cleanup(func() { wafCtx.Close() })
-		data := map[string]any{
-			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
-		}
-		res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
-		require.NoError(t, err)
-		require.NotNil(t, res.Events)
-		require.Nil(t, res.Actions)
-		events, err := json.Marshal(res.Events)
-		require.NoError(t, err)
-		require.Contains(t, string(events), "sensitive")
-	})
+	for _, tc := range []struct{ name string; wantObf bool }{
+		{"key", true}, {"val", true}, {"off", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			waf, _, err := newDefaultHandle(t, rule)
+			require.NoError(t, err)
+			t.Cleanup(func() { waf.Close() })
+			wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
+			require.NoError(t, err)
+			require.NotNil(t, wafCtx)
+			t.Cleanup(func() { wafCtx.Close() })
+			data := map[string]any{
+				"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
+			}
+			res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
+			require.NoError(t, err)
+			require.NotNil(t, res.Events)
+			require.Nil(t, res.Actions)
+			events, err := json.Marshal(res.Events)
+			require.NoError(t, err)
+			if tc.wantObf {
+				require.NotContains(t, events, "sensitive")
+			} else {
+				require.Contains(t, string(events), "sensitive")
+			}
+		})
+	}
 }
 
 func TestTruncationInformation(t *testing.T) {
