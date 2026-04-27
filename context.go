@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/internal/pin"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
@@ -40,10 +40,10 @@ type Context struct {
 
 	handle *Handle // Instance of the WAF
 
-	root        *contextRoot           // Shared root state for the C ddwaf_context pointer
-	isSubCtx    bool                   // Whether this Context represents a subcontext
-	closed      atomic.Bool            // Whether this Context or subcontext has been closed
-	cSubcontext bindings.WAFSubcontext // The C ddwaf_subcontext pointer (nil for root context)
+	root        *contextRoot              // Shared root state for the C ddwaf_context pointer
+	isSubCtx    bool                      // Whether this Context represents a subcontext
+	closed      atomic.Bool               // Whether this Context or subcontext has been closed
+	cSubcontext wafBindings.WAFSubcontext // The C ddwaf_subcontext pointer (nil for root context)
 
 	// mutex protecting local fields such as pinner and cSubcontext.
 	mutex sync.Mutex
@@ -63,7 +63,7 @@ type Context struct {
 
 type contextRoot struct {
 	mu         sync.Mutex
-	cContext   bindings.WAFContext
+	cContext   wafBindings.WAFContext
 	closed     atomic.Bool
 	activeRuns atomic.Int64
 }
@@ -182,7 +182,7 @@ func (context *Context) SubContext(ctx context.Context) (*Context, error) {
 		return nil, waferrors.ErrContextClosed
 	}
 
-	cSubcontext := bindings.Lib.SubcontextInit(context.root.cContext)
+	cSubcontext := wafBindings.Lib.SubcontextInit(context.root.cContext)
 	if cSubcontext == 0 {
 		return nil, fmt.Errorf("failed to create subcontext: ddwaf_subcontext_init returned null")
 	}
@@ -202,7 +202,7 @@ func (context *Context) SubContext(ctx context.Context) (*Context, error) {
 		timer.WithBudget(context.Timer.SumRemaining()),
 	)
 	if err != nil {
-		bindings.Lib.SubcontextDestroy(cSubcontext)
+		wafBindings.Lib.SubcontextDestroy(cSubcontext)
 		return nil, fmt.Errorf("failed to create subcontext timer: %w", err)
 	}
 
@@ -340,7 +340,7 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 // recorded by the encoder are merged into context.truncations.
 //
 // The caller must hold context.mutex.
-func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[string]any, timer timer.Timer) (*bindings.WAFObject, error) {
+func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[string]any, timer timer.Timer) (*WAFObject, error) {
 	if addressData == nil {
 		return nil, nil
 	}
@@ -369,13 +369,13 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 
 // run executes the ddwaf_run call with the provided data on this context.
 // The caller is responsible for holding both context.mutex and context.root.mu.
-func (context *Context) run(ctx context.Context, data *bindings.WAFObject, runTimer timer.NodeTimer) (Result, error) {
+func (context *Context) run(ctx context.Context, data *WAFObject, runTimer timer.NodeTimer) (Result, error) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
-	var result bindings.WAFObject
-	pinner.Pin(&result)
-	defer bindings.Lib.ObjectDestroy(&result, bindings.Lib.DefaultAllocator())
+	var result WAFObject
+	pinner.Pin(result.raw())
+	defer wafBindings.Lib.ObjectDestroy(result.raw(), wafBindings.Lib.DefaultAllocator())
 
 	timeoutDuration := runTimer.SumRemaining()
 	if deadline, ok := ctx.Deadline(); ok {
@@ -392,11 +392,11 @@ func (context *Context) run(ctx context.Context, data *bindings.WAFObject, runTi
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
 	timeout := uint64(timeoutDuration.Microseconds()) & 0x008FFFFFFFFFFFFF
 	cContext := context.root.cContext
-	var ret bindings.WAFReturnCode
+	var ret wafBindings.WAFReturnCode
 	if context.isSubcontext() {
-		ret = bindings.Lib.SubcontextEval(context.cSubcontext, data, 0, &result, timeout)
+		ret = wafBindings.Lib.SubcontextEval(context.cSubcontext, data.raw(), 0, result.raw(), timeout)
 	} else {
-		ret = bindings.Lib.ContextEval(cContext, data, 0, &result, timeout)
+		ret = wafBindings.Lib.ContextEval(cContext, data.raw(), 0, result.raw(), timeout)
 	}
 
 	decodeTimer := runTimer.MustLeaf(DecodeTimeKey)
@@ -414,7 +414,7 @@ func (context *Context) run(ctx context.Context, data *bindings.WAFObject, runTi
 	return res, err
 }
 
-func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Result, time.Duration, error) {
+func unwrapWafResult(ret wafBindings.WAFReturnCode, result *WAFObject) (Result, time.Duration, error) {
 	if !result.IsMap() {
 		return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: expected map, got %s", waferrors.ErrResultInvalidType, result.Type())
 	}
@@ -430,70 +430,70 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 		wafTimeout bool
 	)
 	for _, entry := range entries {
-		key, err := entry.Key.StringValue()
+		key, err := entry.Key().StringValue()
 		if err != nil {
 			return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
 		}
 
 		switch key {
 		case "timeout":
-			timeoutVal, err := entry.Val.BoolValue()
+			timeoutVal, err := entry.Value().BoolValue()
 			if err != nil {
 				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode timeout: %w", waferrors.ErrResultInvalidType, err)
 			}
 			wafTimeout = timeoutVal
 		case "keep":
-			keep, err := entry.Val.BoolValue()
+			keep, err := entry.Value().BoolValue()
 			if err != nil {
 				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode keep: %w", waferrors.ErrResultInvalidType, err)
 			}
 			res.Keep = keep
 		case "duration":
-			dur, err := entry.Val.UIntValue()
+			dur, err := entry.Value().UIntValue()
 			if err != nil {
 				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode duration: %w", waferrors.ErrResultInvalidType, err)
 			}
 			duration = time.Duration(dur) * time.Nanosecond
 		case "events":
-			if !entry.Val.IsArray() {
-				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: expected array for events, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
+			if !entry.Value().IsArray() {
+				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: expected array for events, got %s", waferrors.ErrResultInvalidType, entry.Value().Type())
 			}
-			size, err := entry.Val.ArraySize()
+			size, err := entry.Value().ArraySize()
 			if err != nil {
 				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to get events array size: %w", waferrors.ErrResultInvalidType, err)
 			}
 			if size != 0 {
-				events, err := entry.Val.ArrayValue()
+				events, err := entry.Value().ArrayValue()
 				if err != nil {
 					return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode events: %w", waferrors.ErrResultInvalidType, err)
 				}
 				res.Events = events
 			}
 		case "actions":
-			if !entry.Val.IsMap() {
-				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: expected map for actions, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
+			if !entry.Value().IsMap() {
+				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: expected map for actions, got %s", waferrors.ErrResultInvalidType, entry.Value().Type())
 			}
-			size, err := entry.Val.MapSize()
+			size, err := entry.Value().MapSize()
 			if err != nil {
 				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to get actions map size: %w", waferrors.ErrResultInvalidType, err)
 			}
 			if size != 0 {
-				actions, err := entry.Val.MapValue()
+				actions, err := entry.Value().MapValue()
 				if err != nil {
 					return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode actions: %w", waferrors.ErrResultInvalidType, err)
 				}
 				res.Actions = actions
 			}
 		case "attributes":
-			if !entry.Val.IsMap() {
-				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: expected map for attributes, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
+			if !entry.Value().IsMap() {
+				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: expected map for attributes, got %s", waferrors.ErrResultInvalidType, entry.Value().Type())
 			}
-			size, err := entry.Val.MapSize()
+			size, err := entry.Value().MapSize()
 			if err != nil {
 				return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to get attributes map size: %w", waferrors.ErrResultInvalidType, err)
 			}
 			if size != 0 {
-				derivatives, err := entry.Val.MapValue()
+				derivatives, err := entry.Value().MapValue()
 				if err != nil {
 					return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode attributes: %w", waferrors.ErrResultInvalidType, err)
 				}
@@ -521,7 +521,7 @@ func (context *Context) Close() {
 
 	if context.isSubcontext() {
 		if context.cSubcontext != 0 && !context.root.closed.Load() && context.root.cContext != 0 {
-			bindings.Lib.SubcontextDestroy(context.cSubcontext)
+			wafBindings.Lib.SubcontextDestroy(context.cSubcontext)
 		}
 		context.closed.Store(true)
 		context.cSubcontext = 0
@@ -541,7 +541,7 @@ func (context *Context) Close() {
 			runtime.Gosched()
 		}
 
-		bindings.Lib.ContextDestroy(cContext)
+		wafBindings.Lib.ContextDestroy(cContext)
 		context.pinner.Unpin()
 		return
 	}

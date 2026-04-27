@@ -1,3 +1,10 @@
 - 2026-04-24: Confirmed v5 remains pre-release; decision log captured five architecture choices for downstream implementation waves.
 - 2026-04-24: TOCTOU mitigation should favor throughput-preserving refcounting over lock-heavy serialization.
 - 2026-04-24: Added waferrors sentinels for handle/builder/context/init/result/nil-context/binary typing; go build, go vet, and go test all passed, and errors.Is wrapped sentinels behaved as expected.
+- 2026-04-24: Handle refcount underflow tests should assert both the returned state and the stored atomic value; clamping the CAS result to zero preserves the lock-free semantics while keeping production builds non-panicking.
+- 2026-04-24: baseTimer concurrent read/write coverage should exercise one Start/Stop writer against many Spent/Remaining/Exhausted readers under -race; resolving inherited budgets outside config mutation avoids new races while preserving current semantics.
+- 2026-04-24: atomic.Pointer[time.Time] can add heap churn if Start stores the address of a fresh local time.Time; publishing a preallocated startValue field keeps the race fix under the <5%% benchmark regression target.
+- 2026-04-24: `contextRoot.activeRuns` can be exercised with a deterministic Close-waits test by preloading the atomic counter before `Context.Close()` and asserting the close goroutine stays blocked until the counter is decremented.
+- 2026-04-27: Shared `timer.clock` instances are inherited by node and leaf timers, so `clock.now()` must serialize access to `lastRequest`; a focused `TestClockConcurrentNow` race test catches the regression without changing public timer interfaces.
+- 2026-04-27: Construction-scoped `context.Context` validation for `Handle.NewContext` and `Context.SubContext` can share the same nil/pre-cancel guard, while godoc should explicitly state that only `Run()`'s ctx controls per-run deadlines.
+- 2026-04-27: Public WAF wrappers can hide internal bindings without changing the C layout by keeping `bindings` types in `internal/` and exposing wrapper structs that lazily own a local object for zero values while pointing at pinned backing storage for array/map entries.

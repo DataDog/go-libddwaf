@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"sync/atomic"
 
-	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
 	"github.com/DataDog/go-libddwaf/v5/internal/ruleset"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
@@ -20,7 +20,7 @@ import (
 // Builder manages an evolving WAF configuration.
 // Builder is not thread-safe. Concurrent use panics under `ci` builds.
 type Builder struct {
-	handle        bindings.WAFBuilder
+	handle        wafBindings.WAFBuilder
 	defaultLoaded bool
 	inUse         atomic.Bool // detects concurrent use under ci builds
 }
@@ -47,7 +47,7 @@ func NewBuilder() (*Builder, error) {
 		return nil, errors.New("failed to load WAF library while creating builder")
 	}
 
-	hdl := bindings.Lib.BuilderInit()
+	hdl := wafBindings.Lib.BuilderInit()
 
 	if hdl == 0 {
 		return nil, waferrors.ErrBuilderInitFailed
@@ -61,7 +61,7 @@ func (b *Builder) Close() {
 	if b == nil || b.handle == 0 {
 		return
 	}
-	bindings.Lib.BuilderDestroy(b.handle)
+	wafBindings.Lib.BuilderDestroy(b.handle)
 	b.handle = 0
 }
 
@@ -82,9 +82,9 @@ func (b *Builder) AddDefaultRecommendedRuleset() (Diagnostics, error) {
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("failed to load default recommended ruleset: %w", err)
 	}
-	defer bindings.Lib.ObjectDestroy(&defaultRuleset, bindings.Lib.DefaultAllocator())
+	defer wafBindings.Lib.ObjectDestroy(&defaultRuleset, wafBindings.Lib.DefaultAllocator())
 
-	diag, err := b.addOrUpdateConfig(defaultRecommendedRulesetPath, &defaultRuleset)
+	diag, err := b.addOrUpdateConfig(defaultRecommendedRulesetPath, wrapWAFObjectPtr(&defaultRuleset))
 	if err == nil {
 		b.defaultLoaded = true
 	}
@@ -134,11 +134,11 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 
 // addOrUpdateConfig adds or updates a configuration fragment to this [Builder].
 // Returns the [Diagnostics] produced by adding or updating this configuration.
-func (b *Builder) addOrUpdateConfig(path string, cfg *bindings.WAFObject) (Diagnostics, error) {
-	var diagnosticsWafObj bindings.WAFObject
-	defer bindings.Lib.ObjectDestroy(&diagnosticsWafObj, bindings.Lib.DefaultAllocator())
+func (b *Builder) addOrUpdateConfig(path string, cfg *WAFObject) (Diagnostics, error) {
+	var diagnosticsWafObj WAFObject
+	defer wafBindings.Lib.ObjectDestroy(diagnosticsWafObj.raw(), wafBindings.Lib.DefaultAllocator())
 
-	res := bindings.Lib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
+	res := wafBindings.Lib.BuilderAddOrUpdateConfig(b.handle, path, cfg.raw(), diagnosticsWafObj.raw())
 
 	var diags Diagnostics
 	if !diagnosticsWafObj.IsInvalid() {
@@ -167,7 +167,7 @@ func (b *Builder) RemoveConfig(path string) bool {
 		return false
 	}
 
-	return bindings.Lib.BuilderRemoveConfig(b.handle, path)
+	return wafBindings.Lib.BuilderRemoveConfig(b.handle, path)
 }
 
 // ConfigPaths returns the list of currently loaded configuration paths.
@@ -179,7 +179,7 @@ func (b *Builder) ConfigPaths(filter string) ([]string, error) {
 		return nil, errBuilderClosed
 	}
 
-	return bindings.Lib.BuilderGetConfigPaths(b.handle, filter)
+	return wafBindings.Lib.BuilderGetConfigPaths(b.handle, filter)
 }
 
 // Build creates a new [Handle] instance that uses the current configuration.
@@ -194,7 +194,7 @@ func (b *Builder) Build() (*Handle, error) {
 		return nil, waferrors.ErrBuilderInitFailed
 	}
 
-	hdl := bindings.Lib.BuilderBuildInstance(b.handle)
+	hdl := wafBindings.Lib.BuilderBuildInstance(b.handle)
 	if hdl == 0 {
 		return nil, errors.New("BuilderBuildInstance returned null")
 	}
