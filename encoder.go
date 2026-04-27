@@ -6,7 +6,6 @@
 package libddwaf
 
 import (
-	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -190,13 +189,7 @@ func (encoder *encoder) Encode(data any) (*WAFObject, error) {
 	err := encoder.encode(value, wo.raw(), encoder.config.maxObjectDepth())
 
 	if _, ok := encoder.truncations[ObjectTooDeep]; ok && !encoder.config.Timer.Exhausted() {
-		ctx, cancelCtx := context.WithTimeout(context.Background(), encoder.config.Timer.Remaining())
-		defer cancelCtx()
-
-		// depthOf may return ctx.Err() on timeout; we intentionally use whatever
-		// depth was measured before interruption. The value is published as-is for
-		// truncation reporting. Wave 4.6 will rework this to use the Timer directly.
-		depth, _ := depthOf(ctx, value)
+		depth, _ := depthOf(encoder.config.Timer, value)
 		encoder.truncations[ObjectTooDeep] = []int{depth}
 	}
 
@@ -555,10 +548,9 @@ func (encoder *encoder) addTruncation(reason TruncationReason, size int) {
 
 // depthOf returns the depth of the provided object. This is 0 for scalar values,
 // such as strings.
-func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
-	if err = ctx.Err(); err != nil {
-		// Timed out, won't go any deeper
-		return 0, err
+func depthOf(t timer.Timer, obj reflect.Value) (depth int, err error) {
+	if t.Exhausted() {
+		return 0, waferrors.ErrTimeout
 	}
 
 	obj, kind := resolvePointer(obj)
@@ -571,7 +563,7 @@ func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
 			return 0, nil
 		}
 		for i := 0; i < obj.Len(); i++ {
-			itemDepth, err = depthOf(ctx, obj.Index(i))
+			itemDepth, err = depthOf(t, obj.Index(i))
 			depth = max(depth, itemDepth)
 			if err != nil {
 				break
@@ -580,7 +572,7 @@ func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
 		return depth + 1, err
 	case reflect.Map:
 		for iter := obj.MapRange(); iter.Next(); {
-			itemDepth, err = depthOf(ctx, iter.Value())
+			itemDepth, err = depthOf(t, iter.Value())
 			depth = max(depth, itemDepth)
 			if err != nil {
 				break
@@ -596,7 +588,7 @@ func depthOf(ctx context.Context, obj reflect.Value) (depth int, err error) {
 				continue
 			}
 
-			itemDepth, err = depthOf(ctx, obj.Field(i))
+			itemDepth, err = depthOf(t, obj.Field(i))
 			depth = max(depth, itemDepth)
 			if err != nil {
 				break

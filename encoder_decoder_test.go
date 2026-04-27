@@ -1029,8 +1029,9 @@ func TestResolvePointer(t *testing.T) {
 
 func TestDepthOf(t *testing.T) {
 	t.Run("is safe with self-referecing structs", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*10)
-		defer cancel()
+		tmr, err := timer.NewTimer(timer.WithBudget(10 * time.Millisecond))
+		require.NoError(t, err)
+		tmr.Start()
 
 		type selfReferencing struct {
 			Array []any
@@ -1038,8 +1039,8 @@ func TestDepthOf(t *testing.T) {
 		obj := selfReferencing{Array: make([]any, 1)}
 		obj.Array[0] = &obj // Obj now has a field that indirectly references itself
 
-		depth, err := depthOf(ctx, reflect.ValueOf(obj))
+		depth, depthErr := depthOf(tmr, reflect.ValueOf(obj))
 		require.Greater(t, depth, 0)
-		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.ErrorIs(t, depthErr, waferrors.ErrTimeout)
 	})
 }
