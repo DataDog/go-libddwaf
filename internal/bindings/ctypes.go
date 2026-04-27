@@ -572,14 +572,14 @@ func (w *WAFObject) StringValue() (string, error) {
 		return string(unsafeutil.Slice(unsafeutil.ReadPtr[byte](&w.data[wafObjectPtrOffset]), uint64(size))), nil
 
 	default:
-		return "", fmt.Errorf("value is not a string but %s", t.String())
+		return "", fmt.Errorf("%w: value is not a string but %s", waferrors.ErrInvalidObjectType, t.String())
 	}
 }
 
 // ArraySize returns the number of elements in an array.
 func (w *WAFObject) ArraySize() (uint16, error) {
 	if !w.IsArray() {
-		return 0, fmt.Errorf("value is not an array but %s", w.Type().String())
+		return 0, fmt.Errorf("%w: value is not an array but %s", waferrors.ErrInvalidObjectType, w.Type().String())
 	}
 	return binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:]), nil
 }
@@ -587,7 +587,7 @@ func (w *WAFObject) ArraySize() (uint16, error) {
 // ArrayValues returns the array elements as a slice of WAFObjects as-is using unsafe conversion.
 func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 	if !w.IsArray() {
-		return nil, fmt.Errorf("value is not an array but %s", w.Type().String())
+		return nil, fmt.Errorf("%w: value is not an array but %s", waferrors.ErrInvalidObjectType, w.Type().String())
 	}
 
 	size := binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:])
@@ -604,7 +604,7 @@ func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 // MapSize returns the number of entries in a map.
 func (w *WAFObject) MapSize() (uint16, error) {
 	if !w.IsMap() {
-		return 0, fmt.Errorf("value is not a map but %s", w.Type().String())
+		return 0, fmt.Errorf("%w: value is not a map but %s", waferrors.ErrInvalidObjectType, w.Type().String())
 	}
 	return binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:]), nil
 }
@@ -612,7 +612,7 @@ func (w *WAFObject) MapSize() (uint16, error) {
 // MapEntries returns the map entries as a slice of WAFObjectKV pairs as-is using unsafe conversion.
 func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
 	if !w.IsMap() {
-		return nil, fmt.Errorf("value is not a map but %s", w.Type().String())
+		return nil, fmt.Errorf("%w: value is not a map but %s", waferrors.ErrInvalidObjectType, w.Type().String())
 	}
 
 	size := binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:])

@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -299,8 +300,7 @@ func TestWAFObjectStringValueError(t *testing.T) {
 	obj.SetInt(42)
 
 	_, err := obj.StringValue()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "not a string")
+	require.ErrorIs(t, err, waferrors.ErrInvalidObjectType)
 }
 
 func TestWAFObjectArrayValuesError(t *testing.T) {
@@ -308,8 +308,7 @@ func TestWAFObjectArrayValuesError(t *testing.T) {
 	obj.SetInt(42)
 
 	_, err := obj.ArrayValues()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "not an array")
+	require.ErrorIs(t, err, waferrors.ErrInvalidObjectType)
 }
 
 func TestWAFObjectMapEntriesError(t *testing.T) {
@@ -317,6 +316,5 @@ func TestWAFObjectMapEntriesError(t *testing.T) {
 	obj.SetInt(42)
 
 	_, err := obj.MapEntries()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "not a map")
+	require.ErrorIs(t, err, waferrors.ErrInvalidObjectType)
 }
