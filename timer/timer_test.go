@@ -223,6 +223,19 @@ func TestInheritBudget(t *testing.T) {
 		hasExpired(t, leafTimer, time.Millisecond)
 		hasSumExpired(t, nodeTimer, time.Millisecond)
 	})
+
+	t.Run("inherited-sum-budget-not-exhausted-after-start", func(t *testing.T) {
+		rootTimer, err := timer.NewTreeTimer(timer.WithBudget(time.Hour), timer.WithComponents("a"))
+		require.NoError(t, err)
+
+		nodeTimer, err := rootTimer.NewNode("a", timer.WithComponents("b"))
+		require.NoError(t, err)
+
+		nodeTimer.Start()
+
+		require.False(t, nodeTimer.SumExhausted(), "SumExhausted must be false right after Start when inheriting parent's sum budget")
+		require.Greater(t, nodeTimer.SumRemaining(), time.Hour-time.Second, "SumRemaining must reflect the inherited budget after Start")
+	})
 }
 
 func TestTree(t *testing.T) {

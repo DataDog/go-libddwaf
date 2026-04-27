@@ -95,7 +95,7 @@ func (timer *baseTimer) Spent() time.Duration {
 
 func (timer *baseTimer) Remaining() time.Duration {
 	budget := timer.budgetValue()
-	if budget == UnlimitedBudget {
+	if budget == UnlimitedBudget || budget == DynamicBudget {
 		return UnlimitedBudget
 	}
 
@@ -109,7 +109,7 @@ func (timer *baseTimer) Remaining() time.Duration {
 
 func (timer *baseTimer) Exhausted() bool {
 	budget := timer.budgetValue()
-	if budget == UnlimitedBudget {
+	if budget == UnlimitedBudget || budget == DynamicBudget {
 		return false
 	}
 

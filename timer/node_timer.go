@@ -117,11 +117,12 @@ func (timer *nodeTimer) SumSpent() time.Duration {
 }
 
 func (timer *nodeTimer) SumRemaining() time.Duration {
-	if timer.config.budget == UnlimitedBudget {
+	budget := timer.sumBudget()
+	if budget == UnlimitedBudget {
 		return UnlimitedBudget
 	}
 
-	remaining := timer.config.budget - timer.SumSpent()
+	remaining := budget - timer.SumSpent()
 	if remaining < 0 {
 		return 0
 	}
@@ -130,9 +131,25 @@ func (timer *nodeTimer) SumRemaining() time.Duration {
 }
 
 func (timer *nodeTimer) SumExhausted() bool {
-	if timer.config.budget == UnlimitedBudget {
+	budget := timer.sumBudget()
+	if budget == UnlimitedBudget {
 		return false
 	}
 
-	return timer.SumSpent() > timer.config.budget
+	return timer.SumSpent() > budget
+}
+
+// sumBudget returns the budget used by SumRemaining/SumExhausted.
+// When Start() has resolved an inherited budget, that resolved value is used.
+// Otherwise the budget is computed on the fly from the parent so callers can
+// query a dynamically-budgeted node timer before it has been started.
+func (timer *nodeTimer) sumBudget() time.Duration {
+	budget := timer.budgetValue()
+	if budget == DynamicBudget && timer.parent != nil {
+		budget = timer.config.dynamicBudget(timer.parent)
+	}
+	if budget == DynamicBudget {
+		return UnlimitedBudget
+	}
+	return budget
 }
