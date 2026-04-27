@@ -25,6 +25,8 @@ import (
 // to avoid infinite loops on self-referencing pointers during encoding.
 const maxPointerIndirections = 8
 
+// EncoderConfig provides configuration for an [encoder], including pinning,
+// timing, and size limits for strings, containers, and object depth.
 type EncoderConfig struct {
 	// Pinner is used to pin the data referenced by the encoded wafObjects.
 	Pinner pin.Pinner
@@ -86,7 +88,11 @@ func (reason TruncationReason) String() string {
 }
 
 const (
-	AppsecFieldTag            = "ddwaf"
+	// AppsecFieldTag is the struct tag recognized by the encoder when
+	// deciding how to process struct fields (for example, `ddwaf:"ignore"`).
+	AppsecFieldTag = "ddwaf"
+	// AppsecFieldTagValueIgnore is the struct tag value that causes the
+	// annotated field to be skipped during encoding.
 	AppsecFieldTagValueIgnore = "ignore"
 )
 
@@ -562,7 +568,7 @@ func depthOf(t timer.Timer, obj reflect.Value) (depth int, err error) {
 			// We treat byte slices as strings
 			return 0, nil
 		}
-		for i := 0; i < obj.Len(); i++ {
+		for i := range obj.Len() {
 			itemDepth, err = depthOf(t, obj.Index(i))
 			depth = max(depth, itemDepth)
 			if err != nil {
@@ -581,7 +587,7 @@ func depthOf(t timer.Timer, obj reflect.Value) (depth int, err error) {
 		return depth + 1, err
 	case reflect.Struct:
 		typ := obj.Type()
-		for i := 0; i < obj.NumField(); i++ {
+		for i := range obj.NumField() {
 			fieldType := typ.Field(i)
 			_, usable := getFieldNameFromType(fieldType)
 			if !usable {

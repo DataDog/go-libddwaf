@@ -125,7 +125,19 @@ func (context *Context) isSubcontext() bool {
 //
 // Lock order is always context.mutex then context.root.mu.
 func (context *Context) isClosedAssumingBothLocked() bool {
-	return context.root.closed.Load() || context.root.cContext == 0 || context.closed.Load() || (context.isSubcontext() && context.cSubcontext == 0)
+	if context.root.closed.Load() {
+		return true
+	}
+	if context.root.cContext == 0 {
+		return true
+	}
+	if context.closed.Load() {
+		return true
+	}
+	if context.isSubcontext() && context.cSubcontext == 0 {
+		return true
+	}
+	return false
 }
 
 // SubContext creates a subcontext derived from this context.
@@ -296,31 +308,34 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 // keys from both a and b, with the corresponding value from a and b concatenated (in this order) in
 // a single slice. The implementation tries to minimize reallocations.
 func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
-	count := len(a) + len(b)
-	if count == 0 {
+	if len(a) == 0 && len(b) == 0 {
 		return
 	}
 
-	keys := make(map[K]struct{}, count)
-	nothing := struct{}{}
 	totalCount := 0
-	for _, m := range [2]map[K][]V{a, b} {
-		for k, v := range m {
-			keys[k] = nothing
-			totalCount += len(v)
-		}
+	for _, v := range a {
+		totalCount += len(v)
+	}
+	for _, v := range b {
+		totalCount += len(v)
 	}
 
-	merged = make(map[K][]V, count)
+	merged = make(map[K][]V, len(a)+len(b))
 	values := make([]V, 0, totalCount)
 
-	for k := range keys {
-		idxS := len(values) // Start index
-		values = append(values, a[k]...)
+	for k, av := range a {
+		start := len(values)
+		values = append(values, av...)
 		values = append(values, b[k]...)
-		idxE := len(values) // End index
+		merged[k] = values[start:]
+	}
 
-		merged[k] = values[idxS:idxE]
+	for k, bv := range b {
+		if _, ok := merged[k]; !ok {
+			start := len(values)
+			values = append(values, bv...)
+			merged[k] = values[start:]
+		}
 	}
 
 	return
