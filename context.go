@@ -44,8 +44,12 @@ type Context struct {
 	closed      atomic.Bool            // Whether this Context or subcontext has been closed
 	cSubcontext bindings.WAFSubcontext // The C ddwaf_subcontext pointer (nil for root context)
 
-	// mutex protecting local fields such as truncations, pinner and cSubcontext.
+	// mutex protecting local fields such as pinner and cSubcontext.
 	mutex sync.Mutex
+
+	// truncationsMu protects reads and writes to truncations independently of
+	// the run mutex, so that Truncations() does not block on long Run() calls.
+	truncationsMu sync.RWMutex
 
 	// truncations provides details about truncations that occurred while encoding address data for the WAF execution.
 	truncations map[TruncationReason][]int
@@ -336,7 +340,9 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 		return nil, fmt.Errorf("failed to encode address data: %w", err)
 	}
 	if len(encoder.truncations) > 0 {
+		context.truncationsMu.Lock()
 		context.truncations = merge(context.truncations, encoder.truncations)
+		context.truncationsMu.Unlock()
 	}
 
 	if timer.Exhausted() {
@@ -474,10 +480,10 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Re
 // It destroys the context, releases associated data, and decreases
 // the reference count of the [Handle] created for this [Context].
 func (context *Context) Close() {
+	defer context.handle.Close()
+
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
-
-	defer context.handle.Close()
 
 	context.root.mu.Lock()
 
@@ -518,8 +524,8 @@ func (context *Context) Close() {
 // The value is a slice of integers, each integer being the original size of the object that was truncated.
 // In case of the [ObjectTooDeep] reason, the original size can only be approximated because of recursive objects.
 func (context *Context) Truncations() map[TruncationReason][]int {
-	context.mutex.Lock()
-	defer context.mutex.Unlock()
+	context.truncationsMu.RLock()
+	defer context.truncationsMu.RUnlock()
 
 	return maps.Clone(context.truncations)
 }
