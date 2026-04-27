@@ -60,7 +60,7 @@ func TestBuilder(t *testing.T) {
 		builder, err := NewBuilder()
 		require.NoError(t, err)
 		require.NotNil(t, builder)
-		defer builder.Close()
+		t.Cleanup(func() { builder.Close() })
 
 		requireConfigPaths(t, builder, "", []string{})
 		handle, err := builder.Build()
@@ -108,7 +108,7 @@ func TestBuilder(t *testing.T) {
 		builder, err := NewBuilder()
 		require.NoError(t, err)
 		require.NotNil(t, builder)
-		defer builder.Close()
+		t.Cleanup(func() { builder.Close() })
 
 		requireConfigPaths(t, builder, "", []string{})
 		handle, err := builder.Build()
@@ -127,12 +127,12 @@ func TestBuilder(t *testing.T) {
 		handle, err = builder.Build()
 		require.NoError(t, err)
 		require.NotNil(t, handle)
-		defer handle.Close()
+		t.Cleanup(func() { handle.Close() })
 
 		ctx, err := handle.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
-		defer ctx.Close()
+		t.Cleanup(func() { ctx.Close() })
 
 		res, err := ctx.Run(context.Background(), RunAddressData{Data: map[string]any{"server.request.headers.no_cookies": []string{"Arachni/v1"}}})
 		require.NoError(t, err)
@@ -143,6 +143,7 @@ func TestBuilder(t *testing.T) {
 		builder, err := NewBuilder()
 		require.NoError(t, err)
 		require.NotNil(t, builder)
+		t.Cleanup(func() { builder.Close() })
 
 		const (
 			ruleId      = "new-operator-rule"
@@ -194,6 +195,7 @@ func TestBuilder(t *testing.T) {
 			builder, err := NewBuilder()
 			require.NoError(t, err)
 			require.NotNil(t, builder)
+			t.Cleanup(func() { builder.Close() })
 			_, err = builder.AddOrUpdateConfig("/", map[string]any{
 				"version": "2.1",
 				"rules":   []map[string]any{maps.Clone(validRule)},
@@ -203,11 +205,11 @@ func TestBuilder(t *testing.T) {
 			t.Run(field, func(t *testing.T) {
 				rules := map[string]any{"version": "2.1", field: 1337.42}
 				_, err := builder.AddOrUpdateConfig("/broken", rules)
-			require.ErrorIs(t, err, errUpdateFailed)
-			waf, err := builder.Build()
-			require.NoError(t, err)
-			require.NotNil(t, waf)
-			waf.Close()
+				require.ErrorIs(t, err, errUpdateFailed)
+				waf, err := builder.Build()
+				require.NoError(t, err)
+				require.NotNil(t, waf)
+				t.Cleanup(func() { waf.Close() })
 			})
 		}
 	})
@@ -219,6 +221,7 @@ func TestBuilder(t *testing.T) {
 
 		builder, err := NewBuilder()
 		require.NoError(t, err)
+		t.Cleanup(func() { builder.Close() })
 
 		_, err = builder.AddOrUpdateConfig("/", map[string]any{
 			"version": "2.1",
@@ -249,11 +252,13 @@ func TestBuilder(t *testing.T) {
 		waf, err := builder.Build()
 		require.NoError(t, err)
 		require.NotNil(t, waf)
-		defer waf.Close()
+		firstWaf := waf
+		t.Cleanup(func() { firstWaf.Close() })
 		ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
-		defer ctx.Close()
+		firstCtx := ctx
+		t.Cleanup(func() { firstCtx.Close() })
 		res, err := ctx.Run(context.Background(), runData)
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
@@ -289,11 +294,13 @@ func TestBuilder(t *testing.T) {
 		waf, err = builder.Build()
 		require.NoError(t, err)
 		require.NotNil(t, waf)
-		defer waf.Close()
+		secondWaf := waf
+		t.Cleanup(func() { secondWaf.Close() })
 		ctx, err = waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
-		defer ctx.Close()
+		secondCtx := ctx
+		t.Cleanup(func() { secondCtx.Close() })
 		res, err = ctx.Run(context.Background(), runData)
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
@@ -311,7 +318,7 @@ func TestBuilder(t *testing.T) {
 		if token == "" {
 			builder, err := NewBuilder()
 			require.NoError(t, err)
-			defer builder.Close()
+			t.Cleanup(func() { builder.Close() })
 
 			diags, err := builder.AddDefaultRecommendedRuleset()
 			require.NoError(t, err)
@@ -320,7 +327,7 @@ func TestBuilder(t *testing.T) {
 			handle, err := builder.Build()
 			require.NoError(t, err)
 			require.NotNil(t, handle)
-			handle.Close()
+			t.Cleanup(func() { handle.Close() })
 			return
 		}
 
@@ -352,7 +359,7 @@ func TestBuilder(t *testing.T) {
 
 		builder, err := NewBuilder()
 		require.NoError(t, err)
-		defer builder.Close()
+		t.Cleanup(func() { builder.Close() })
 
 		diags, err := builder.AddOrUpdateConfig("/", rules)
 		t.Logf("diags: %#v", diags)
@@ -361,7 +368,7 @@ func TestBuilder(t *testing.T) {
 		handle, err := builder.Build()
 		require.NoError(t, err)
 		require.NotNil(t, handle)
-		handle.Close()
+		t.Cleanup(func() { handle.Close() })
 	})
 
 	t.Run("blank-string-encoding", func(t *testing.T) {
@@ -414,6 +421,7 @@ func TestBuilder(t *testing.T) {
 
 		builder, err := NewBuilder()
 		require.NoError(t, err)
+		t.Cleanup(func() { builder.Close() })
 
 		dec := json.NewDecoder(bytes.NewReader([]byte(rulesJSON)))
 		dec.UseNumber()
@@ -432,11 +440,11 @@ func TestBuilder(t *testing.T) {
 		waf, err := builder.Build()
 		require.NoError(t, err)
 		require.NotNil(t, waf)
-		defer waf.Close()
+		t.Cleanup(func() { waf.Close() })
 
 		ctx, err := waf.NewContext(context.Background(), timer.WithBudget(time.Hour))
 		require.NoError(t, err)
-		defer ctx.Close()
+		t.Cleanup(func() { ctx.Close() })
 
 		res, err := ctx.Run(context.Background(), RunAddressData{
 			Data: map[string]any{
@@ -463,7 +471,7 @@ func TestBuilderConcurrentUsePanics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer builder.Close()
+	t.Cleanup(func() { builder.Close() })
 
 	var wg sync.WaitGroup
 	barrier := make(chan struct{})
@@ -507,7 +515,7 @@ func TestBuilderSequentialUseOK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer builder.Close()
+	t.Cleanup(func() { builder.Close() })
 
 	builder.acquire()
 	builder.release()
