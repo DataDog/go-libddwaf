@@ -35,17 +35,17 @@ type Result struct {
 	Keep bool
 }
 
-// HasEvents return true if the [Result] holds at least 1 event.
+// HasEvents returns true if the [Result] holds at least 1 event.
 func (r *Result) HasEvents() bool {
 	return len(r.Events) > 0
 }
 
-// HasDerivatives return true if the [Result] holds at least 1 derivative.
+// HasDerivatives returns true if the [Result] holds at least 1 derivative.
 func (r *Result) HasDerivatives() bool {
 	return len(r.Derivatives) > 0
 }
 
-// HasActions return true if the [Result] holds at least 1 action.
+// HasActions returns true if the [Result] holds at least 1 action.
 func (r *Result) HasActions() bool {
 	return len(r.Actions) > 0
 }
