@@ -258,26 +258,33 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafBindings.WAFObject, 
 	// 		Is nullable type: nil pointers, channels, maps or functions
 	case isValueNil(value):
 		obj.SetNil()
+		return nil
 
 	// 		Booleans
 	case kind == reflect.Bool:
 		obj.SetBool(value.Bool())
+		return nil
 
 	// 		Numbers
 	case value.CanInt(): // any int type or alias
 		obj.SetInt(value.Int())
+		return nil
 	case value.CanUint(): // any Uint type or alias
 		obj.SetUint(value.Uint())
+		return nil
 	case value.CanFloat(): // any float type or alias
 		obj.SetFloat(value.Float())
+		return nil
 
 	// 		json.Number -- string-represented arbitrary precision numbers
 	case value.Type() == jsonNumberType:
 		encoder.encodeJSONNumber(value.Interface().(json.Number), obj)
+		return nil
 
 	//		Strings
 	case kind == reflect.String: // string type
 		encoder.encodeString(value.String(), obj)
+		return nil
 
 	case (kind == reflect.Array || kind == reflect.Slice) && value.Type().Elem().Kind() == reflect.Uint8:
 		// Byte Arrays are skipped voluntarily because they are often used
@@ -295,16 +302,17 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafBindings.WAFObject, 
 	// 		Either an array or a slice of an array
 	case kind == reflect.Array || kind == reflect.Slice:
 		encoder.encodeArray(value, obj, depth-1)
+		return nil
 	case kind == reflect.Map:
 		encoder.encodeMap(value, obj, depth-1)
+		return nil
 	case kind == reflect.Struct:
 		encoder.encodeStruct(value, obj, depth-1)
+		return nil
 
 	default:
 		return waferrors.ErrUnsupportedValue
 	}
-
-	return nil
 }
 
 func (encoder *encoder) encodeJSONNumber(num json.Number, obj *wafBindings.WAFObject) {
@@ -472,8 +480,10 @@ func (encoder *encoder) encodeMap(value reflect.Value, obj *wafBindings.WAFObjec
 	obj.SetMapSize(uint16(length))
 }
 
-// encodeMapKey takes a reflect.Value and encodes it as a map key WAFObject.
-
+// encodeMapKey encodes value as a WAF map-key object. Only strings and
+// []byte are valid WAF map keys because the C libddwaf API requires map
+// keys to be null-terminated C strings; all other types return
+// [waferrors.ErrInvalidMapKey].
 func (encoder *encoder) encodeMapKey(value reflect.Value, keyObj *wafBindings.WAFObject) error {
 	value, kind := resolvePointer(value)
 
@@ -494,7 +504,6 @@ func (encoder *encoder) encodeMapKey(value reflect.Value, keyObj *wafBindings.WA
 }
 
 // encodeMapKeyString encodes a string as a map key WAFObject.
-
 func (encoder *encoder) encodeMapKeyString(keyStr string, keyObj *wafBindings.WAFObject) {
 	size := len(keyStr)
 	if size > encoder.config.maxStringSize() {
