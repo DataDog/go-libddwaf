@@ -210,7 +210,11 @@ func newDefaultHandle(rule any) (*Handle, *Diagnostics, error) {
 		return nil, nil, err
 	}
 
-	return builder.Build(), &diag, nil
+	hdl, err := builder.Build()
+	if err != nil {
+		return nil, nil, err
+	}
+	return hdl, &diag, nil
 }
 
 func maxWafValueEncoder(cfg EncoderConfig) map[string]any {

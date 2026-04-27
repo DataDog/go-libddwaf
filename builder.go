@@ -183,20 +183,21 @@ func (b *Builder) ConfigPaths(filter string) ([]string, error) {
 }
 
 // Build creates a new [Handle] instance that uses the current configuration.
-// Returns nil if an error occurs when building the handle. The caller is
-// responsible for calling [Handle.Close] when the handle is no longer needed.
-func (b *Builder) Build() *Handle {
+// Returns an error if the builder is not initialized or the C library fails to
+// build the handle. The caller is responsible for calling [Handle.Close] when
+// the handle is no longer needed.
+func (b *Builder) Build() (*Handle, error) {
 	b.acquire()
 	defer b.release()
 
 	if b == nil || b.handle == 0 {
-		return nil
+		return nil, waferrors.ErrBuilderInitFailed
 	}
 
 	hdl := bindings.Lib.BuilderBuildInstance(b.handle)
 	if hdl == 0 {
-		return nil
+		return nil, errors.New("BuilderBuildInstance returned null")
 	}
 
-	return wrapHandle(hdl)
+	return wrapHandle(hdl), nil
 }

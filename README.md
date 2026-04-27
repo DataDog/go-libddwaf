@@ -28,9 +28,9 @@ func main() {
         panic(err)
     }
 
-    wafHandle := builder.Build()
-    if wafHandle == nil {
-        panic("WAF handle is nil")
+    wafHandle, err := builder.Build()
+    if err != nil {
+        panic(err)
     }
     defer wafHandle.Close()
 

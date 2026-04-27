@@ -63,7 +63,8 @@ func TestBuilder(t *testing.T) {
 		defer builder.Close()
 
 		requireConfigPaths(t, builder, "", []string{})
-		handle := builder.Build()
+		handle, err := builder.Build()
+		require.Error(t, err)
 		require.Nil(t, handle)
 
 		diag, err := builder.AddDefaultRecommendedRuleset()
@@ -79,13 +80,15 @@ func TestBuilder(t *testing.T) {
 		assert.NotEmpty(t, diag.Rules.Loaded)
 		requireConfigPaths(t, builder, "", []string{defaultRecommendedRulesetPath})
 
-		hdl := builder.Build()
+		hdl, err := builder.Build()
+		require.NoError(t, err)
 		require.NotNil(t, hdl)
 		hdl.Close()
 
 		require.True(t, builder.RemoveDefaultRecommendedRuleset())
 		requireConfigPaths(t, builder, "", []string{})
-		hdl = builder.Build()
+		hdl, err = builder.Build()
+		require.Error(t, err)
 		require.Nil(t, hdl)
 
 		require.False(t, builder.RemoveDefaultRecommendedRuleset())
@@ -95,7 +98,8 @@ func TestBuilder(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEmpty(t, diag.Version)
 		assert.NotEmpty(t, diag.Rules.Loaded)
-		hdl = builder.Build()
+		hdl, err = builder.Build()
+		require.NoError(t, err)
 		require.NotNil(t, hdl)
 		hdl.Close()
 	})
@@ -107,7 +111,8 @@ func TestBuilder(t *testing.T) {
 		defer builder.Close()
 
 		requireConfigPaths(t, builder, "", []string{})
-		handle := builder.Build()
+		handle, err := builder.Build()
+		require.Error(t, err)
 		require.Nil(t, handle)
 
 		rules := map[string]any{
@@ -119,7 +124,8 @@ func TestBuilder(t *testing.T) {
 		require.Equal(t, Diagnostics{Rules: &Feature{Loaded: []string{"ua0-600-12x"}}}, diag)
 
 		requireConfigPaths(t, builder, "", []string{"test/config"})
-		handle = builder.Build()
+		handle, err = builder.Build()
+		require.NoError(t, err)
 		require.NotNil(t, handle)
 		defer handle.Close()
 
@@ -197,10 +203,11 @@ func TestBuilder(t *testing.T) {
 			t.Run(field, func(t *testing.T) {
 				rules := map[string]any{"version": "2.1", field: 1337.42}
 				_, err := builder.AddOrUpdateConfig("/broken", rules)
-				require.ErrorIs(t, err, errUpdateFailed)
-				waf := builder.Build()
-				require.NotNil(t, waf)
-				waf.Close()
+			require.ErrorIs(t, err, errUpdateFailed)
+			waf, err := builder.Build()
+			require.NoError(t, err)
+			require.NotNil(t, waf)
+			waf.Close()
 			})
 		}
 	})
@@ -239,7 +246,8 @@ func TestBuilder(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		waf := builder.Build()
+		waf, err := builder.Build()
+		require.NoError(t, err)
 		require.NotNil(t, waf)
 		defer waf.Close()
 		ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
@@ -278,7 +286,8 @@ func TestBuilder(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		waf = builder.Build()
+		waf, err = builder.Build()
+		require.NoError(t, err)
 		require.NotNil(t, waf)
 		defer waf.Close()
 		ctx, err = waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
@@ -308,7 +317,8 @@ func TestBuilder(t *testing.T) {
 			require.NoError(t, err)
 			t.Logf("diags (bundled ruleset): %#v", diags)
 
-			handle := builder.Build()
+			handle, err := builder.Build()
+			require.NoError(t, err)
 			require.NotNil(t, handle)
 			handle.Close()
 			return
@@ -348,7 +358,8 @@ func TestBuilder(t *testing.T) {
 		t.Logf("diags: %#v", diags)
 		require.NoError(t, err)
 
-		handle := builder.Build()
+		handle, err := builder.Build()
+		require.NoError(t, err)
 		require.NotNil(t, handle)
 		handle.Close()
 	})
@@ -418,7 +429,8 @@ func TestBuilder(t *testing.T) {
 			assert.Empty(t, feat.Warnings, "feature %s has warnings", name)
 		})
 
-		waf := builder.Build()
+		waf, err := builder.Build()
+		require.NoError(t, err)
 		require.NotNil(t, waf)
 		defer waf.Close()
 
