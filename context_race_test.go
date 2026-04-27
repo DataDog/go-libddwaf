@@ -23,7 +23,7 @@ import (
 func TestContextRunCloseRace(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
-	defer waf.Close()
+	t.Cleanup(func() { waf.Close() })
 
 	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestContextRunCloseRace(t *testing.T) {
 func TestContextCloseWaitsForActiveRun(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
-	defer waf.Close()
+	t.Cleanup(func() { waf.Close() })
 
 	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)

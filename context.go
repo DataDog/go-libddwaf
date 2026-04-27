@@ -195,7 +195,7 @@ func (context *Context) SubContext(ctx context.Context) (*Context, error) {
 
 	cSubcontext := wafBindings.Lib.SubcontextInit(context.root.cContext)
 	if cSubcontext == 0 {
-		return nil, fmt.Errorf("failed to create subcontext: ddwaf_subcontext_init returned null")
+		return nil, errors.New("failed to create subcontext: ddwaf_subcontext_init returned null")
 	}
 
 	parentStats := context.Timer.Stats()

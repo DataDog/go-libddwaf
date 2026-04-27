@@ -66,7 +66,7 @@ func TestHandleCloseNilReceiverDoesNotPanic(t *testing.T) {
 func TestHandleNewContext(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
-	defer waf.Close()
+	t.Cleanup(func() { waf.Close() })
 
 	t.Run("nil-context-returns-ErrNilContext", func(t *testing.T) {
 		wafCtx, err := waf.NewContext(nil)
