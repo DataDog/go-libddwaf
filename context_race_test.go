@@ -25,10 +25,10 @@ func TestContextRunCloseRace(t *testing.T) {
 	require.NoError(t, err)
 	defer waf.Close()
 
-	ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 
-	subCtx, err := ctx.SubContext()
+	subCtx, err := ctx.SubContext(context.Background())
 	require.NoError(t, err)
 
 	data := RunAddressData{Data: map[string]any{
@@ -86,7 +86,7 @@ func TestContextCloseWaitsForActiveRun(t *testing.T) {
 	require.NoError(t, err)
 	defer waf.Close()
 
-	ctx, err := waf.NewContext(timer.WithBudget(timer.UnlimitedBudget))
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 
 	ctx.root.activeRuns.Add(1)

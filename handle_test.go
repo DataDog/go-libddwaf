@@ -8,9 +8,12 @@
 package libddwaf
 
 import (
+	"context"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,4 +53,35 @@ func TestHandleRefcountUnderflowSilentInProd(t *testing.T) {
 
 	require.Zero(t, result)
 	require.Zero(t, handle.refCounter.Load())
+}
+
+func TestHandleNewContext(t *testing.T) {
+	waf, _, err := newDefaultHandle(testArachniRule)
+	require.NoError(t, err)
+	defer waf.Close()
+
+	t.Run("nil-context-returns-ErrNilContext", func(t *testing.T) {
+		wafCtx, err := waf.NewContext(nil)
+		require.Nil(t, wafCtx)
+		require.EqualError(t, err, "Handle.NewContext: nil context.Context")
+		require.ErrorIs(t, err, waferrors.ErrNilContext)
+	})
+
+	t.Run("cancelled-context-returns-context-error", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		wafCtx, err := waf.NewContext(ctx)
+		require.Nil(t, wafCtx)
+		require.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("deadline-exceeded-context-returns-context-error", func(t *testing.T) {
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		defer cancel()
+
+		wafCtx, err := waf.NewContext(ctx)
+		require.Nil(t, wafCtx)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	})
 }

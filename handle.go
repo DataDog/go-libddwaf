@@ -6,6 +6,7 @@
 package libddwaf
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 
@@ -54,10 +55,30 @@ func wrapHandle(cHandle bindings.WAFHandle) *Handle {
 	return handle
 }
 
+func validateConstructionContext(op string, ctx context.Context) error {
+	if ctx == nil {
+		return fmt.Errorf("%s: %w", op, waferrors.ErrNilContext)
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
 // NewContext returns a new WAF context for the given WAF handle.
+// The provided ctx only scopes the construction call itself and is not retained
+// after NewContext returns; per-run deadlines and cancellation must be supplied
+// to [Context.Run] via its own ctx argument.
 // An error is returned when the WAF handle was released or when the WAF context
 // couldn't be created.
-func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error) {
+func (handle *Handle) NewContext(ctx context.Context, timerOptions ...timer.Option) (*Context, error) {
+	if err := validateConstructionContext("Handle.NewContext", ctx); err != nil {
+		return nil, err
+	}
+
 	if !handle.retain() {
 		return nil, waferrors.ErrHandleReleased
 	}

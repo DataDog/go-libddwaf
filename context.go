@@ -129,6 +129,9 @@ func (context *Context) isClosedAssumingBothLocked() bool {
 }
 
 // SubContext creates a subcontext derived from this context.
+// The provided ctx only scopes the construction call itself and is not retained
+// after SubContext returns; per-run deadlines and cancellation must be supplied
+// to [Context.Run] via its own ctx argument.
 // Data passed to the subcontext's Run() is stored and persists across multiple calls
 // to Run on that subcontext, but does not persist in the parent context.
 // When the subcontext is closed, its data is released.
@@ -142,13 +145,17 @@ func (context *Context) isClosedAssumingBothLocked() bool {
 //
 // Usage:
 //
-//	subCtx, err := ctx.SubContext()
+//	subCtx, err := ctx.SubContext(context.Background())
 //	if err != nil {
 //	    return err
 //	}
 //	defer subCtx.Close()
 //	result, err := subCtx.Run(context.Background(), RunAddressData{Data: data})
-func (context *Context) SubContext() (*Context, error) {
+func (context *Context) SubContext(ctx context.Context) (*Context, error) {
+	if err := validateConstructionContext("Context.SubContext", ctx); err != nil {
+		return nil, err
+	}
+
 	if !context.handle.retain() {
 		if context.closed.Load() || context.root.closed.Load() {
 			return nil, waferrors.ErrContextClosed
