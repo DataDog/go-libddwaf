@@ -6,6 +6,7 @@
 package libddwaf
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -146,7 +147,7 @@ func (context *Context) isClosedAssumingBothLocked() bool {
 //	    return err
 //	}
 //	defer subCtx.Close()
-//	result, err := subCtx.Run(RunAddressData{Data: data})
+//	result, err := subCtx.Run(context.Background(), RunAddressData{Data: data})
 func (context *Context) SubContext() (*Context, error) {
 	if !context.handle.retain() {
 		if context.closed.Load() || context.root.closed.Load() {
@@ -210,9 +211,16 @@ func (context *Context) SubContext() (*Context, error) {
 
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
 // Callers must check the returned [Result] object even when an error is returned, as the WAF might
-// have been able to match some rules and generate events or actions before the error was reached;
-// especially when the error is [waferrors.ErrTimeout].
-func (context *Context) Run(addressData RunAddressData) (res Result, err error) {
+// have been able to match some rules and generate events or actions before the error was reached.
+//
+// Deadline precedence is the minimum of ctx's deadline and the remaining [Context.Timer] budget.
+// If ctx fires first, Run returns ctx.Err(). If the timer budget fires first, Run returns
+// [waferrors.ErrTimeout].
+func (context *Context) Run(ctx context.Context, addressData RunAddressData) (res Result, err error) {
+	if ctx == nil {
+		return Result{}, fmt.Errorf("Context.Run: %w", waferrors.ErrNilContext)
+	}
+
 	if addressData.isEmpty() {
 		if context.closed.Load() || context.root.closed.Load() {
 			return Result{}, waferrors.ErrContextClosed
@@ -274,7 +282,7 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 		return Result{}, waferrors.ErrTimeout
 	}
 
-	return context.run(data, runTimer)
+	return context.run(ctx, data, runTimer)
 }
 
 // merge merges two maps of slices into a single map of slices. The resulting map will contain all
@@ -354,7 +362,7 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 
 // run executes the ddwaf_run call with the provided data on this context.
 // The caller is responsible for holding both context.mutex and context.root.mu.
-func (context *Context) run(data *bindings.WAFObject, runTimer timer.NodeTimer) (Result, error) {
+func (context *Context) run(ctx context.Context, data *bindings.WAFObject, runTimer timer.NodeTimer) (Result, error) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
@@ -362,9 +370,20 @@ func (context *Context) run(data *bindings.WAFObject, runTimer timer.NodeTimer) 
 	pinner.Pin(&result)
 	defer bindings.Lib.ObjectDestroy(&result, bindings.Lib.DefaultAllocator())
 
+	timeoutDuration := runTimer.SumRemaining()
+	if deadline, ok := ctx.Deadline(); ok {
+		ctxRemaining := time.Until(deadline)
+		if ctxRemaining < timeoutDuration || timeoutDuration == timer.UnlimitedBudget {
+			timeoutDuration = ctxRemaining
+		}
+	}
+	if timeoutDuration < 0 {
+		timeoutDuration = 0
+	}
+
 	// The value of the timeout cannot exceed 2^55
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
-	timeout := uint64(runTimer.SumRemaining().Microseconds()) & 0x008FFFFFFFFFFFFF
+	timeout := uint64(timeoutDuration.Microseconds()) & 0x008FFFFFFFFFFFFF
 	cContext := context.root.cContext
 	var ret bindings.WAFReturnCode
 	if context.isSubcontext() {
@@ -379,6 +398,12 @@ func (context *Context) run(data *bindings.WAFObject, runTimer timer.NodeTimer) 
 
 	res, duration, err := unwrapWafResult(ret, &result)
 	runTimer.AddTime(DurationTimeKey, duration)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return res, ctxErr
+	}
+	if runTimer.SumExhausted() {
+		return res, waferrors.ErrTimeout
+	}
 	return res, err
 }
 

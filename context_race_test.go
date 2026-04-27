@@ -8,6 +8,7 @@
 package libddwaf
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -52,7 +53,7 @@ func TestContextRunCloseRace(t *testing.T) {
 			<-start
 
 			for run := range nbRuns {
-				_, err := subCtx.Run(data)
+				_, err := subCtx.Run(context.Background(), data)
 				if err != nil && !errors.Is(err, waferrors.ErrContextClosed) {
 					errCh <- fmt.Errorf("worker %d run %d: %w", worker, run, err)
 					return

@@ -9,6 +9,7 @@ package libddwaf
 
 import (
 	"bytes"
+	stdcontext "context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -263,7 +264,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Data: normalValue, TimerKey: wafTimerKey})
+		res, err := context.Run(stdcontext.Background(), RunAddressData{Data: normalValue, TimerKey: wafTimerKey})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Timer.Stats())
 		require.NotZero(t, context.Timer.Stats()[wafTimerKey])
@@ -279,7 +280,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Data: map[string]any{"my.input": "curl/7.88"}, TimerKey: wafTimerKey})
+		res, err := context.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "curl/7.88"}, TimerKey: wafTimerKey})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Timer.Stats())
 		require.NotZero(t, context.Timer.Stats()[wafTimerKey])
@@ -295,7 +296,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Data: largeValue, TimerKey: wafTimerKey})
+		res, err := context.Run(stdcontext.Background(), RunAddressData{Data: largeValue, TimerKey: wafTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Timer.Stats()[wafTimerKey], time.Millisecond)
 		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
@@ -314,7 +315,7 @@ func TestTimeout(t *testing.T) {
 		require.NoError(t, err)
 		defer subCtx.Close()
 
-		res, err := subCtx.Run(RunAddressData{Data: largeValue})
+		res, err := subCtx.Run(stdcontext.Background(), RunAddressData{Data: largeValue})
 		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
 	})
@@ -329,10 +330,10 @@ func TestTimeout(t *testing.T) {
 		require.NoError(t, err)
 		defer subCtx.Close()
 
-		_, err = context.Run(RunAddressData{Data: largeValue, TimerKey: wafTimerKey})
+		_, err = context.Run(stdcontext.Background(), RunAddressData{Data: largeValue, TimerKey: wafTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
 
-		res, err := subCtx.Run(RunAddressData{Data: normalValue})
+		res, err := subCtx.Run(stdcontext.Background(), RunAddressData{Data: normalValue})
 		require.NoError(t, err)
 		require.Len(t, res.Events, 1)
 		require.NotZero(t, res.TimerStats[EncodeTimeKey])
@@ -345,7 +346,7 @@ func TestTimeout(t *testing.T) {
 		defer context.Close()
 
 		for i := 0; i < 1000 && !errors.Is(err, waferrors.ErrTimeout); i++ {
-			_, err = context.Run(RunAddressData{Data: normalValue, TimerKey: wafTimerKey})
+			_, err = context.Run(stdcontext.Background(), RunAddressData{Data: normalValue, TimerKey: wafTimerKey})
 		}
 
 		require.Equal(t, waferrors.ErrTimeout, err)
@@ -361,7 +362,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Data: normalValue, TimerKey: raspTimerKey})
+		res, err := context.Run(stdcontext.Background(), RunAddressData{Data: normalValue, TimerKey: raspTimerKey})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Timer.Stats())
 		require.NotZero(t, context.Timer.Stats()[raspTimerKey])
@@ -377,7 +378,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Data: largeValue, TimerKey: raspTimerKey})
+		res, err := context.Run(stdcontext.Background(), RunAddressData{Data: largeValue, TimerKey: raspTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
 		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey], time.Millisecond)
 		require.GreaterOrEqual(t, res.TimerStats[EncodeTimeKey], time.Millisecond)
@@ -391,7 +392,7 @@ func TestTimeout(t *testing.T) {
 		require.NotNil(t, context)
 		defer context.Close()
 
-		res, err := context.Run(RunAddressData{Data: normalValue, TimerKey: wafTimerKey})
+		res, err := context.Run(stdcontext.Background(), RunAddressData{Data: normalValue, TimerKey: wafTimerKey})
 		require.NoError(t, err)
 		require.NotEmpty(t, context.Timer.Stats())
 		require.NotZero(t, context.Timer.Stats()[wafTimerKey])
@@ -400,11 +401,58 @@ func TestTimeout(t *testing.T) {
 		require.NotZero(t, res.TimerStats[EncodeTimeKey])
 		require.NotZero(t, res.TimerStats[DurationTimeKey])
 
-		res, err = context.Run(RunAddressData{Data: largeValue, TimerKey: raspTimerKey})
+		res, err = context.Run(stdcontext.Background(), RunAddressData{Data: largeValue, TimerKey: raspTimerKey})
 		require.Equal(t, waferrors.ErrTimeout, err)
 		require.LessOrEqual(t, context.Timer.Stats()[wafTimerKey], time.Millisecond)
 		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey]+context.Timer.Stats()[wafTimerKey], time.Millisecond)
 		require.GreaterOrEqual(t, context.Timer.Stats()[raspTimerKey]+res.TimerStats[EncodeTimeKey], time.Millisecond)
+	})
+}
+
+func TestRunContext(t *testing.T) {
+	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	require.NotNil(t, waf)
+	defer waf.Close()
+
+	data := RunAddressData{Data: map[string]any{"my.input": maxWafValueEncoder(EncoderConfig{
+		MaxContainerSize: 64,
+		MaxObjectDepth:   2,
+		MaxStringSize:    512,
+	})}}
+
+	t.Run("nil-context-returns-ErrNilContext", func(t *testing.T) {
+		wafCtx, err := waf.NewContext(timer.WithBudget(time.Hour))
+		require.NoError(t, err)
+		defer wafCtx.Close()
+
+		_, err = wafCtx.Run(nil, data)
+		require.EqualError(t, err, "Context.Run: nil context.Context")
+		require.ErrorIs(t, err, waferrors.ErrNilContext)
+	})
+
+	t.Run("shorter-context-deadline-wins", func(t *testing.T) {
+		wafCtx, err := waf.NewContext(timer.WithBudget(time.Hour))
+		require.NoError(t, err)
+		defer wafCtx.Close()
+
+		ctx, cancel := stdcontext.WithTimeout(stdcontext.Background(), time.Nanosecond)
+		defer cancel()
+
+		_, err = wafCtx.Run(ctx, data)
+		require.ErrorIs(t, err, stdcontext.DeadlineExceeded)
+	})
+
+	t.Run("shorter-timer-budget-wins", func(t *testing.T) {
+		wafCtx, err := waf.NewContext(timer.WithBudget(time.Nanosecond))
+		require.NoError(t, err)
+		defer wafCtx.Close()
+
+		ctx, cancel := stdcontext.WithTimeout(stdcontext.Background(), time.Hour)
+		defer cancel()
+
+		_, err = wafCtx.Run(ctx, data)
+		require.ErrorIs(t, err, waferrors.ErrTimeout)
 	})
 }
 
@@ -423,7 +471,7 @@ func TestMatching(t *testing.T) {
 	values := map[string]any{
 		"my.input": "go client",
 	}
-	res, err := wafCtx.Run(RunAddressData{Data: values})
+	res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: values})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -432,7 +480,7 @@ func TestMatching(t *testing.T) {
 	values = map[string]any{
 		"server.request.uri.raw": "something",
 	}
-	res, err = wafCtx.Run(RunAddressData{Data: values})
+	res, err = wafCtx.Run(stdcontext.Background(), RunAddressData{Data: values})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -442,25 +490,25 @@ func TestMatching(t *testing.T) {
 	values = map[string]any{
 		"my.input": "Arachni",
 	}
-	res, err = wafCtx.Run(RunAddressData{Data: values})
+	res, err = wafCtx.Run(stdcontext.Background(), RunAddressData{Data: values})
 	require.NoError(t, err)
 	require.NotEmpty(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	// Not matching anymore since it already matched before
-	res, err = wafCtx.Run(RunAddressData{Data: values})
+	res, err = wafCtx.Run(stdcontext.Background(), RunAddressData{Data: values})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	// Nil values
-	res, err = wafCtx.Run(RunAddressData{})
+	res, err = wafCtx.Run(stdcontext.Background(), RunAddressData{})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	// Empty values
-	res, err = wafCtx.Run(RunAddressData{Data: map[string]any{}})
+	res, err = wafCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -486,7 +534,7 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 	defer wafCtx.Close()
 
 	// Persistent data is run first on the root context
-	res, err := wafCtx.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni/persistent"}})
+	res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "Arachni/persistent"}})
 	require.NoError(t, err)
 
 	// There is only one hit here on the PERSISTENT value
@@ -511,7 +559,7 @@ func TestMatchingEphemeralAndPersistent(t *testing.T) {
 	require.NoError(t, err)
 	defer subCtx.Close()
 
-	res, err = subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni/ephemeral"}})
+	res, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "Arachni/ephemeral"}})
 	require.NoError(t, err)
 	// There shouldn't be any match since the rule already matched with persistent data
 	require.Empty(t, res.Events)
@@ -537,35 +585,35 @@ func TestMatchingEphemeral(t *testing.T) {
 
 	// First run persistent data (input2), then ephemeral via subcontext (input1)
 	// Not matching because the address value doesn't match the rule
-	res, err := wafCtx.Run(RunAddressData{Data: map[string]any{input2: "go client"}})
+	res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{input2: "go client"}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	subCtx, err := wafCtx.SubContext()
 	require.NoError(t, err)
-	res, err = subCtx.Run(RunAddressData{Data: map[string]any{input1: "go client"}})
+	res, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{input1: "go client"}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 	subCtx.Close()
 
 	// Not matching because the address is not used by the rule
-	res, err = wafCtx.Run(RunAddressData{Data: map[string]any{"server.request.body.raw": "something"}})
+	res, err = wafCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"server.request.body.raw": "something"}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 
 	subCtx, err = wafCtx.SubContext()
 	require.NoError(t, err)
-	res, err = subCtx.Run(RunAddressData{Data: map[string]any{"server.request.uri.raw": "something"}})
+	res, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"server.request.uri.raw": "something"}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
 	subCtx.Close()
 
 	// Matching: persistent data (input2) on root context
-	res, err = wafCtx.Run(RunAddressData{Data: map[string]any{input2: "Arachni-2"}})
+	res, err = wafCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{input2: "Arachni-2"}})
 	require.NoError(t, err)
 	require.Len(t, res.Events, 1) // 1 persistent
 	require.Nil(t, res.Actions)
@@ -574,14 +622,14 @@ func TestMatchingEphemeral(t *testing.T) {
 	// Note a WAF rule with ephemeral addresses may match more than once!
 	subCtx, err = wafCtx.SubContext()
 	require.NoError(t, err)
-	res, err = subCtx.Run(RunAddressData{Data: map[string]any{input1: "Arachni-1"}})
+	res, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{input1: "Arachni-1"}})
 	require.NoError(t, err)
 	require.Len(t, res.Events, 1) // 1 ephemeral
 	require.Nil(t, res.Actions)
 	subCtx.Close()
 
 	// Run persistent again - shouldn't match anymore since it already matched
-	res, err = wafCtx.Run(RunAddressData{Data: map[string]any{input2: "Arachni-2"}})
+	res, err = wafCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{input2: "Arachni-2"}})
 	require.NoError(t, err)
 	require.Empty(t, res.Events) // persistent already matched
 	require.Nil(t, res.Actions)
@@ -589,7 +637,7 @@ func TestMatchingEphemeral(t *testing.T) {
 	// Ephemeral address should still match on new subcontext
 	subCtx, err = wafCtx.SubContext()
 	require.NoError(t, err)
-	res, err = subCtx.Run(RunAddressData{Data: map[string]any{input1: "Arachni-1"}})
+	res, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{input1: "Arachni-1"}})
 	require.NoError(t, err)
 	require.Len(t, res.Events, 1) // 1 ephemeral - still matches
 	require.Nil(t, res.Actions)
@@ -625,7 +673,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	// Not matching because the address value doesn't match the rule
 	subCtx, err := wafCtx.SubContext()
 	require.NoError(t, err)
-	res, err := subCtx.Run(RunAddressData{Data: map[string]any{input1: "go client"}})
+	res, err := subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{input1: "go client"}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -634,7 +682,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	// Not matching because the address is not used by the rule
 	subCtx, err = wafCtx.SubContext()
 	require.NoError(t, err)
-	res, err = subCtx.Run(RunAddressData{Data: map[string]any{"server.request.uri.raw": "something"}})
+	res, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"server.request.uri.raw": "something"}})
 	require.NoError(t, err)
 	require.Nil(t, res.Events)
 	require.Nil(t, res.Actions)
@@ -643,7 +691,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 	// Matching
 	subCtx, err = wafCtx.SubContext()
 	require.NoError(t, err)
-	res, err = subCtx.Run(RunAddressData{Data: map[string]any{input1: "Arachni-1"}})
+	res, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{input1: "Arachni-1"}})
 	require.NoError(t, err)
 	require.Len(t, res.Events, 1) // 1 ephemeral
 	require.Nil(t, res.Actions)
@@ -673,7 +721,7 @@ func TestSubContext(t *testing.T) {
 		require.NoError(t, err)
 		defer subCtx1.Close()
 
-		res, err := subCtx1.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		res, err := subCtx1.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
 		require.NoError(t, err)
 		require.Len(t, res.Events, 1)
 
@@ -684,7 +732,7 @@ func TestSubContext(t *testing.T) {
 		require.NoError(t, err)
 		defer subCtx2.Close()
 
-		res, err = subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		res, err = subCtx2.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
 		require.NoError(t, err)
 		require.Len(t, res.Events, 1)
 	})
@@ -720,15 +768,15 @@ func TestSubContext(t *testing.T) {
 		t.Cleanup(func() { subCtx3.Close() })
 
 		// All should work independently
-		res1, err := subCtx1.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni-1"}})
+		res1, err := subCtx1.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "Arachni-1"}})
 		require.NoError(t, err)
 		require.Len(t, res1.Events, 1)
 
-		res2, err := subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni-2"}})
+		res2, err := subCtx2.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "Arachni-2"}})
 		require.NoError(t, err)
 		require.Len(t, res2.Events, 1)
 
-		res3, err := subCtx3.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni-3"}})
+		res3, err := subCtx3.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "Arachni-3"}})
 		require.NoError(t, err)
 		require.Len(t, res3.Events, 1)
 
@@ -743,7 +791,7 @@ func TestSubContext(t *testing.T) {
 		subCtx, err := ctx.SubContext()
 		require.NoError(t, err)
 
-		res, err := subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		res, err := subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
 		require.NoError(t, err)
 		require.Len(t, res.Events, 1)
 
@@ -754,7 +802,7 @@ func TestSubContext(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { subCtx2.Close() })
 
-		res2, err := subCtx2.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		res2, err := subCtx2.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
 		require.NoError(t, err)
 		require.Len(t, res2.Events, 1) // Still matches because subcontext data is isolated
 
@@ -770,7 +818,7 @@ func TestSubContext(t *testing.T) {
 		subCtx.Close()
 
 		// Run on closed subcontext should return an error
-		_, err = subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
+		_, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "Arachni"}})
 		require.ErrorIs(t, err, waferrors.ErrContextClosed)
 
 		ctx.Close()
@@ -787,7 +835,7 @@ func TestSubContext(t *testing.T) {
 		subCtx.Close()
 
 		// Running on closed subcontext should fail
-		res, err := subCtx.Run(RunAddressData{Data: map[string]any{"my.input": "test"}})
+		res, err := subCtx.Run(stdcontext.Background(), RunAddressData{Data: map[string]any{"my.input": "test"}})
 		require.ErrorIs(t, err, waferrors.ErrContextClosed)
 		require.Empty(t, res.Events)
 	})
@@ -810,7 +858,7 @@ func TestActions(t *testing.T) {
 			values := map[string]any{
 				"my.input": "Arachni",
 			}
-			res, err := wafCtx.Run(RunAddressData{Data: values})
+			res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: values})
 			require.NoError(t, err)
 			require.NotEmpty(t, res.Events)
 			for _, aType := range expectedActionsTypes {
@@ -881,7 +929,7 @@ func TestConcurrentWAFContextUsage(t *testing.T) {
 							"user-agent": userAgents[i],
 						},
 					}
-					res, err := wafCtx.Run(RunAddressData{Data: data})
+					res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 					if err != nil {
 						return err
 					}
@@ -904,7 +952,7 @@ func TestConcurrentWAFContextUsage(t *testing.T) {
 			"user-agent": "Arachni",
 		},
 	}
-	res, err := wafCtx.Run(RunAddressData{Data: data})
+	res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 	require.NoError(t, err)
 	require.NotEmpty(t, res.Events)
 	close(errCh)
@@ -951,7 +999,7 @@ func TestConcurrentWAFInstanceUsage(t *testing.T) {
 							"user-agent": userAgents[i],
 						},
 					}
-					res, err := wafCtx.Run(RunAddressData{Data: data})
+					res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 					if err != nil {
 						return err
 					}
@@ -965,7 +1013,7 @@ func TestConcurrentWAFInstanceUsage(t *testing.T) {
 						"user-agent": "Arachni",
 					},
 				}
-				res, err := wafCtx.Run(RunAddressData{Data: data})
+				res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 				if err != nil {
 					return fmt.Errorf("Run failed: %w", err)
 				}
@@ -1036,7 +1084,7 @@ func TestConcurrentWAFSubcontextUsage(t *testing.T) {
 						},
 					}
 
-					res, err := wafSubCtx.Run(RunAddressData{Data: data})
+					res, err := wafSubCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 					if err != nil {
 						return err
 					}
@@ -1050,7 +1098,7 @@ func TestConcurrentWAFSubcontextUsage(t *testing.T) {
 						"user-agent": "Arachni",
 					},
 				}
-				res, err := wafSubCtx.Run(RunAddressData{Data: data})
+				res, err := wafSubCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 				if err != nil {
 					return fmt.Errorf("SubContext Run failed: %w", err)
 				}
@@ -1149,7 +1197,7 @@ func TestConcurrentContextUseDestroy(t *testing.T) {
 				}
 				defer subCtx.Close()
 
-				_, err = subCtx.Run(RunAddressData{Data: data})
+				_, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 				if err != nil && !errors.Is(err, waferrors.ErrContextClosed) {
 					errCh <- fmt.Errorf("Run failed with unexpected error: %w", err)
 				}
@@ -1358,7 +1406,7 @@ func TestMetrics(t *testing.T) {
 			"server.request.uri.raw": "\\%uff00",
 		}
 		start := time.Now()
-		res, err := wafCtx.Run(RunAddressData{Data: data, TimerKey: wafTimerKey})
+		res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data, TimerKey: wafTimerKey})
 		elapsedNS := time.Since(start).Nanoseconds()
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
@@ -1383,7 +1431,7 @@ func TestMetrics(t *testing.T) {
 		}
 
 		for i := uint64(1); i <= 10; i++ {
-			_, err := wafCtx.Run(RunAddressData{Data: data, TimerKey: wafTimerKey})
+			_, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data, TimerKey: wafTimerKey})
 			require.Equal(t, waferrors.ErrTimeout, err)
 		}
 	})
@@ -1402,7 +1450,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]any{
 			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
 		}
-		res, err := wafCtx.Run(RunAddressData{Data: data})
+		res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
@@ -1422,7 +1470,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]any{
 			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
 		}
-		res, err := wafCtx.Run(RunAddressData{Data: data})
+		res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
@@ -1442,7 +1490,7 @@ func TestObfuscatorConfig(t *testing.T) {
 		data := map[string]any{
 			"my.addr": map[string]any{"key": "Arachni-sensitive-Arachni"},
 		}
-		res, err := wafCtx.Run(RunAddressData{Data: data})
+		res, err := wafCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 		require.NoError(t, err)
 		require.NotNil(t, res.Events)
 		require.Nil(t, res.Actions)
@@ -1464,7 +1512,7 @@ func TestTruncationInformation(t *testing.T) {
 	extra := rand.Intn(10) + 1 // Random int between 1 and 10
 
 	// Run persistent data first
-	_, err = ctx.Run(RunAddressData{
+	_, err = ctx.Run(stdcontext.Background(), RunAddressData{
 		Data: map[string]any{
 			"my.input.2": map[string]any{
 				"string_too_long":     strings.Repeat("Z", int(bindings.MaxStringLength)+extra+2),
@@ -1479,7 +1527,7 @@ func TestTruncationInformation(t *testing.T) {
 	require.NoError(t, err)
 	defer subCtx.Close()
 
-	_, err = subCtx.Run(RunAddressData{
+	_, err = subCtx.Run(stdcontext.Background(), RunAddressData{
 		Data: map[string]any{
 			"my.input": map[string]any{
 				"string_too_long":     strings.Repeat("Z", int(bindings.MaxStringLength)+extra),

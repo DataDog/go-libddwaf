@@ -9,6 +9,7 @@ package libddwaf
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"maps"
 	"net/http"
@@ -127,7 +128,7 @@ func TestBuilder(t *testing.T) {
 		require.NotNil(t, ctx)
 		defer ctx.Close()
 
-		res, err := ctx.Run(RunAddressData{Data: map[string]any{"server.request.headers.no_cookies": []string{"Arachni/v1"}}})
+		res, err := ctx.Run(context.Background(), RunAddressData{Data: map[string]any{"server.request.headers.no_cookies": []string{"Arachni/v1"}}})
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
 	})
@@ -245,7 +246,7 @@ func TestBuilder(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
 		defer ctx.Close()
-		res, err := ctx.Run(runData)
+		res, err := ctx.Run(context.Background(), runData)
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
 		require.Empty(t, res.Actions)
@@ -284,7 +285,7 @@ func TestBuilder(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, ctx)
 		defer ctx.Close()
-		res, err = ctx.Run(runData)
+		res, err = ctx.Run(context.Background(), runData)
 		require.NoError(t, err)
 		require.NotEmpty(t, res.Events)
 
@@ -425,7 +426,7 @@ func TestBuilder(t *testing.T) {
 		require.NoError(t, err)
 		defer ctx.Close()
 
-		res, err := ctx.Run(RunAddressData{
+		res, err := ctx.Run(context.Background(), RunAddressData{
 			Data: map[string]any{
 				"server.request.headers.no_cookies": map[string][]string{
 					"user-agent": {"Canary/v4 bazinga"},

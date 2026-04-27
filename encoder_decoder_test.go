@@ -36,7 +36,7 @@ func wafTest(t *testing.T, obj *bindings.WAFObject) {
 	require.NotNil(t, wafCtx)
 	defer wafCtx.Close()
 
-	_, err = wafCtx.Run(RunAddressData{
+	_, err = wafCtx.Run(context.Background(), RunAddressData{
 		Data: map[string]any{"my.input": obj},
 	})
 	require.NoError(t, err)
@@ -44,7 +44,7 @@ func wafTest(t *testing.T, obj *bindings.WAFObject) {
 	subCtx, err := wafCtx.SubContext()
 	require.NoError(t, err)
 	defer subCtx.Close()
-	_, err = subCtx.Run(RunAddressData{
+	_, err = subCtx.Run(context.Background(), RunAddressData{
 		Data: map[string]any{"my.other.input": obj},
 	})
 	require.NoError(t, err)
