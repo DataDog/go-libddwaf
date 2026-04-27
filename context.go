@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"maps"
 	"runtime"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -200,13 +199,16 @@ func (context *Context) SubContext(ctx context.Context) (*Context, error) {
 	}
 
 	parentStats := context.Timer.Stats()
-	components := make([]timer.Key, 0, len(parentStats))
+	seen := make(map[timer.Key]struct{}, len(parentStats)+3)
+	components := make([]timer.Key, 0, len(parentStats)+3)
 	for k := range parentStats {
+		seen[k] = struct{}{}
 		components = append(components, k)
 	}
 	for _, key := range []timer.Key{EncodeTimeKey, DurationTimeKey, DecodeTimeKey} {
-		if !slices.Contains(components, key) {
+		if _, ok := seen[key]; !ok {
 			components = append(components, key)
+			seen[key] = struct{}{}
 		}
 	}
 	subTimer, err := timer.NewTreeTimer(
