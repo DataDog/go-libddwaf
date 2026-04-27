@@ -389,19 +389,25 @@ func TestBaseTimerConcurrentReadWrite(t *testing.T) {
 // Reproduce approximately the same number of calls that the WAF context will do
 func BenchmarkContext(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		contextTimer, _ := timer.NewTreeTimer(
+		contextTimer, err := timer.NewTreeTimer(
 			timer.WithBudget(4*time.Millisecond),
 			timer.WithComponents("Run"))
+		if err != nil {
+			b.Fatal(err)
+		}
 
 		// Let's say we do 4 calls to run in the WAF
 		for range 4 {
-			runTimer, _ := contextTimer.NewNode("Run",
+			runTimer, err := contextTimer.NewNode("Run",
 				timer.WithBudget(1*time.Millisecond),
 				timer.WithComponents("persistent-encoder"),
 				timer.WithComponents("ephemera-encoder"),
 				timer.WithComponents("waiting"),
 				timer.WithComponents("run"),
 			)
+			if err != nil {
+				b.Fatal(err)
+			}
 
 			runTimer.Start()
 
@@ -441,12 +447,15 @@ func BenchmarkContext(b *testing.B) {
 // Reproduce approximately the same number of calls that the WAF run will do
 func BenchmarkRun(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		runTimer, _ := timer.NewTreeTimer(timer.WithBudget(1*time.Millisecond),
+		runTimer, err := timer.NewTreeTimer(timer.WithBudget(1*time.Millisecond),
 			timer.WithComponents("persistent-encoder"),
 			timer.WithComponents("ephemera-encoder"),
 			timer.WithComponents("waiting"),
 			timer.WithComponents("run"),
 		)
+		if err != nil {
+			b.Fatal(err)
+		}
 
 		runTimer.Start()
 
