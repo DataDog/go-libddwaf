@@ -16,8 +16,8 @@ type clock struct {
 	lastRequest time.Time
 }
 
-func newTimeCache() clock {
-	return clock{
+func newTimeCache() *clock {
+	return &clock{
 		lastRequest: time.Now(),
 	}
 }

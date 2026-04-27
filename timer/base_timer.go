@@ -18,7 +18,7 @@ type baseTimer struct {
 	// config is the configuration of the timer
 	config config
 
-	clock
+	clock *clock
 
 	// start is the time when the timer was started
 	start atomic.Pointer[time.Time]
@@ -76,6 +76,10 @@ func (timer *baseTimer) Start() time.Time {
 	timer.start.Store(&timer.startValue)
 
 	return *timer.start.Load()
+}
+
+func (timer *baseTimer) now() time.Time {
+	return timer.clock.now()
 }
 
 func (timer *baseTimer) Spent() time.Duration {
