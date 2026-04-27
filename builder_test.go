@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"sync"
 	"testing"
@@ -314,40 +315,40 @@ func TestBuilder(t *testing.T) {
 	})
 
 	t.Run("DataDog/appsec-event-rules", func(t *testing.T) {
-		token := os.Getenv("GITHUB_TOKEN")
-		if token == "" {
-			builder, err := NewBuilder()
-			require.NoError(t, err)
-			t.Cleanup(func() { builder.Close() })
+		t.Log("GITHUB_TOKEN not set; testing bundled ruleset only")
 
-			diags, err := builder.AddDefaultRecommendedRuleset()
-			require.NoError(t, err)
-			t.Logf("diags (bundled ruleset): %#v", diags)
-
-			handle, err := builder.Build()
-			require.NoError(t, err)
-			require.NotNil(t, handle)
-			t.Cleanup(func() { handle.Close() })
-			return
-		}
-
-		req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/DataDog/appsec-event-rules/releases/latest", nil)
+		releasesPayload, err := os.ReadFile("testdata/github-releases-latest.json")
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "Bearer "+token)
+		rulesPayload, err := os.ReadFile("testdata/github-recommended.json")
+		require.NoError(t, err)
+
+		mux := http.NewServeMux()
+		mux.HandleFunc("/repos/DataDog/appsec-event-rules/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(releasesPayload)
+		})
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(rulesPayload)
+		})
+		ts := httptest.NewServer(mux)
+		t.Cleanup(ts.Close)
+
+		req, err := http.NewRequest(http.MethodGet, ts.URL+"/repos/DataDog/appsec-event-rules/releases/latest", nil)
+		require.NoError(t, err)
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode, "failed to get latest release of DataDog/appsec-event-rules: %s", resp.Status)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 		var release struct {
 			TagName string `json:"tag_name"`
 		}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&release))
 
-		req, err = http.NewRequest(http.MethodGet, "https://raw.githubusercontent.com/DataDog/appsec-event-rules/refs/tags/"+release.TagName+"/build/recommended.json", nil)
+		req, err = http.NewRequest(http.MethodGet, ts.URL+"/DataDog/appsec-event-rules/refs/tags/"+release.TagName+"/build/recommended.json", nil)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "Bearer "+token)
 
 		resp, err = http.DefaultClient.Do(req)
 		require.NoError(t, err)
