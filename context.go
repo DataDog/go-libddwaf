@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
@@ -56,9 +57,10 @@ type Context struct {
 }
 
 type contextRoot struct {
-	mu       sync.Mutex
-	cContext bindings.WAFContext
-	closed   bool
+	mu         sync.Mutex
+	cContext   bindings.WAFContext
+	closed     bool
+	activeRuns atomic.Int64
 }
 
 // RunAddressData provides address data to the [Context.Run] method.
@@ -263,6 +265,9 @@ func (context *Context) Run(addressData RunAddressData) (res Result, err error) 
 	if context.isClosedAssumingBothLocked() {
 		return Result{}, waferrors.ErrContextClosed
 	}
+
+	context.root.activeRuns.Add(1)
+	defer context.root.activeRuns.Add(-1)
 
 	if runTimer.SumExhausted() {
 		return Result{}, waferrors.ErrTimeout
@@ -478,7 +483,6 @@ func (context *Context) Close() {
 	defer context.handle.Close()
 
 	context.root.mu.Lock()
-	defer context.root.mu.Unlock()
 
 	if context.isSubcontext() {
 		if context.cSubcontext != 0 && !context.root.closed && context.root.cContext != 0 {
@@ -486,16 +490,28 @@ func (context *Context) Close() {
 		}
 		context.closed = true
 		context.cSubcontext = 0
+		context.root.mu.Unlock()
 		context.pinner.Unpin()
 		return
 	}
 
 	if !context.root.closed && context.root.cContext != 0 {
-		bindings.Lib.ContextDestroy(context.root.cContext)
-		context.root.cContext = 0
+		cContext := context.root.cContext
 		context.root.closed = true
+		context.root.cContext = 0
+		context.closed = true
+		context.root.mu.Unlock()
+
+		for context.root.activeRuns.Load() > 0 {
+			runtime.Gosched()
+		}
+
+		bindings.Lib.ContextDestroy(cContext)
+		context.pinner.Unpin()
+		return
 	}
 	context.closed = true
+	context.root.mu.Unlock()
 
 	context.pinner.Unpin()
 }
