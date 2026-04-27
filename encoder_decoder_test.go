@@ -28,7 +28,7 @@ import (
 
 func wafTest(t *testing.T, obj *WAFObject) {
 	t.Helper()
-	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}, {Address: "my.other.input"}}, nil))
 	require.NoError(t, err)
 	defer waf.Close()
 	wafCtx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))

@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
 	"runtime"
 	"sort"
 	"strconv"
@@ -32,10 +33,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	if ok, err := Load(); !ok {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "Load failed: %v\n", err)
+		os.Exit(1)
 	}
+	os.Exit(m.Run())
 }
 
 func TestLoad(t *testing.T) {
@@ -57,8 +60,6 @@ func TestUsable(t *testing.T) {
 func TestVersion(t *testing.T) {
 	require.Equal(t, lib.EmbeddedWAFVersion, Version())
 }
-
-var testArachniRule = newArachniTestRule([]ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil)
 
 var testArachniRuleTmpl = template.Must(template.New("").Parse(`
 {
@@ -164,42 +165,45 @@ type ruleInput struct {
 	KeyPath []string
 }
 
-func newArachniTestRule(inputs []ruleInput, actions []string) map[string]any {
+func newArachniTestRule(t testing.TB, inputs []ruleInput, actions []string) map[string]any {
+	t.Helper()
 	var buf bytes.Buffer
 	if err := testArachniRuleTmpl.Execute(&buf, struct {
 		Inputs  []ruleInput
 		Actions []string
 	}{Inputs: inputs, Actions: actions}); err != nil {
-		panic(err)
+		t.Fatalf("failed to execute arachni rule template: %v", err)
 	}
 	parsed := map[string]any{}
 
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
-		panic(err)
+		t.Fatalf("failed to unmarshal arachni rule JSON: %v", err)
 	}
 
 	return parsed
 }
 
-func newArachniTestRulePair(input1, input2 ruleInput) map[string]any {
+func newArachniTestRulePair(t testing.TB, input1, input2 ruleInput) map[string]any {
+	t.Helper()
 	var buf bytes.Buffer
 	if err := testArachniRulePairTmpl.Execute(&buf, struct {
 		Input1  ruleInput
 		Input2  ruleInput
 		Actions []string
 	}{input1, input2, nil}); err != nil {
-		panic(err)
+		t.Fatalf("failed to execute arachni rule pair template: %v", err)
 	}
 
 	parsed := map[string]any{}
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
-		panic(err)
+		t.Fatalf("failed to unmarshal arachni rule pair JSON: %v", err)
 	}
 
 	return parsed
 }
 
-func newDefaultHandle(rule any) (*Handle, *Diagnostics, error) {
+func newDefaultHandle(t testing.TB, rule any) (*Handle, *Diagnostics, error) {
+	t.Helper()
 	builder, err := NewBuilder()
 	if err != nil {
 		return nil, nil, err
@@ -217,16 +221,18 @@ func newDefaultHandle(rule any) (*Handle, *Diagnostics, error) {
 	return hdl, &diag, nil
 }
 
-func maxWafValueEncoder(cfg EncoderConfig) map[string]any {
+func maxWafValueEncoder(t testing.TB, cfg EncoderConfig) map[string]any {
+	t.Helper()
 	rnd := rand.New(rand.NewSource(33))
 	buf := make([]byte, bindings.MaxStringLength)
 	rnd.Read(buf)
 	fullstr := string(buf)
 
-	return maxWafValueRec(&cfg, fullstr, int(cfg.MaxObjectDepth))
+	return maxWafValueRec(t, &cfg, fullstr, int(cfg.MaxObjectDepth))
 }
 
-func maxWafValueRec(cfg *EncoderConfig, str string, depth int) map[string]any {
+func maxWafValueRec(t testing.TB, cfg *EncoderConfig, str string, depth int) map[string]any {
+	t.Helper()
 	data := make(map[string]any, cfg.MaxContainerSize)
 
 	if depth == 0 {
@@ -237,18 +243,18 @@ func maxWafValueRec(cfg *EncoderConfig, str string, depth int) map[string]any {
 	}
 
 	for i := 0; i < int(cfg.MaxContainerSize); i++ {
-		data[str+strconv.Itoa(i)] = maxWafValueRec(cfg, str, depth-1)
+		data[str+strconv.Itoa(i)] = maxWafValueRec(t, cfg, str, depth-1)
 	}
 	return data
 }
 
 func TestTimeout(t *testing.T) {
-	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 
 	largeValue := map[string]any{
-		"my.input": maxWafValueEncoder(EncoderConfig{
+		"my.input": maxWafValueEncoder(t, EncoderConfig{
 			MaxContainerSize: 64,
 			MaxObjectDepth:   2,
 			MaxStringSize:    512,
@@ -357,7 +363,7 @@ func TestTimeout(t *testing.T) {
 	})
 
 	t.Run("rasp-simple", func(t *testing.T) {
-		waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+		waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
 		require.NoError(t, err)
 		require.NotNil(t, waf)
 
@@ -414,12 +420,12 @@ func TestTimeout(t *testing.T) {
 }
 
 func TestRunContext(t *testing.T) {
-	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 	t.Cleanup(func() { waf.Close() })
 
-	data := RunAddressData{Data: map[string]any{"my.input": maxWafValueEncoder(EncoderConfig{
+	data := RunAddressData{Data: map[string]any{"my.input": maxWafValueEncoder(t, EncoderConfig{
 		MaxContainerSize: 64,
 		MaxObjectDepth:   2,
 		MaxStringSize:    512,
@@ -461,7 +467,7 @@ func TestRunContext(t *testing.T) {
 }
 
 func TestMatching(t *testing.T) {
-	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 
@@ -528,7 +534,7 @@ func TestMatching(t *testing.T) {
 func TestMatchingEphemeralAndPersistent(t *testing.T) {
 	// This test validates the WAF behavior when a given address is provided as both
 	// persistent (on root context) and ephemeral (on subcontext).
-	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
 
@@ -575,7 +581,7 @@ func TestMatchingEphemeral(t *testing.T) {
 		input2 = "my.input.2"
 	)
 
-	waf, _, err := newDefaultHandle(newArachniTestRulePair(ruleInput{Address: input1}, ruleInput{Address: input2}))
+	waf, _, err := newDefaultHandle(t, newArachniTestRulePair(t, ruleInput{Address: input1}, ruleInput{Address: input2}))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 
@@ -661,7 +667,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 		input2 = "my.input.2"
 	)
 
-	waf, _, err := newDefaultHandle(newArachniTestRulePair(ruleInput{Address: input1}, ruleInput{Address: input2}))
+	waf, _, err := newDefaultHandle(t, newArachniTestRulePair(t, ruleInput{Address: input1}, ruleInput{Address: input2}))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 
@@ -710,7 +716,7 @@ func TestMatchingEphemeralOnly(t *testing.T) {
 }
 
 func TestSubContext(t *testing.T) {
-	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	require.NotNil(t, waf)
 	t.Cleanup(func() { waf.Close() })
@@ -872,7 +878,7 @@ func TestSubContext(t *testing.T) {
 func TestActions(t *testing.T) {
 	testActions := func(expectedActions []string, expectedActionsTypes []string) func(t *testing.T) {
 		return func(t *testing.T) {
-			waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, expectedActions))
+			waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, expectedActions))
 			require.NoError(t, err)
 			require.NotNil(t, waf)
 			t.Cleanup(func() { waf.Close() })
@@ -909,14 +915,14 @@ func TestActions(t *testing.T) {
 func TestAddresses(t *testing.T) {
 	expectedAddresses := []string{"my.indexed.input", "my.third.input", "my.second.input", "my.first.input"}
 	addresses := []ruleInput{{Address: "my.first.input"}, {Address: "my.second.input"}, {Address: "my.third.input"}, {Address: "my.indexed.input", KeyPath: []string{"indexed"}}}
-	waf, _, err := newDefaultHandle(newArachniTestRule(addresses, nil))
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, addresses, nil))
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
 	require.Equal(t, expectedAddresses, waf.Addresses())
 }
 
 func TestKnownActions(t *testing.T) {
-	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.first.input"}}, []string{"block"}))
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.first.input"}}, []string{"block"}))
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
 	require.Equal(t, []string{"block_request"}, waf.Actions())
@@ -928,7 +934,7 @@ func TestConcurrentWAFContextUsage(t *testing.T) {
 		nbRun   = 500
 	)
 
-	waf, _, err := newDefaultHandle(testArachniRule)
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
 	errCh := make(chan error, nbUsers)
@@ -995,7 +1001,7 @@ func TestConcurrentWAFInstanceUsage(t *testing.T) {
 		nbRun   = 500
 	)
 
-	waf, _, err := newDefaultHandle(testArachniRule)
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
 	errCh := make(chan error, nbUsers)
@@ -1072,7 +1078,7 @@ func TestConcurrentWAFSubcontextUsage(t *testing.T) {
 		nbRun   = 500
 	)
 
-	waf, _, err := newDefaultHandle(testArachniRule)
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
 	errCh := make(chan error, nbUsers)
@@ -1154,7 +1160,7 @@ func TestConcurrentWAFSubcontextUsage(t *testing.T) {
 func TestConcurrentWAFHandleClose(t *testing.T) {
 	const nbUsers = 200
 
-	waf, _, err := newDefaultHandle(testArachniRule)
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
 
 	var startBarrier, stopBarrier sync.WaitGroup
@@ -1190,7 +1196,7 @@ func TestConcurrentWAFHandleClose(t *testing.T) {
 func TestConcurrentContextUseDestroy(t *testing.T) {
 	const nbUsers = 200
 
-	waf, _, err := newDefaultHandle(testArachniRule)
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
 
 	wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
@@ -1399,7 +1405,7 @@ func TestMetrics(t *testing.T) {
 
 	require.NoError(t, json.Unmarshal([]byte(rules), &parsed))
 
-	waf, diags, err := newDefaultHandle(parsed)
+	waf, diags, err := newDefaultHandle(t, parsed)
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
 
@@ -1466,9 +1472,9 @@ func TestMetrics(t *testing.T) {
 }
 
 func TestObfuscatorConfig(t *testing.T) {
-	rule := newArachniTestRule([]ruleInput{{Address: "my.addr", KeyPath: []string{"key"}}}, nil)
+	rule := newArachniTestRule(t, []ruleInput{{Address: "my.addr", KeyPath: []string{"key"}}}, nil)
 	t.Run("key", func(t *testing.T) {
-		waf, _, err := newDefaultHandle(rule)
+		waf, _, err := newDefaultHandle(t, rule)
 		require.NoError(t, err)
 		t.Cleanup(func() { waf.Close() })
 		wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
@@ -1488,7 +1494,7 @@ func TestObfuscatorConfig(t *testing.T) {
 	})
 
 	t.Run("val", func(t *testing.T) {
-		waf, _, err := newDefaultHandle(rule)
+		waf, _, err := newDefaultHandle(t, rule)
 		require.NoError(t, err)
 		t.Cleanup(func() { waf.Close() })
 		wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
@@ -1508,7 +1514,7 @@ func TestObfuscatorConfig(t *testing.T) {
 	})
 
 	t.Run("off", func(t *testing.T) {
-		waf, _, err := newDefaultHandle(rule)
+		waf, _, err := newDefaultHandle(t, rule)
 		require.NoError(t, err)
 		t.Cleanup(func() { waf.Close() })
 		wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
@@ -1529,7 +1535,7 @@ func TestObfuscatorConfig(t *testing.T) {
 }
 
 func TestTruncationInformation(t *testing.T) {
-	waf, _, err := newDefaultHandle(newArachniTestRule([]ruleInput{{Address: "my.input"}}, nil))
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)
 	t.Cleanup(func() { waf.Close() })
 
@@ -1575,19 +1581,28 @@ func BenchmarkEncoder(b *testing.B) {
 	rnd := rand.New(rand.NewSource(33))
 	buf := make([]byte, 16384)
 	n, err := rnd.Read(buf)
+	if err != nil || n != len(buf) {
+		b.Fatal(err)
+	}
 	fullstr := string(buf)
-	encodeTimer, _ := timer.NewTimer(timer.WithUnlimitedBudget())
+	encodeTimer, err := timer.NewTimer(timer.WithUnlimitedBudget())
+	if err != nil {
+		b.Fatal(err)
+	}
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
 	for _, l := range []int{1024, 4096, 8192, 16384} {
-		encoder, _ := newEncoder(EncoderConfig{
+		encoder, err := newEncoder(EncoderConfig{
 			Pinner:           &pinner,
 			MaxObjectDepth:   10,
 			MaxStringSize:    math.MaxUint16,
 			MaxContainerSize: 100,
 			Timer:            encodeTimer,
 		})
+		if err != nil {
+			b.Fatal(err)
+		}
 		b.Run(fmt.Sprintf("%d", l), func(b *testing.B) {
 			b.ReportAllocs()
 			str := fullstr[:l]
@@ -1603,9 +1618,6 @@ func BenchmarkEncoder(b *testing.B) {
 				"k7": slice,
 				"k8": slice,
 				"k9": slice,
-			}
-			if err != nil || n != len(buf) {
-				b.Fatal(err)
 			}
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {

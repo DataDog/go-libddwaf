@@ -55,8 +55,16 @@ func TestHandleRefcountUnderflowSilentInProd(t *testing.T) {
 	require.Zero(t, handle.refCounter.Load())
 }
 
+func TestHandleCloseNilReceiverDoesNotPanic(t *testing.T) {
+	var handle *Handle
+
+	require.NotPanics(t, func() {
+		handle.Close()
+	})
+}
+
 func TestHandleNewContext(t *testing.T) {
-	waf, _, err := newDefaultHandle(testArachniRule)
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
 	defer waf.Close()
 
