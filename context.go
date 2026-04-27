@@ -41,7 +41,7 @@ type Context struct {
 
 	root        *contextRoot           // Shared root state for the C ddwaf_context pointer
 	isSubCtx    bool                   // Whether this Context represents a subcontext
-	closed      bool                   // Whether this Context or subcontext has been closed
+	closed      atomic.Bool            // Whether this Context or subcontext has been closed
 	cSubcontext bindings.WAFSubcontext // The C ddwaf_subcontext pointer (nil for root context)
 
 	// mutex protecting local fields such as truncations, pinner and cSubcontext.
@@ -59,7 +59,7 @@ type Context struct {
 type contextRoot struct {
 	mu         sync.Mutex
 	cContext   bindings.WAFContext
-	closed     bool
+	closed     atomic.Bool
 	activeRuns atomic.Int64
 }
 
@@ -120,7 +120,7 @@ func (context *Context) isSubcontext() bool {
 //
 // Lock order is always context.mutex then context.root.mu.
 func (context *Context) isClosedAssumingBothLocked() bool {
-	return context.root.closed || context.root.cContext == 0 || context.closed || (context.isSubcontext() && context.cSubcontext == 0)
+	return context.root.closed.Load() || context.root.cContext == 0 || context.closed.Load() || (context.isSubcontext() && context.cSubcontext == 0)
 }
 
 // SubContext creates a subcontext derived from this context.
@@ -144,18 +144,11 @@ func (context *Context) isClosedAssumingBothLocked() bool {
 //	defer subCtx.Close()
 //	result, err := subCtx.Run(RunAddressData{Data: data})
 func (context *Context) SubContext() (*Context, error) {
-	context.mutex.Lock()
-	defer context.mutex.Unlock()
-
-	context.root.mu.Lock()
-	defer context.root.mu.Unlock()
-
-	if context.isClosedAssumingBothLocked() {
-		return nil, waferrors.ErrContextClosed
-	}
-
 	if !context.handle.retain() {
-		return nil, fmt.Errorf("WAF handle has been released")
+		if context.closed.Load() || context.root.closed.Load() {
+			return nil, waferrors.ErrContextClosed
+		}
+		return nil, waferrors.ErrHandleReleased
 	}
 	// Refcount bookkeeping: retain() above is released by the deferred Close()
 	// below on any failure path. On success, the returned subcontext owns the
@@ -166,6 +159,16 @@ func (context *Context) SubContext() (*Context, error) {
 			context.handle.Close()
 		}
 	}()
+
+	context.mutex.Lock()
+	defer context.mutex.Unlock()
+
+	context.root.mu.Lock()
+	defer context.root.mu.Unlock()
+
+	if context.isClosedAssumingBothLocked() {
+		return nil, waferrors.ErrContextClosed
+	}
 
 	cSubcontext := bindings.Lib.SubcontextInit(context.root.cContext)
 	if cSubcontext == 0 {
@@ -207,13 +210,7 @@ func (context *Context) SubContext() (*Context, error) {
 // especially when the error is [waferrors.ErrTimeout].
 func (context *Context) Run(addressData RunAddressData) (res Result, err error) {
 	if addressData.isEmpty() {
-		context.mutex.Lock()
-		defer context.mutex.Unlock()
-
-		context.root.mu.Lock()
-		defer context.root.mu.Unlock()
-
-		if context.isClosedAssumingBothLocked() {
+		if context.closed.Load() || context.root.closed.Load() {
 			return Result{}, waferrors.ErrContextClosed
 		}
 		return Result{}, nil
@@ -485,21 +482,21 @@ func (context *Context) Close() {
 	context.root.mu.Lock()
 
 	if context.isSubcontext() {
-		if context.cSubcontext != 0 && !context.root.closed && context.root.cContext != 0 {
+		if context.cSubcontext != 0 && !context.root.closed.Load() && context.root.cContext != 0 {
 			bindings.Lib.SubcontextDestroy(context.cSubcontext)
 		}
-		context.closed = true
+		context.closed.Store(true)
 		context.cSubcontext = 0
 		context.root.mu.Unlock()
 		context.pinner.Unpin()
 		return
 	}
 
-	if !context.root.closed && context.root.cContext != 0 {
+	if !context.root.closed.Load() && context.root.cContext != 0 {
 		cContext := context.root.cContext
-		context.root.closed = true
+		context.root.closed.Store(true)
 		context.root.cContext = 0
-		context.closed = true
+		context.closed.Store(true)
 		context.root.mu.Unlock()
 
 		for context.root.activeRuns.Load() > 0 {
@@ -510,7 +507,7 @@ func (context *Context) Close() {
 		context.pinner.Unpin()
 		return
 	}
-	context.closed = true
+	context.closed.Store(true)
 	context.root.mu.Unlock()
 
 	context.pinner.Unpin()
