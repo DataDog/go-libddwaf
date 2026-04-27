@@ -169,17 +169,4 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 	}
 }
 
-func goRunError(rc bindings.WAFReturnCode) error {
-	switch rc {
-	case bindings.WAFErrInternal:
-		return waferrors.ErrInternal
-	case bindings.WAFErrInvalidObject:
-		return waferrors.ErrInvalidObject
-	case bindings.WAFErrInvalidArgument:
-		return waferrors.ErrInvalidArgument
-	case bindings.WAFOK, bindings.WAFMatch:
-		return nil
-	default:
-		return fmt.Errorf("%w: %d", waferrors.ErrUnknownReturnCode, int(rc))
-	}
-}
+
