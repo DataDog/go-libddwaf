@@ -119,6 +119,9 @@ func (handle *Handle) Actions() []string {
 // Close decrements the reference counter of this [Handle], possibly allowing it to be destroyed
 // and all the resources associated with it to be released.
 func (handle *Handle) Close() {
+	if handle == nil {
+		return
+	}
 	if handle.addRefCounter(-1) != 0 {
 		return
 	}

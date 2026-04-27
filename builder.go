@@ -48,7 +48,6 @@ func NewBuilder() (*Builder, error) {
 	}
 
 	hdl := wafBindings.Lib.BuilderInit()
-
 	if hdl == 0 {
 		return nil, waferrors.ErrBuilderInitFailed
 	}

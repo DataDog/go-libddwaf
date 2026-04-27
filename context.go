@@ -306,7 +306,8 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 
 // merge merges two maps of slices into a single map of slices. The resulting map will contain all
 // keys from both a and b, with the corresponding value from a and b concatenated (in this order) in
-// a single slice. The implementation tries to minimize reallocations.
+// a single slice. The named return keeps the empty-input fast path concise while still allowing the
+// accumulator to be built without extra copies.
 func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 	if len(a) == 0 && len(b) == 0 {
 		return
@@ -403,9 +404,9 @@ func (context *Context) run(ctx context.Context, data *WAFObject, runTimer timer
 		timeoutDuration = 0
 	}
 
-	// The value of the timeout cannot exceed 2^55
+	// The value of the timeout cannot exceed 2^55 - 1 (55 bits)
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
-	timeout := uint64(timeoutDuration.Microseconds()) & 0x008FFFFFFFFFFFFF
+	timeout := uint64(timeoutDuration.Microseconds()) & 0x007FFFFFFFFFFFFF
 	cContext := context.root.cContext
 	var ret wafBindings.WAFReturnCode
 	if context.isSubcontext() {
@@ -429,7 +430,8 @@ func (context *Context) run(ctx context.Context, data *WAFObject, runTimer timer
 	return res, err
 }
 
-func unwrapWafResult(ret wafBindings.WAFReturnCode, result *WAFObject) (Result, time.Duration, error) {
+// Named returns keep the post-processing / deferred-assignment pattern compact at the callsite.
+func unwrapWafResult(ret wafBindings.WAFReturnCode, result *WAFObject) (res Result, duration time.Duration, err error) {
 	if !result.IsMap() {
 		return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: expected map, got %s", waferrors.ErrResultInvalidType, result.Type())
 	}
@@ -439,11 +441,7 @@ func unwrapWafResult(ret wafBindings.WAFReturnCode, result *WAFObject) (Result, 
 		return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result entries: %w", waferrors.ErrResultInvalidType, err)
 	}
 
-	var (
-		res        Result
-		duration   time.Duration
-		wafTimeout bool
-	)
+	var wafTimeout bool
 	for _, entry := range entries {
 		key, err := entry.Key().StringValue()
 		if err != nil {
