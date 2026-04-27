@@ -345,7 +345,7 @@ func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[
 		return nil, nil
 	}
 
-	encoder, err := newEncoder(newEncoderConfig(pinner, timer))
+	encoder, err := newEncoder(newEncoderConfig(pinner, WithTimer(timer)))
 	if err != nil {
 		return nil, fmt.Errorf("could not create encoder: %w", err)
 	}

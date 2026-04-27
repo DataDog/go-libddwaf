@@ -119,7 +119,7 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
-	encoder, err := newEncoder(newUnlimitedEncoderConfig(&pinner))
+	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("could not create encoder: %w", err)
 	}

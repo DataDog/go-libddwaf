@@ -82,7 +82,7 @@ func TestEncodable(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+		encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 		encoded, err := encoder.Encode(&input)
 
 		require.NoError(t, err, "unexpected error when encoding: %v", err)
@@ -97,7 +97,7 @@ func TestEncodable(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+		encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 		_, err := encoder.Encode(&input)
 		require.NoError(t, err, "unexpected error when encoding: %v", err)
 
@@ -110,10 +110,40 @@ func TestEncodable(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+		encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 		_, err := encoder.Encode(&input)
 		require.Error(t, err, "expected an error when encoding: %v", err)
 		require.ErrorIs(t, err, waferrors.ErrUnsupportedValue)
+	})
+}
+
+func TestNewEncoderConfig(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		cfg := newEncoderConfig(&pinner)
+
+		require.Same(t, &pinner, cfg.Pinner)
+		require.Nil(t, cfg.Timer)
+		require.Equal(t, bindings.MaxContainerSize, cfg.MaxContainerSize)
+		require.Equal(t, bindings.MaxStringLength, cfg.MaxStringSize)
+		require.Equal(t, bindings.MaxContainerDepth, cfg.MaxObjectDepth)
+	})
+
+	t.Run("with timer and unlimited limits", func(t *testing.T) {
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		tm, err := timer.NewTimer(timer.WithBudget(time.Second))
+		require.NoError(t, err)
+
+		cfg := newEncoderConfig(&pinner, WithTimer(tm), WithUnlimitedLimits())
+
+		require.Same(t, tm, cfg.Timer)
+		require.Equal(t, math.MaxInt, cfg.maxContainerSize())
+		require.Equal(t, math.MaxInt, cfg.maxStringSize())
+		require.Equal(t, math.MaxInt, cfg.maxObjectDepth())
 	})
 }
 
@@ -423,7 +453,7 @@ func TestEncodeDecode(t *testing.T) {
 			var pinner runtime.Pinner
 			defer pinner.Unpin()
 
-			encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+			encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 			encoded, err := encoder.Encode(tc.Input)
 
 			t.Run("equal", func(t *testing.T) {
@@ -906,7 +936,7 @@ func TestEncoderTypeTree(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+		encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 		encoded, err := encoder.Encode(tc.Input)
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
 			if tc.Error != nil {
@@ -931,7 +961,7 @@ func TestDecoder(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		encoder, _ := newEncoder(newUnlimitedEncoderConfig(&pinner))
+		encoder, _ := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 		objBuilder := func(value any) *WAFObject {
 			encoded, err := encoder.Encode(value)
 			require.NoError(t, err, "Encoding object failed")

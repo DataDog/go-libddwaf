@@ -37,9 +37,10 @@ type EncoderConfig struct {
 	MaxStringSize uint16
 	// MaxObjectDepth is the maximum depth of the object that will be encoded.
 	MaxObjectDepth uint16
-
-	unlimited bool
 }
+
+// EncoderOption mutates an [EncoderConfig] created by [newEncoderConfig].
+type EncoderOption func(*EncoderConfig)
 
 // encoder encodes Go values into wafObjects. Only the subset of Go types representable into wafObjects
 // will be encoded while ignoring the rest of it.
@@ -120,42 +121,59 @@ func newEncoder(config EncoderConfig) (*encoder, error) {
 	return &encoder{config: config}, nil
 }
 
-func newEncoderConfig(pinner pin.Pinner, timer timer.Timer) EncoderConfig {
-	return EncoderConfig{
+func newEncoderConfig(pinner pin.Pinner, opts ...EncoderOption) EncoderConfig {
+	config := EncoderConfig{
 		Pinner:           pinner,
-		Timer:            timer,
 		MaxContainerSize: wafBindings.MaxContainerSize,
 		MaxStringSize:    wafBindings.MaxStringLength,
 		MaxObjectDepth:   wafBindings.MaxContainerDepth,
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&config)
+		}
+	}
+	return config
 }
 
-func newUnlimitedEncoderConfig(pinner pin.Pinner) EncoderConfig {
-	return EncoderConfig{
-		Pinner:           pinner,
-		MaxContainerSize: math.MaxUint16,
-		MaxStringSize:    math.MaxUint16,
-		MaxObjectDepth:   math.MaxUint16,
-		unlimited:        true,
+// WithUnlimitedLimits configures [newEncoderConfig] to disable encoder truncation limits.
+func WithUnlimitedLimits() EncoderOption {
+	return func(config *EncoderConfig) {
+		config.MaxContainerSize = math.MaxUint16
+		config.MaxStringSize = math.MaxUint16
+		config.MaxObjectDepth = math.MaxUint16
 	}
 }
 
+// WithTimer configures [newEncoderConfig] to use the provided timer.
+func WithTimer(timer timer.Timer) EncoderOption {
+	return func(config *EncoderConfig) {
+		config.Timer = timer
+	}
+}
+
+func (config EncoderConfig) hasUnlimitedLimits() bool {
+	return config.MaxContainerSize == math.MaxUint16 &&
+		config.MaxStringSize == math.MaxUint16 &&
+		config.MaxObjectDepth == math.MaxUint16
+}
+
 func (config EncoderConfig) maxContainerSize() int {
-	if config.unlimited {
+	if config.hasUnlimitedLimits() {
 		return math.MaxInt
 	}
 	return int(config.MaxContainerSize)
 }
 
 func (config EncoderConfig) maxStringSize() int {
-	if config.unlimited {
+	if config.hasUnlimitedLimits() {
 		return math.MaxInt
 	}
 	return int(config.MaxStringSize)
 }
 
 func (config EncoderConfig) maxObjectDepth() int {
-	if config.unlimited {
+	if config.hasUnlimitedLimits() {
 		return math.MaxInt
 	}
 	return int(config.MaxObjectDepth)
