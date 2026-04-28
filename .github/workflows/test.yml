@@ -7,7 +7,6 @@ on:
         default: 'main'
   schedule: # nightly
     - cron: "0 0 * * *"
-  pull_request: # on pull requests touching appsec files
   push: # on push to the main branch
     branches:
       - main

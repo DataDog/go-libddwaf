@@ -1,0 +1,35 @@
+name: Test
+on:
+  pull_request: # on pull requests touching appsec files
+
+permissions:
+  contents: read
+
+jobs:
+  bare-metal:
+    name: GitHub Runner
+    uses: ./.github/workflows/_test_bare_metal.yml
+  containerized:
+    name: Containerized
+    uses: ./.github/workflows/_test_containerized.yml
+
+  # Smoke tests are intentionally excluded from pull_request runs.
+  # The cross-repo reusable workflow in DataDog/dd-trace-go requests
+  # `id-token: write`, but GitHub only grants `id-token: none` to these
+  # PR runs, which causes a startup_failure before any job can start.
+  done:
+    name: Done
+    runs-on: ubuntu-latest
+    needs:
+      - bare-metal
+      - containerized
+    if: '!cancelled()'
+    steps:
+      - name: Done
+        if: needs.bare-metal.result == 'success' && needs.containerized.result == 'success'
+        run: echo "Done!"
+      - name: Done
+        if: needs.bare-metal.result != 'success' || needs.containerized.result != 'success'
+        run: |-
+          echo "Failed!"
+          exit 1
