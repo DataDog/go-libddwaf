@@ -25,9 +25,6 @@ jobs:
 
   test:
     needs: go-versions-matrix
-    permissions:
-      id-token: write
-      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -53,6 +50,7 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
       - name: Get GitHub token (DataDog/appsec-event-rules)
+        if: github.event_name != 'pull_request'
         id: generate-token
         uses: DataDog/dd-octo-sts-action@96a25462dbcb10ebf0bfd6e2ccc917d2ab235b9a # v1.0.4
         with:
@@ -65,4 +63,4 @@ jobs:
           DD_APPSEC_WAF_LOG_LEVEL: ${{ matrix.waf-log-level }}
           # We need a GITHUB_TOKEN in order to access the latest release of the AppSec rules from
           # the DataDog/appsec-rules repository.
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || github.token }}
