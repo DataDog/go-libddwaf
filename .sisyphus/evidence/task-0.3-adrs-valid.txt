@@ -1,9 +1,0 @@
-=== .sisyphus/plans/adr-001-toctou-architecture.md ===
-4
-=== .sisyphus/plans/adr-002-ctx-deadline-semantics.md ===
-4
-=== .sisyphus/plans/adr-003-refcount-underflow-prod.md ===
-4
-=== .sisyphus/plans/adr-004-nil-context-handling.md ===
-4
-4
