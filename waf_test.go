@@ -437,7 +437,7 @@ func TestRunContext(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { wafCtx.Close() })
 
-		_, err = wafCtx.Run(nil, data)
+		_, err = wafCtx.Run(nil, data) //nolint:staticcheck // intentionally testing nil context handling
 		require.EqualError(t, err, "Context.Run: nil context.Context")
 		require.ErrorIs(t, err, waferrors.ErrNilContext)
 	})
@@ -765,7 +765,7 @@ func TestSubContext(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { ctx.Close() })
 
-		subCtx, err := ctx.SubContext(nil)
+		subCtx, err := ctx.SubContext(nil) //nolint:staticcheck // intentionally testing nil context handling
 		require.Nil(t, subCtx)
 		require.EqualError(t, err, "Context.SubContext: nil context.Context")
 		require.ErrorIs(t, err, waferrors.ErrNilContext)
@@ -1410,7 +1410,10 @@ func TestMetrics(t *testing.T) {
 
 func TestObfuscatorConfig(t *testing.T) {
 	rule := newArachniTestRule(t, []ruleInput{{Address: "my.addr", KeyPath: []string{"key"}}}, nil)
-	for _, tc := range []struct{ name string; wantObf bool }{
+	for _, tc := range []struct {
+		name    string
+		wantObf bool
+	}{
 		{"key", true}, {"val", true}, {"off", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

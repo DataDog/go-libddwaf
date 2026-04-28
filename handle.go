@@ -168,5 +168,3 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 		}
 	}
 }
-
-

@@ -278,7 +278,7 @@ func (encoder *encoder) encode(value reflect.Value, obj *wafBindings.WAFObject, 
 
 	// 		json.Number -- string-represented arbitrary precision numbers
 	case value.Type() == jsonNumberType:
-		encoder.encodeJSONNumber(value.Interface().(json.Number), obj)
+		encoder.encodeJSONNumber(json.Number(value.String()), obj)
 		return nil
 
 	//		Strings

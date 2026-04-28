@@ -655,7 +655,7 @@ func TestEncoderLimits(t *testing.T) {
 				Ignored     string `json:"-"`
 				Transparent string `json:",omitempty"`
 				Renamed     string `json:"field"`
-				LiteralDash string `json:"-,"`
+				LiteralDash string `json:"-,"` //nolint:staticcheck // testing literal dash field name
 			}{Ignored: "1", Transparent: "2", Renamed: "3", LiteralDash: "4"},
 			Output: map[string]any{"Transparent": "2", "field": "3", "-": "4"},
 		},

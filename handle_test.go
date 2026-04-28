@@ -69,7 +69,7 @@ func TestHandleNewContext(t *testing.T) {
 	t.Cleanup(func() { waf.Close() })
 
 	t.Run("nil-context-returns-ErrNilContext", func(t *testing.T) {
-		wafCtx, err := waf.NewContext(nil)
+		wafCtx, err := waf.NewContext(nil) //nolint:staticcheck // intentionally testing nil context handling
 		require.Nil(t, wafCtx)
 		require.EqualError(t, err, "Handle.NewContext: nil context.Context")
 		require.ErrorIs(t, err, waferrors.ErrNilContext)

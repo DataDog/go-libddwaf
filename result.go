@@ -70,25 +70,41 @@ func goRunError(rc bindings.WAFReturnCode) error {
 
 // Named returns keep the post-processing / deferred-assignment pattern compact at the callsite.
 func unwrapWafResult(ret bindings.WAFReturnCode, result *WAFObject) (res Result, duration time.Duration, err error) {
-	if !result.IsMap() { return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: expected map, got %s", waferrors.ErrResultInvalidType, result.Type()) }
+	if !result.IsMap() {
+		return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: expected map, got %s", waferrors.ErrResultInvalidType, result.Type())
+	}
 	entries, err := result.MapEntries()
-	if err != nil { return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result entries: %w", waferrors.ErrResultInvalidType, err) }
+	if err != nil {
+		return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result entries: %w", waferrors.ErrResultInvalidType, err)
+	}
 	var wafTimeout bool
 	for _, entry := range entries {
 		key, err := entry.Key().StringValue()
-		if err != nil { return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err) }
+		if err != nil {
+			return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
+		}
 		switch key {
 		case "timeout", "keep", "duration":
-			if wafTimeout, duration, err = decodeTimeoutKeepDuration(entry, key, wafTimeout, duration, &res); err != nil { return Result{}, 0, err }
+			if wafTimeout, duration, err = decodeTimeoutKeepDuration(entry, key, wafTimeout, duration, &res); err != nil {
+				return Result{}, 0, err
+			}
 		case "events":
-			if err := decodeEvents(entry, &res); err != nil { return Result{}, 0, err }
+			if err := decodeEvents(entry, &res); err != nil {
+				return Result{}, 0, err
+			}
 		case "actions":
-			if err := decodeActions(entry, &res); err != nil { return Result{}, 0, err }
+			if err := decodeActions(entry, &res); err != nil {
+				return Result{}, 0, err
+			}
 		case "attributes":
-			if err := decodeAttributes(entry, &res); err != nil { return Result{}, 0, err }
+			if err := decodeAttributes(entry, &res); err != nil {
+				return Result{}, 0, err
+			}
 		}
 	}
-	if wafTimeout { return res, duration, waferrors.ErrTimeout }
+	if wafTimeout {
+		return res, duration, waferrors.ErrTimeout
+	}
 	return res, duration, goRunError(ret)
 }
 
