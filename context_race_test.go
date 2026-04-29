@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -110,4 +111,53 @@ func TestContextCloseWaitsForActiveRun(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Close did not return after activeRuns reached zero")
 	}
+}
+
+func TestContextRunClosePinnedPointerLeakRegression(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	data := RunAddressData{Data: map[string]any{
+		"server.request.headers.no_cookies": map[string][]string{
+			"user-agent":      {"Arachni/test", "curl/8.0"},
+			"accept":          {"application/json", "text/html", "*/*"},
+			"accept-encoding": {"gzip", "deflate", "br"},
+			"x-forwarded-for": {"1.2.3.4", "5.6.7.8", "9.10.11.12", "13.14.15.16"},
+			"x-custom":        {"a", "b", "c", "d", "e", "f", "g", "h"},
+		},
+	}}
+
+	const iterations = 1000
+	for range iterations {
+		ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := ctx.Run(context.Background(), data)
+			if err != nil && !errors.Is(err, waferrors.ErrContextClosed) {
+				t.Errorf("Run returned unexpected error: %v", err)
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			<-start
+			ctx.Close()
+		}()
+
+		close(start)
+		wg.Wait()
+		runtime.Gosched()
+	}
+
+	runtime.GC()
+	runtime.GC()
+	runtime.GC()
 }

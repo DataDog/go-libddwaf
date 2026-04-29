@@ -450,7 +450,7 @@ func (context *Context) Close() {
 		context.closed.Store(true)
 		context.cSubcontext = 0
 		context.root.mu.Unlock()
-		context.pinner.Unpin()
+		context.pinner.Close()
 		return
 	}
 
@@ -465,14 +465,16 @@ func (context *Context) Close() {
 			runtime.Gosched()
 		}
 
-		wafBindings.Lib.ContextDestroy(cContext)
-		context.pinner.Unpin()
+		if cContext != 0 {
+			wafBindings.Lib.ContextDestroy(cContext)
+		}
+		context.pinner.Close()
 		return
 	}
 	context.closed.Store(true)
 	context.root.mu.Unlock()
 
-	context.pinner.Unpin()
+	context.pinner.Close()
 }
 
 // Truncations returns the truncations that occurred while encoding address data for WAF execution.
