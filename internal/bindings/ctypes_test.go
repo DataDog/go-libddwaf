@@ -8,6 +8,7 @@ package bindings
 import (
 	"runtime"
 	"testing"
+	"unsafe"
 
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/require"
@@ -317,4 +318,52 @@ func TestWAFObjectMapEntriesError(t *testing.T) {
 
 	_, err := obj.MapEntries()
 	require.ErrorIs(t, err, waferrors.ErrInvalidObjectType)
+}
+
+// TestWAFObjectAlignment verifies that WAFObject has at least 8-byte alignment,
+// matching the C union it represents. Without proper alignment, pointer operations
+// at byte offset 8 (where the C union stores pointers, int64, uint64, float64)
+// cause "checkptr: misaligned pointer conversion" under -race.
+func TestWAFObjectAlignment(t *testing.T) {
+	const pointerAlignment = unsafe.Sizeof(uintptr(0)) // 8 on 64-bit
+
+	t.Run("WAFObject", func(t *testing.T) {
+		require.GreaterOrEqual(t, unsafe.Alignof(WAFObject{}), pointerAlignment,
+			"WAFObject must be pointer-aligned to match C union layout")
+		require.Equal(t, uintptr(16), unsafe.Sizeof(WAFObject{}),
+			"WAFObject size must remain 16 bytes")
+	})
+
+	t.Run("WAFObjectKV", func(t *testing.T) {
+		require.GreaterOrEqual(t, unsafe.Alignof(WAFObjectKV{}), pointerAlignment,
+			"WAFObjectKV must be pointer-aligned")
+		require.Equal(t, uintptr(32), unsafe.Sizeof(WAFObjectKV{}),
+			"WAFObjectKV size must remain 32 bytes")
+	})
+
+	t.Run("stack allocation alignment", func(t *testing.T) {
+		var obj WAFObject
+		addr := uintptr(unsafe.Pointer(&obj))
+		require.Zero(t, addr%pointerAlignment,
+			"stack-allocated WAFObject at %#x is not %d-byte aligned", addr, pointerAlignment)
+	})
+
+	t.Run("slice element alignment", func(t *testing.T) {
+		objs := make([]WAFObject, 3)
+		for i := range objs {
+			addr := uintptr(unsafe.Pointer(&objs[i]))
+			require.Zero(t, addr%pointerAlignment,
+				"slice element [%d] at %#x is not %d-byte aligned", i, addr, pointerAlignment)
+		}
+	})
+
+	t.Run("pointer field offset alignment", func(t *testing.T) {
+		// The pointer/value field is at byte 8 within the WAFObject.
+		// If WAFObject is N-byte aligned and N >= 8, then data[8] is also 8-byte aligned.
+		var obj WAFObject
+		ptrFieldAddr := uintptr(unsafe.Pointer(&obj.data[wafObjectPtrOffset]))
+		require.Zero(t, ptrFieldAddr%pointerAlignment,
+			"pointer field at data[%d] (addr %#x) is not %d-byte aligned",
+			wafObjectPtrOffset, ptrFieldAddr, pointerAlignment)
+	})
 }

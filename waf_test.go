@@ -1237,7 +1237,7 @@ func TestUnwrapWafResultTimeoutFromResultMap(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		var result WAFObject
+		result := newWAFObject()
 		kvs := result.SetMap(&pinner, 1)
 		kvs[0].Key().SetString(&pinner, "timeout")
 		kvs[0].Value().SetBool(true)
@@ -1251,7 +1251,7 @@ func TestUnwrapWafResultTimeoutFromResultMap(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		var result WAFObject
+		result := newWAFObject()
 		kvs := result.SetMap(&pinner, 1)
 		kvs[0].Key().SetString(&pinner, "timeout")
 		kvs[0].Value().SetBool(false)
