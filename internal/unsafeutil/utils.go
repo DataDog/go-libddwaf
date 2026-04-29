@@ -28,6 +28,8 @@ func StringData(str string) *byte {
 }
 
 // Gostring copies a char* to a Go string.
+//go:nosplit
+//go:nocheckptr
 func Gostring(ptr *byte) string {
 	if ptr == nil {
 		return ""
@@ -56,6 +58,8 @@ func NativeStringUnwrap(str string) StringHeader {
 
 // GostringSized copies size bytes starting at ptr into a new Go string. Unlike
 // [Gostring], it does not scan for a NUL terminator. Returns "" if ptr is nil.
+//go:nosplit
+//go:nocheckptr
 func GostringSized(ptr *byte, size uint64) string {
 	if ptr == nil {
 		return ""
@@ -131,12 +135,16 @@ func SliceToUintptr[T any](arg []T) uintptr {
 	return uintptr(unsafe.Pointer(unsafe.SliceData(arg)))
 }
 
+//go:nosplit
+//go:nocheckptr
 func Slice[T any](ptr *T, length uint64) []T {
 	return unsafe.Slice(ptr, length)
 }
 
 // String returns a string whose bytes start at ptr and has the given length.
 // It is a wrapper around [unsafe.String].
+//go:nosplit
+//go:nocheckptr
 func String(ptr *byte, length uint64) string {
 	return unsafe.String(ptr, length)
 }
