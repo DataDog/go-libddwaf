@@ -47,6 +47,8 @@ func wrapWAFObjects(items []wafBindings.WAFObject) []WAFObject {
 	return wrapped
 }
 
+//go:nosplit
+//go:nocheckptr
 func unwrapWAFObjects(items []WAFObject) []wafBindings.WAFObject {
 	n := len(items)
 	if n == 0 {
@@ -90,6 +92,8 @@ func wrapWAFObjectKVs(entries []wafBindings.WAFObjectKV) []WAFObjectKV {
 	return wrapped
 }
 
+//go:nosplit
+//go:nocheckptr
 func unwrapWAFObjectKVs(entries []WAFObjectKV) []wafBindings.WAFObjectKV {
 	n := len(entries)
 	if n == 0 {
