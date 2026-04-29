@@ -134,7 +134,7 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 // addOrUpdateConfig adds or updates a configuration fragment to this [Builder].
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) addOrUpdateConfig(path string, cfg *WAFObject) (Diagnostics, error) {
-	var diagnosticsWafObj WAFObject
+	diagnosticsWafObj := newWAFObject()
 	defer wafBindings.Lib.ObjectDestroy(diagnosticsWafObj.raw(), wafBindings.Lib.DefaultAllocator())
 
 	res := wafBindings.Lib.BuilderAddOrUpdateConfig(b.handle, path, cfg.raw(), diagnosticsWafObj.raw())

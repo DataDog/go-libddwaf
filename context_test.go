@@ -25,63 +25,63 @@ type wafResultMapBuilder struct {
 }
 
 func (b *wafResultMapBuilder) addBoolEntry(key string, val bool) {
-	var entry WAFObjectKV
+	entry := newWAFObjectKV()
 	entry.Key().SetString(&b.pinner, key)
 	entry.Value().SetBool(val)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) addUintEntry(key string, val uint64) {
-	var entry WAFObjectKV
+	entry := newWAFObjectKV()
 	entry.Key().SetString(&b.pinner, key)
 	entry.Value().SetUint(val)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) addStringEntry(key string, val string) {
-	var entry WAFObjectKV
+	entry := newWAFObjectKV()
 	entry.Key().SetString(&b.pinner, key)
 	entry.Value().SetString(&b.pinner, val)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) addEmptyArrayEntry(key string) {
-	var entry WAFObjectKV
+	entry := newWAFObjectKV()
 	entry.Key().SetString(&b.pinner, key)
 	entry.Value().SetArray(&b.pinner, 0)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) addArrayEntry(key string, items []WAFObject) {
-	var entry WAFObjectKV
+	entry := newWAFObjectKV()
 	entry.Key().SetString(&b.pinner, key)
 	_ = entry.Value().SetArrayData(&b.pinner, items)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) addEmptyMapEntry(key string) {
-		var entry WAFObjectKV
+	entry := newWAFObjectKV()
 	entry.Key().SetString(&b.pinner, key)
 	entry.Value().SetMap(&b.pinner, 0)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) addMapEntry(key string, items []WAFObjectKV) {
-	var entry WAFObjectKV
+	entry := newWAFObjectKV()
 	entry.Key().SetString(&b.pinner, key)
 	_ = entry.Value().SetMapData(&b.pinner, items)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) build() WAFObject {
-	var obj WAFObject
+	obj := newWAFObject()
 	obj.SetMapData(&b.pinner, b.entries)
 	return obj
 }
 
 func TestUnwrapWafResult(t *testing.T) {
 	t.Run("result-not-a-map", func(t *testing.T) {
-		var result WAFObject
+		result := newWAFObject()
 		result.SetInvalid()
 		_, _, err := unwrapWafResult(bindings.WAFOK, &result)
 		require.Error(t, err)
@@ -213,7 +213,7 @@ func TestUnwrapWafResult(t *testing.T) {
 			var b wafResultMapBuilder
 			defer b.pinner.Unpin()
 
-			var item WAFObject
+			item := newWAFObject()
 			item.SetString(&b.pinner, "event-1")
 			b.addArrayEntry("events", []WAFObject{item})
 			result := b.build()
@@ -244,7 +244,7 @@ func TestUnwrapWafResult(t *testing.T) {
 
 			_, _, err := unwrapWafResult(bindings.WAFOK, &result)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid WAF result object type: expected array for events, got string")
+			require.Contains(t, err.Error(), "invalid WAF result object type: expected array for events, got small_string")
 		})
 	})
 
@@ -253,7 +253,7 @@ func TestUnwrapWafResult(t *testing.T) {
 			var b wafResultMapBuilder
 			defer b.pinner.Unpin()
 
-			var item WAFObjectKV
+			item := newWAFObjectKV()
 			item.Key().SetString(&b.pinner, "block_request")
 			item.Value().SetString(&b.pinner, "blocked")
 			b.addMapEntry("actions", []WAFObjectKV{item})
@@ -284,7 +284,7 @@ func TestUnwrapWafResult(t *testing.T) {
 
 			_, _, err := unwrapWafResult(bindings.WAFOK, &result)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid WAF result object type: expected map for actions, got string")
+			require.Contains(t, err.Error(), "invalid WAF result object type: expected map for actions, got small_string")
 		})
 	})
 
@@ -293,7 +293,7 @@ func TestUnwrapWafResult(t *testing.T) {
 			var b wafResultMapBuilder
 			defer b.pinner.Unpin()
 
-			var item WAFObjectKV
+			item := newWAFObjectKV()
 			item.Key().SetString(&b.pinner, "derivative-key")
 			item.Value().SetString(&b.pinner, "derivative-value")
 			b.addMapEntry("attributes", []WAFObjectKV{item})
@@ -324,7 +324,7 @@ func TestUnwrapWafResult(t *testing.T) {
 
 			_, _, err := unwrapWafResult(bindings.WAFOK, &result)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid WAF result object type: expected map for attributes, got string")
+			require.Contains(t, err.Error(), "invalid WAF result object type: expected map for attributes, got small_string")
 		})
 	})
 
@@ -334,11 +334,11 @@ func TestUnwrapWafResult(t *testing.T) {
 
 		b.addBoolEntry("timeout", true)
 
-		var event WAFObject
+		event := newWAFObject()
 		event.SetString(&b.pinner, "matched-rule")
 		b.addArrayEntry("events", []WAFObject{event})
 
-		var action WAFObjectKV
+		action := newWAFObjectKV()
 		action.Key().SetString(&b.pinner, "block_request")
 		action.Value().SetString(&b.pinner, "blocked")
 		b.addMapEntry("actions", []WAFObjectKV{action})

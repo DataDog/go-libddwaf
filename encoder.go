@@ -190,7 +190,8 @@ func (config EncoderConfig) maxObjectDepth() int {
 // like a function or a channel.
 func (encoder *encoder) Encode(data any) (*WAFObject, error) {
 	value := reflect.ValueOf(data)
-	wo := &WAFObject{}
+	obj := newWAFObject()
+	wo := &obj
 
 	err := encoder.encode(value, wo.raw(), encoder.config.maxObjectDepth())
 

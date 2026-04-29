@@ -12,10 +12,10 @@ func TestPublicWAFObjectMethods(t *testing.T) {
 	defer pinner.Unpin()
 
 	t.Run("scalar accessors", func(t *testing.T) {
-		var obj WAFObject
+		obj := newWAFObject()
 		obj.SetString(&pinner, "hello")
 
-		require.Equal(t, "string", obj.Type())
+		require.Equal(t, "small_string", obj.Type())
 		require.True(t, obj.IsString())
 
 		value, err := obj.StringValue()
@@ -24,7 +24,7 @@ func TestPublicWAFObjectMethods(t *testing.T) {
 	})
 
 	t.Run("map container wrappers", func(t *testing.T) {
-		var obj WAFObject
+		obj := newWAFObject()
 		entries := obj.SetMap(&pinner, 1)
 		require.Len(t, entries, 1)
 
@@ -53,7 +53,7 @@ func TestPublicWAFObjectMethods(t *testing.T) {
 	})
 
 	t.Run("array container wrappers", func(t *testing.T) {
-		var obj WAFObject
+		obj := newWAFObject()
 		items := obj.SetArray(&pinner, 2)
 		require.Len(t, items, 2)
 

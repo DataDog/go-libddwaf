@@ -143,6 +143,7 @@ func (w WAFObjectType) String() string {
 // All these offsets are sorted in the constants below and used to query the byte slice.
 type WAFObject struct {
 	_    structs.HostLayout
+	_    [0]uintptr // force 8-byte alignment to match C union (contains pointer/int64/float64 at offset 8)
 	data [16]byte
 }
 

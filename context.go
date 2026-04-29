@@ -400,7 +400,7 @@ func (context *Context) run(ctx context.Context, data *WAFObject, runTimer timer
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 
-	var result WAFObject
+	result := newWAFObject()
 	pinner.Pin(result.raw())
 	defer wafBindings.Lib.ObjectDestroy(result.raw(), wafBindings.Lib.DefaultAllocator())
 

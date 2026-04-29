@@ -1,6 +1,8 @@
 package libddwaf
 
 import (
+	"unsafe"
+
 	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/internal/pin"
 )
@@ -8,19 +10,18 @@ import (
 // WAFObject is a WAF object that can be passed to the WAF engine.
 type WAFObject struct {
 	inner *wafBindings.WAFObject
-	owned wafBindings.WAFObject
 }
 
 // WAFObjectKV is a key-value pair used in v2 maps.
 type WAFObjectKV struct {
 	inner *wafBindings.WAFObjectKV
-	owned wafBindings.WAFObjectKV
+}
+
+func newWAFObject() WAFObject {
+	return WAFObject{inner: new(wafBindings.WAFObject)}
 }
 
 func (w *WAFObject) raw() *wafBindings.WAFObject {
-	if w.inner == nil {
-		w.inner = &w.owned
-	}
 	return w.inner
 }
 
@@ -47,20 +48,30 @@ func wrapWAFObjects(items []wafBindings.WAFObject) []WAFObject {
 }
 
 func unwrapWAFObjects(items []WAFObject) []wafBindings.WAFObject {
-	if len(items) == 0 {
+	n := len(items)
+	if n == 0 {
 		return nil
 	}
-	inner := make([]wafBindings.WAFObject, len(items))
+	first := items[0].inner
+	if n == 1 {
+		return unsafe.Slice(first, 1)
+	}
+	stride := unsafe.Sizeof(wafBindings.WAFObject{})
+	if uintptr(unsafe.Pointer(items[n-1].inner)) == uintptr(unsafe.Pointer(first))+uintptr(n-1)*stride {
+		return unsafe.Slice(first, n)
+	}
+	inner := make([]wafBindings.WAFObject, n)
 	for i := range items {
-		inner[i] = *items[i].raw()
+		inner[i] = *items[i].inner
 	}
 	return inner
 }
 
+func newWAFObjectKV() WAFObjectKV {
+	return WAFObjectKV{inner: new(wafBindings.WAFObjectKV)}
+}
+
 func (kv *WAFObjectKV) raw() *wafBindings.WAFObjectKV {
-	if kv.inner == nil {
-		kv.inner = &kv.owned
-	}
 	return kv.inner
 }
 
@@ -80,24 +91,28 @@ func wrapWAFObjectKVs(entries []wafBindings.WAFObjectKV) []WAFObjectKV {
 }
 
 func unwrapWAFObjectKVs(entries []WAFObjectKV) []wafBindings.WAFObjectKV {
-	if len(entries) == 0 {
+	n := len(entries)
+	if n == 0 {
 		return nil
 	}
-	inner := make([]wafBindings.WAFObjectKV, len(entries))
+	first := entries[0].inner
+	if n == 1 {
+		return unsafe.Slice(first, 1)
+	}
+	stride := unsafe.Sizeof(wafBindings.WAFObjectKV{})
+	if uintptr(unsafe.Pointer(entries[n-1].inner)) == uintptr(unsafe.Pointer(first))+uintptr(n-1)*stride {
+		return unsafe.Slice(first, n)
+	}
+	inner := make([]wafBindings.WAFObjectKV, n)
 	for i := range entries {
-		inner[i] = *entries[i].raw()
+		inner[i] = *entries[i].inner
 	}
 	return inner
 }
 
 // Type returns the type of the WAF object.
 func (w *WAFObject) Type() string {
-	switch t := w.raw().Type(); t {
-	case wafBindings.WAFSmallStringType, wafBindings.WAFStringType, wafBindings.WAFLiteralStringType:
-		return "string"
-	default:
-		return t.String()
-	}
+	return w.raw().Type().String()
 }
 
 // IsInvalid returns true if the WAF object is invalid.
