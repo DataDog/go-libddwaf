@@ -7,4 +7,4 @@ require (
 	github.com/iancoleman/orderedmap v0.3.0
 )
 
-require github.com/google/go-querystring v1.1.0 // indirect
+require github.com/google/go-querystring v1.2.0 // indirect
