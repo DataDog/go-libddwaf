@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,71 +21,71 @@ import (
 // that must be unpinned by the caller when the objects are no longer needed.
 type wafResultMapBuilder struct {
 	pinner  runtime.Pinner
-	entries []bindings.WAFObject
+	entries []WAFObjectKV
 }
 
 func (b *wafResultMapBuilder) addBoolEntry(key string, val bool) {
-	var entry bindings.WAFObject
-	entry.SetMapKey(&b.pinner, key)
-	entry.SetBool(val)
+	var entry WAFObjectKV
+	entry.Key().SetString(&b.pinner, key)
+	entry.Value().SetBool(val)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) addUintEntry(key string, val uint64) {
-	var entry bindings.WAFObject
-	entry.SetMapKey(&b.pinner, key)
-	entry.SetUint(val)
+	var entry WAFObjectKV
+	entry.Key().SetString(&b.pinner, key)
+	entry.Value().SetUint(val)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) addStringEntry(key string, val string) {
-	var entry bindings.WAFObject
-	entry.SetMapKey(&b.pinner, key)
-	entry.SetString(&b.pinner, val)
+	var entry WAFObjectKV
+	entry.Key().SetString(&b.pinner, key)
+	entry.Value().SetString(&b.pinner, val)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) addEmptyArrayEntry(key string) {
-	var entry bindings.WAFObject
-	entry.SetMapKey(&b.pinner, key)
-	entry.SetArray(&b.pinner, 0)
+	var entry WAFObjectKV
+	entry.Key().SetString(&b.pinner, key)
+	entry.Value().SetArray(&b.pinner, 0)
 	b.entries = append(b.entries, entry)
 }
 
-func (b *wafResultMapBuilder) addArrayEntry(key string, items []bindings.WAFObject) {
-	var entry bindings.WAFObject
-	entry.SetMapKey(&b.pinner, key)
-	entry.SetArrayData(&b.pinner, items)
+func (b *wafResultMapBuilder) addArrayEntry(key string, items []WAFObject) {
+	var entry WAFObjectKV
+	entry.Key().SetString(&b.pinner, key)
+	_ = entry.Value().SetArrayData(&b.pinner, items)
 	b.entries = append(b.entries, entry)
 }
 
 func (b *wafResultMapBuilder) addEmptyMapEntry(key string) {
-	var entry bindings.WAFObject
-	entry.SetMapKey(&b.pinner, key)
-	entry.SetMap(&b.pinner, 0)
+		var entry WAFObjectKV
+	entry.Key().SetString(&b.pinner, key)
+	entry.Value().SetMap(&b.pinner, 0)
 	b.entries = append(b.entries, entry)
 }
 
-func (b *wafResultMapBuilder) addMapEntry(key string, items []bindings.WAFObject) {
-	var entry bindings.WAFObject
-	entry.SetMapKey(&b.pinner, key)
-	entry.SetMapData(&b.pinner, items)
+func (b *wafResultMapBuilder) addMapEntry(key string, items []WAFObjectKV) {
+	var entry WAFObjectKV
+	entry.Key().SetString(&b.pinner, key)
+	_ = entry.Value().SetMapData(&b.pinner, items)
 	b.entries = append(b.entries, entry)
 }
 
-func (b *wafResultMapBuilder) build() bindings.WAFObject {
-	var obj bindings.WAFObject
+func (b *wafResultMapBuilder) build() WAFObject {
+	var obj WAFObject
 	obj.SetMapData(&b.pinner, b.entries)
 	return obj
 }
 
 func TestUnwrapWafResult(t *testing.T) {
 	t.Run("result-not-a-map", func(t *testing.T) {
-		var result bindings.WAFObject
+		var result WAFObject
 		result.SetInvalid()
 		_, _, err := unwrapWafResult(bindings.WAFOK, &result)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid result (expected map, got invalid)")
+			require.Contains(t, err.Error(), "invalid WAF result object type: expected map, got invalid")
 	})
 
 	t.Run("empty-map-return-codes", func(t *testing.T) {
@@ -100,7 +100,7 @@ func TestUnwrapWafResult(t *testing.T) {
 			{name: "WAFErrInternal", ret: bindings.WAFErrInternal, expErr: waferrors.ErrInternal},
 			{name: "WAFErrInvalidObject", ret: bindings.WAFErrInvalidObject, expErr: waferrors.ErrInvalidObject},
 			{name: "WAFErrInvalidArgument", ret: bindings.WAFErrInvalidArgument, expErr: waferrors.ErrInvalidArgument},
-			{name: "unknown-return-code", ret: bindings.WAFReturnCode(42), errMsg: "unknown waf return code 42"},
+			{name: "unknown-return-code", ret: bindings.WAFReturnCode(42), errMsg: "unknown WAF return code: 42"},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				var b wafResultMapBuilder
@@ -213,9 +213,9 @@ func TestUnwrapWafResult(t *testing.T) {
 			var b wafResultMapBuilder
 			defer b.pinner.Unpin()
 
-			var item bindings.WAFObject
+			var item WAFObject
 			item.SetString(&b.pinner, "event-1")
-			b.addArrayEntry("events", []bindings.WAFObject{item})
+			b.addArrayEntry("events", []WAFObject{item})
 			result := b.build()
 
 			res, _, err := unwrapWafResult(bindings.WAFOK, &result)
@@ -244,7 +244,7 @@ func TestUnwrapWafResult(t *testing.T) {
 
 			_, _, err := unwrapWafResult(bindings.WAFOK, &result)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid events (expected array, got string)")
+			require.Contains(t, err.Error(), "invalid WAF result object type: expected array for events, got string")
 		})
 	})
 
@@ -253,10 +253,10 @@ func TestUnwrapWafResult(t *testing.T) {
 			var b wafResultMapBuilder
 			defer b.pinner.Unpin()
 
-			var item bindings.WAFObject
-			item.SetMapKey(&b.pinner, "block_request")
-			item.SetString(&b.pinner, "blocked")
-			b.addMapEntry("actions", []bindings.WAFObject{item})
+			var item WAFObjectKV
+			item.Key().SetString(&b.pinner, "block_request")
+			item.Value().SetString(&b.pinner, "blocked")
+			b.addMapEntry("actions", []WAFObjectKV{item})
 			result := b.build()
 
 			res, _, err := unwrapWafResult(bindings.WAFOK, &result)
@@ -284,7 +284,7 @@ func TestUnwrapWafResult(t *testing.T) {
 
 			_, _, err := unwrapWafResult(bindings.WAFOK, &result)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid actions (expected map, got string)")
+			require.Contains(t, err.Error(), "invalid WAF result object type: expected map for actions, got string")
 		})
 	})
 
@@ -293,10 +293,10 @@ func TestUnwrapWafResult(t *testing.T) {
 			var b wafResultMapBuilder
 			defer b.pinner.Unpin()
 
-			var item bindings.WAFObject
-			item.SetMapKey(&b.pinner, "derivative-key")
-			item.SetString(&b.pinner, "derivative-value")
-			b.addMapEntry("attributes", []bindings.WAFObject{item})
+			var item WAFObjectKV
+			item.Key().SetString(&b.pinner, "derivative-key")
+			item.Value().SetString(&b.pinner, "derivative-value")
+			b.addMapEntry("attributes", []WAFObjectKV{item})
 			result := b.build()
 
 			res, _, err := unwrapWafResult(bindings.WAFOK, &result)
@@ -324,7 +324,7 @@ func TestUnwrapWafResult(t *testing.T) {
 
 			_, _, err := unwrapWafResult(bindings.WAFOK, &result)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid attributes (expected map, got string)")
+			require.Contains(t, err.Error(), "invalid WAF result object type: expected map for attributes, got string")
 		})
 	})
 
@@ -334,14 +334,14 @@ func TestUnwrapWafResult(t *testing.T) {
 
 		b.addBoolEntry("timeout", true)
 
-		var event bindings.WAFObject
+		var event WAFObject
 		event.SetString(&b.pinner, "matched-rule")
-		b.addArrayEntry("events", []bindings.WAFObject{event})
+		b.addArrayEntry("events", []WAFObject{event})
 
-		var action bindings.WAFObject
-		action.SetMapKey(&b.pinner, "block_request")
-		action.SetString(&b.pinner, "blocked")
-		b.addMapEntry("actions", []bindings.WAFObject{action})
+		var action WAFObjectKV
+		action.Key().SetString(&b.pinner, "block_request")
+		action.Value().SetString(&b.pinner, "blocked")
+		b.addMapEntry("actions", []WAFObjectKV{action})
 
 		result := b.build()
 
