@@ -8,6 +8,7 @@ package pin
 import (
 	"runtime"
 	"sync"
+	"sync/atomic"
 )
 
 // A Pinner is a set of Go objects each pinned to a fixed location in memory.
@@ -40,6 +41,7 @@ var _ Pinner = (*runtime.Pinner)(nil)
 type ConcurrentPinner struct {
 	pinner runtime.Pinner
 	mu     sync.Mutex
+	closed atomic.Bool
 }
 
 // Pin pins v unless the pinner has already been closed, in which case it is
@@ -47,8 +49,15 @@ type ConcurrentPinner struct {
 // arriving after a concurrent [Close] would leak onto the already-released
 // pinner and trigger the runtime.Pinner finalizer panic on the next GC.
 func (p *ConcurrentPinner) Pin(v any) {
+	if p.closed.Load() {
+		return
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.closed.Load() {
+		return
+	}
 	p.pinner.Pin(v)
 }
 
@@ -59,4 +68,9 @@ func (p *ConcurrentPinner) Unpin() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.pinner.Unpin()
+}
+
+func (p *ConcurrentPinner) Close() {
+	p.closed.Store(true)
+	p.Unpin()
 }
