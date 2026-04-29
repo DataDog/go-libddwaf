@@ -27,7 +27,6 @@ import (
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/internal/lib"
-	"github.com/DataDog/go-libddwaf/v5/internal/testhelpers"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/assert"
@@ -945,7 +944,7 @@ func TestConcurrentWAFContextUsage(t *testing.T) {
 
 	userAgents := [...]string{"Foo", "Bar", "Datadog"}
 
-	testhelpers.ConcurrentRunner(t, nbUsers, func(_ int) error {
+	concurrentRunner(t, nbUsers, func(_ int) error {
 		return captureWorkerError(func() error {
 			for c := range nbRun {
 				i := c % len(userAgents)
@@ -988,7 +987,7 @@ func TestConcurrentWAFInstanceUsage(t *testing.T) {
 
 	userAgents := [...]string{"Foo", "Bar", "Datadog"}
 
-	testhelpers.ConcurrentRunner(t, nbUsers, func(_ int) error {
+	concurrentRunner(t, nbUsers, func(_ int) error {
 		wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
 		if err != nil {
 			return fmt.Errorf("NewContext failed: %w", err)
@@ -1044,7 +1043,7 @@ func TestConcurrentWAFSubcontextUsage(t *testing.T) {
 
 	userAgents := [...]string{"Foo", "Bar", "Datadog"}
 
-	testhelpers.ConcurrentRunner(t, nbUsers, func(_ int) error {
+	concurrentRunner(t, nbUsers, func(_ int) error {
 		wafCtx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(timer.UnlimitedBudget))
 		if err != nil {
 			return fmt.Errorf("NewContext failed: %w", err)
@@ -1590,4 +1589,64 @@ func TestProcessorOverrides(t *testing.T) {
 		Failed:   nil,
 		Skipped:  nil,
 	}, diag.ProcessorOverrides)
+}
+
+func concurrentRunner(t testing.TB, numGoroutines int, iter func(goroutineIdx int) error) {
+	t.Helper()
+	var wg sync.WaitGroup
+	barrier := make(chan struct{})
+	errCh := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			<-barrier
+			if err := iter(idx); err != nil {
+				errCh <- err
+			}
+		}(i)
+	}
+
+	close(barrier)
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func captureWorkerError(fn func() error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if recoveredErr, ok := recovered.(error); ok {
+				err = fmt.Errorf("worker panic: %w", recoveredErr)
+				return
+			}
+			err = fmt.Errorf("worker panic: %v", recovered)
+		}
+	}()
+
+	return fn()
+}
+
+func TestCaptureWorkerErrorReturnsWorkerError(t *testing.T) {
+	want := errors.New("worker failed")
+
+	err := captureWorkerError(func() error {
+		return want
+	})
+
+	require.ErrorIs(t, err, want)
+}
+
+func TestCaptureWorkerErrorConvertsPanicToError(t *testing.T) {
+	err := captureWorkerError(func() error {
+		panic("boom")
+	})
+
+	require.EqualError(t, err, "worker panic: boom")
 }

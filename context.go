@@ -25,6 +25,15 @@ import (
 // the truncations map allocated in NewContext/SubContext rarely grows.
 const numTruncationReasons = 3
 
+const (
+	// EncodeTimeKey is the key used to track the time spent encoding the address data reported in [Result.TimerStats].
+	EncodeTimeKey timer.Key = "encode"
+	// DurationTimeKey is the key used to track the time spent in libddwaf ddwaf_run C function reported in [Result.TimerStats].
+	DurationTimeKey timer.Key = "duration"
+	// DecodeTimeKey is the key used to track the time spent decoding the address data reported in [Result.TimerStats].
+	DecodeTimeKey timer.Key = "decode"
+)
+
 // Context is a WAF execution context. It allows running the WAF incrementally when calling it
 // multiple times to run its rules every time new addresses become available. Each request must have
 // its own [Context]. New [Context] instances can be created by calling

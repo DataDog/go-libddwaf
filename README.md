@@ -74,6 +74,9 @@ go-libddwaf v5 tracks libddwaf v2 and includes a few breaking API changes:
 - ephemeral evaluation now goes through `SubContext()`
 - `Context.Run`, `Handle.NewContext`, and `Context.SubContext` now require a `context.Context`
 - `Builder.Build()` now returns `(*Handle, error)`
+- `WAFObject` and `WAFObjectKV` are now opaque structs wrapping internal types
+- The `Encodable` interface's `Encode` method now takes `*WAFObject` and `EncoderConfig` instead of `*bindings.WAFObject`
+- The internal `depthOf` function now takes a `timer.Timer` instead of relying on `context.Background()`
 
 ```go
 // v4
