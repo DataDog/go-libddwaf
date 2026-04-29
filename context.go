@@ -275,6 +275,11 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
+	// First closed check: optimization to avoid expensive encoding work if
+	// the context is already closed. This check releases root.mu before
+	// encoding because encoding is pure Go work that does not touch the C
+	// context. A concurrent Close() can run between here and the second
+	// check below — that is safe because encoding only writes to Go memory.
 	context.root.mu.Lock()
 	if context.isClosedAssumingBothLocked() {
 		context.root.mu.Unlock()
@@ -299,6 +304,14 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	wafEncodeTimer.Stop()
 
 	context.root.mu.Lock()
+	// Second closed check: safety gate after re-acquiring root.mu. This
+	// ensures the C context is still alive before passing encoded data to
+	// the C library.
+	// root.mu is held for the full duration of the C call because libddwaf
+	// requires serialized access to ddwaf_context_eval / ddwaf_subcontext_eval
+	// on the same parent context. The activeRuns counter prevents Close() from
+	// destroying the C context during evaluation but does not provide mutual
+	// exclusion for the C call itself.
 	defer context.root.mu.Unlock()
 
 	if context.isClosedAssumingBothLocked() {
@@ -315,10 +328,15 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	return context.run(ctx, data, runTimer)
 }
 
-// merge merges two maps of slices into a single map of slices. The resulting map will contain all
-// keys from both a and b, with the corresponding value from a and b concatenated (in this order) in
-// a single slice. The named return keeps the empty-input fast path concise while still allowing the
-// accumulator to be built without extra copies.
+// merge combines two maps of slices into one. All returned slice values
+// share a single backing array for efficiency. Callers MUST NOT append
+// to individual slices in the returned map, as this would corrupt
+// adjacent entries in the shared backing array.
+//
+// It contains all keys from both a and b, with the corresponding values
+// from a and b concatenated in that order. The named return keeps the
+// empty-input fast path concise while still allowing the accumulator to be
+// built without extra copies.
 func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 	if len(a) == 0 && len(b) == 0 {
 		return
@@ -445,10 +463,13 @@ func (context *Context) run(ctx context.Context, data *WAFObject, runTimer timer
 // It destroys the context, releases associated data, and decreases
 // the reference count of the [Handle] created for this [Context].
 func (context *Context) Close() {
-	defer context.handle.Close()
-
 	context.mutex.Lock()
+	if context.closed.Load() {
+		context.mutex.Unlock()
+		return
+	}
 	defer context.mutex.Unlock()
+	defer context.handle.Close()
 
 	context.root.mu.Lock()
 

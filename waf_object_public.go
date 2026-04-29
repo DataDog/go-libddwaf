@@ -59,6 +59,12 @@ func unwrapWAFObjects(items []WAFObject) []wafBindings.WAFObject {
 		return unsafe.Slice(first, 1)
 	}
 	stride := unsafe.Sizeof(wafBindings.WAFObject{})
+	// Contiguity check: verifies the first and last elements are at the
+	// expected stride distance, implying the backing memory is a single
+	// contiguous allocation. This invariant holds because all callers
+	// produce items via wrapWAFObjects, which wraps a contiguous C array
+	// allocated by libddwaf. If a non-contiguous source is ever used,
+	// this check will fail and fall through to the element-by-element copy.
 	if uintptr(unsafe.Pointer(items[n-1].inner)) == uintptr(unsafe.Pointer(first))+uintptr(n-1)*stride {
 		return unsafe.Slice(first, n)
 	}
