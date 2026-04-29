@@ -1165,7 +1165,7 @@ func TestConcurrentContextUseDestroy(t *testing.T) {
 					}
 					return
 				}
-				t.Cleanup(func() { subCtx.Close() })
+				defer subCtx.Close()
 
 				_, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: data})
 				if err != nil && !errors.Is(err, waferrors.ErrContextClosed) {
