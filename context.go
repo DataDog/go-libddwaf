@@ -99,7 +99,6 @@ func (d RunAddressData) isEmpty() bool {
 	return len(d.Data) == 0
 }
 
-// newTimer creates a new timer for this run. If the TimerKey is empty, a new timer without taking the parent into account is created.
 // NewSubcontext creates a subcontext derived from this context.
 // The provided ctx only scopes the construction call itself and is not retained
 // after NewSubcontext returns; per-run deadlines and cancellation must be supplied
@@ -314,7 +313,6 @@ func (context *Context) Close() {
 	context.root.closed.Store(true)
 
 	context.mu.Lock()
-	_ = context.root.cContext
 	context.mu.Unlock()
 
 	context.evalsInFlight.Wait()
