@@ -29,6 +29,7 @@ import (
 // resolvable for the entire lifetime of the process, and Context/SubContext
 // teardown paths that call into bindings.Lib after the Handle's refcount has
 // reached zero are safe with respect to the library itself.
+// The Handle's reference count tracks the number of alive Context and Subcontext instances.
 type Handle struct {
 	// Lock-less reference counter avoiding blocking calls to the [Handle.Close]
 	// method while WAF [Context]s are still using the WAF handle. Instead, we let
