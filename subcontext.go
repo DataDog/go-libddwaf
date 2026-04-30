@@ -125,9 +125,8 @@ func (s *Subcontext) Close() {
 		return
 	}
 
-	//lint:ignore SA2001 synchronize with Run before pinner close
 	s.mu.Lock()
-	s.mu.Unlock()
+	s.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run before pinner close
 
 	s.parent.mu.Lock()
 	if !s.parent.closedHint.Load() && s.cSub != 0 {

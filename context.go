@@ -234,10 +234,8 @@ func (context *Context) Close() {
 		return
 	}
 
-	//lint:ignore SA2001 synchronize with Run/NewSubcontext before waiting for in-flight evals.
 	context.mu.Lock()
-	_ = context.cContext
-	context.mu.Unlock()
+	context.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run/NewSubcontext before waiting for in-flight evals
 
 	context.evalsInFlight.Wait()
 
