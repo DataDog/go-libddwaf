@@ -17,26 +17,18 @@ import (
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
-// newRunTimer creates a run-scoped timer node from the parent timer.
-// If key is empty, a standalone tree timer with the parent's remaining budget is created.
+var runTimerComponents = timer.WithComponents(EncodeTimeKey, DurationTimeKey, DecodeTimeKey)
+
 func newRunTimer(parent timer.NodeTimer, key timer.Key) (timer.NodeTimer, error) {
 	if key == "" {
 		return timer.NewTreeTimer(
-			timer.WithComponents(
-				EncodeTimeKey,
-				DurationTimeKey,
-				DecodeTimeKey,
-			),
+			runTimerComponents,
 			timer.WithBudget(parent.SumRemaining()),
 		)
 	}
 
 	return parent.NewNode(key,
-		timer.WithComponents(
-			EncodeTimeKey,
-			DurationTimeKey,
-			DecodeTimeKey,
-		),
+		runTimerComponents,
 		timer.WithInheritedSumBudget(),
 	)
 }
