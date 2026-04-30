@@ -90,7 +90,7 @@ func TestContextCloseWaitsForActiveRun(t *testing.T) {
 	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 
-	ctx.root.activeRuns.Add(1)
+	ctx.evalsInFlight.Add(1)
 
 	closed := make(chan struct{})
 	go func() {
@@ -100,16 +100,16 @@ func TestContextCloseWaitsForActiveRun(t *testing.T) {
 
 	select {
 	case <-closed:
-		t.Fatal("Close returned while activeRuns was non-zero")
+		t.Fatal("Close returned while evalsInFlight was non-zero")
 	case <-time.After(10 * time.Millisecond):
 	}
 
-	ctx.root.activeRuns.Add(-1)
+	ctx.evalsInFlight.Done()
 
 	select {
 	case <-closed:
 	case <-time.After(time.Second):
-		t.Fatal("Close did not return after activeRuns reached zero")
+		t.Fatal("Close did not return after evalsInFlight reached zero")
 	}
 }
 
