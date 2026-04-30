@@ -85,7 +85,7 @@ func TestUnwrapWafResult(t *testing.T) {
 		result.SetInvalid()
 		_, _, err := unwrapWafResult(bindings.WAFOK, &result)
 		require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid WAF result object type: expected map, got invalid")
+		require.Contains(t, err.Error(), "invalid WAF result object type: expected map, got invalid")
 	})
 
 	t.Run("empty-map-return-codes", func(t *testing.T) {
