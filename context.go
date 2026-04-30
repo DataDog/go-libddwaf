@@ -212,14 +212,12 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	}
 
 	success = true
-	return &Subcontext{Context: &Context{
+	return &Subcontext{
 		Timer:       subTimer,
-		handle:      context.handle,
-		root:        context.root,
-		isSubCtx:    true,
-		cSubcontext: cSubcontext,
+		parent:      context,
+		cSub:        cSubcontext,
 		truncations: make(map[TruncationReason][]int, numTruncationReasons),
-	}}, nil
+	}, nil
 }
 
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.

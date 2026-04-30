@@ -735,10 +735,9 @@ func TestSubContext(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, res.Events, 1)
 
-		// Creating a subcontext from another subcontext intentionally creates a new
-		// sibling from the shared root WAF context. It does not inherit subCtx1's
-		// ephemeral state, so the same ephemeral match can happen again.
-		subCtx2, err := subCtx1.NewSubcontext(stdcontext.Background())
+		// Creating a new sibling subcontext from the parent context. It does not
+		// inherit subCtx1's ephemeral state, so the same ephemeral match can happen again.
+		subCtx2, err := ctx.NewSubcontext(stdcontext.Background())
 		require.NoError(t, err)
 		t.Cleanup(func() { subCtx2.Close() })
 

@@ -370,13 +370,13 @@ func TestDoubleCloseSafety(t *testing.T) {
 
 	subCtx, err := ctx2.NewSubcontext(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, int32(1), subCtx.handle.refCounter.Load())
+	require.Equal(t, int32(1), subCtx.parent.handle.refCounter.Load())
 
 	subCtx.Close()
-	require.Equal(t, int32(0), subCtx.handle.refCounter.Load())
+	require.Equal(t, int32(0), subCtx.parent.handle.refCounter.Load())
 
 	subCtx.Close()
-	require.Equal(t, int32(0), subCtx.handle.refCounter.Load())
+	require.Equal(t, int32(0), subCtx.parent.handle.refCounter.Load())
 
 	ctx2.Close()
 	waf.Close()
