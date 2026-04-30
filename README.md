@@ -48,8 +48,8 @@ func main() {
         TimerKey: "waf",
     })
 
-    // v2: For ephemeral data, use SubContext
-    subCtx, err := wafCtx.SubContext(context.Background())
+    // v2: For ephemeral data, use NewSubcontext
+    subCtx, err := wafCtx.NewSubcontext(context.Background())
     if err != nil {
         panic(err)
     }
@@ -71,8 +71,8 @@ go-libddwaf v5 tracks libddwaf v2 and includes a few breaking API changes:
 
 - `NewBuilder()` no longer takes obfuscator regex arguments; obfuscation now lives in builder config via `AddOrUpdateConfig(..., "obfuscator/config", ...)`
 - `RunAddressData` now uses a single `Data` field instead of `Persistent` and `Ephemeral`
-- ephemeral evaluation now goes through `SubContext()`
-- `Context.Run`, `Handle.NewContext`, and `Context.SubContext` now require a `context.Context`
+- ephemeral evaluation now goes through `NewSubcontext()`
+- `Context.Run`, `Handle.NewContext`, and `Context.NewSubcontext` now require a `context.Context`
 - `Builder.Build()` now returns `(*Handle, error)`
 - `WAFObject` and `WAFObjectKV` are now opaque structs wrapping internal types
 - The `Encodable` interface's `Encode` method now takes `*WAFObject` and `EncoderConfig` instead of `*bindings.WAFObject`
@@ -92,7 +92,7 @@ builder.AddOrUpdateConfig("obfuscator/config", map[string]any{
 wafHandle, err := builder.Build()
 ctx.Run(context.Background(), waf.RunAddressData{Data: data})
 
-subCtx, err := ctx.SubContext(context.Background())
+subCtx, err := ctx.NewSubcontext(context.Background())
 defer subCtx.Close()
 subCtx.Run(context.Background(), waf.RunAddressData{Data: ephemeral})
 ```
@@ -101,6 +101,24 @@ For the upstream libddwaf v2 migration details and release notes, prefer the can
 
 - https://github.com/DataDog/libddwaf/blob/master/docs/upgrading/UPGRADING-v2.0.md
 - https://github.com/DataDog/libddwaf/blob/master/docs/changelog/CHANGELOG-v2.0.0.md
+
+## Upgrading within v5 (Context/Subcontext split)
+
+The `Context.Subcontext` method has been replaced by `Context.NewSubcontext`, which returns a dedicated `*Subcontext` type:
+
+```go
+// Before
+subCtx, err := ctx.Subcontext(context.Background())  // returned *Context
+
+// After
+subCtx, err := ctx.NewSubcontext(context.Background())  // returns *Subcontext
+```
+
+Key changes:
+- `Subcontext` is its own type with `Run`, `Close`, and `Truncations` methods
+- `Subcontext.NewSubcontext()` is not available — only `Context` can spawn subcontexts
+- Sibling subcontexts from the same parent context can run `Run` concurrently
+
 
 Originally this project only provided CGO wrappers for calls to libddwaf.
 With the appearance of the `ddwaf_object` tree-like structure and the goal of building CGO-less bindings, it has grown into an integrated component of the DataDog tracer.
@@ -140,16 +158,20 @@ flowchart LR
     START:::hidden -->|NewBuilder| Builder -->|Build| Handle
 
     Handle -->|NewContext| Context
+    Context -->|NewSubcontext| Subcontext
 
     Context -->|Encode Inputs| Encoder
+    Subcontext -->|Encode Inputs| Encoder
 
     Handle -->|Encode Ruleset| Encoder
     Handle -->|Init WAF| Library
     Context -->|Decode Result| Decoder
+    Subcontext -->|Decode Result| Decoder
 
     Handle -->|Decode Init Errors| Decoder
 
     Context -->|Run| Library
+    Subcontext -->|Run| Library
     Encoder -->|Allocate Waf Objects| runtime.Pinner
 
     Library -->|Call C code| libddwaf
@@ -161,9 +183,7 @@ flowchart LR
 
 When passing Go values to the WAF, it is necessary to make sure that memory remains valid and does
 not move until the WAF no longer has any pointers to it. We do this by using a `runtime.Pinner`.
-Data passed to a root `Context` is added to a `Context`-associated `runtime.Pinner`; while data
-passed to a `SubContext` (for ephemeral evaluation) is managed by a transient `runtime.Pinner` that
-only exists for the duration of the call.
+Data passed to a root `Context` is added to a `Context`-associated `runtime.Pinner`; while data passed to a Subcontext is added to a per-Subcontext runtime.Pinner whose lifetime spans the Subcontext (released on Subcontext.Close)
 
 ### Typical call to Run()
 
