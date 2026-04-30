@@ -27,7 +27,7 @@ func TestSiblingSubcontextParallelismTarget(t *testing.T) {
 
 func meetsSiblingSubcontextSpeedupTarget(ratio float64) bool {
 	return ratio >= 1.4
-	}
+}
 
 func TestSiblingSubcontextParallelismSpeedup(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))

@@ -78,6 +78,115 @@ go-libddwaf v5 tracks libddwaf v2 and includes a few breaking API changes:
 - The `Encodable` interface's `Encode` method now takes `*WAFObject` and `EncoderConfig` instead of `*bindings.WAFObject`
 - The internal `depthOf` function now takes a `timer.Timer` instead of relying on `context.Background()`
 
+### Migration Guide
+
+The v5 update introduces a more ergonomic and performant encoding API. Key changes include:
+
+1.  **Type changes**: `WAFObject` and `WAFObjectKV` are now value types (type aliases to bindings). A `WAFObject{}` is a valid zero-value.
+2.  **Direct field access for KV**: Use `kv.Key.SetString(pinner, "...")` and `kv.Val.SetBool(true)` directly. The `kv.Key()` and `kv.Value()` accessors have been removed.
+3.  **Pinner re-export**: External `Encodable` implementers should now import `libddwaf.Pinner` instead of using `internal/pin`.
+4.  **Truncations value type**: The `map[TruncationReason][]int` has been replaced by a `Truncations` value type. Use `t.StringTooLong` etc. for direct access, or `t.AsMap()` for backward compatibility.
+5.  **Encoder helper**: A bundle for `Encodable` implementers that provides `WriteString`, `Map`, `Array`, and `Timeout` helpers.
+6.  **MapBuilder / ArrayBuilder**: Ergonomic builders that replace the manual slice juggling and `SetMapData`/`SetArrayData` pattern.
+7.  **Encodable interface change**: The new signature is `Encode(enc *Encoder, obj *WAFObject, depth int) error`. Truncations now accumulate in `enc.Truncations`.
+8.  **Best-effort encoding philosophy**: Errors should be self-recovered whenever possible. Only fatal conditions like `ErrTimeout` or `ErrMaxDepthExceeded` should propagate.
+
+**BEFORE (v4):**
+```go
+// BEFORE (v4) — manual slice juggling + truncation map merge dance
+type Encodable struct {
+    data []byte
+    // ... fields elided
+}
+
+func (e *Encodable) Encode(config libddwaf.EncoderConfig, obj *libddwaf.WAFObject, remainingDepth int) (map[libddwaf.TruncationReason][]int, error) {
+    truncations := map[libddwaf.TruncationReason][]int{}
+
+    // ... manual JSON walk ...
+    // For each map:
+    var wafObjs []libddwaf.WAFObject
+    var length int
+    for /* each (key, value) */ {
+        length++
+        if config.Timer.Exhausted() {
+            return truncations, waferrors.ErrTimeout
+        }
+        if len(wafObjs) >= config.MaxContainerSize {
+            continue
+        }
+        wafObjs = append(wafObjs, libddwaf.WAFObject{})
+        entryObj := &wafObjs[len(wafObjs)-1]
+
+        // Manual key truncation
+        if len(key) > config.MaxStringSize {
+            truncations[libddwaf.StringTooLong] = append(
+                truncations[libddwaf.StringTooLong], len(key))
+            key = key[:config.MaxStringSize]
+        }
+        entryObj.SetMapKey(config.Pinner, key)  // v4-only method
+
+        // ... encode value into entryObj ...
+        if err := encodeValue(entryObj, value, remainingDepth-1); err != nil {
+            entryObj.SetInvalid()
+            continue
+        }
+    }
+    if len(wafObjs) >= config.MaxContainerSize {
+        truncations[libddwaf.ContainerTooLarge] = append(
+            truncations[libddwaf.ContainerTooLarge], length)
+    }
+    obj.SetMapData(config.Pinner, wafObjs)
+    return truncations, nil
+}
+```
+
+**AFTER (v5):**
+```go
+// AFTER (v5) — MapBuilder + Encoder helpers handle truncation, capacity,
+// key truncation, and finalization automatically.
+type Encodable struct {
+    data []byte
+    // ... fields elided
+}
+
+func (e *Encodable) Encode(enc *libddwaf.Encoder, obj *libddwaf.WAFObject, depth int) error {
+    if enc.Timeout() {
+        return waferrors.ErrTimeout
+    }
+    if depth < 0 {
+        enc.Truncations.Record(libddwaf.ObjectTooDeep, enc.Config.MaxObjectDepth-depth)
+        return waferrors.ErrMaxDepthExceeded
+    }
+
+    // ... walk JSON ...
+    // For each map:
+    mb := enc.Map(obj)
+    defer mb.Close()
+
+    for /* each (key, value) */ {
+        if enc.Timeout() {
+            return waferrors.ErrTimeout
+        }
+        slot := mb.NextValue(key)  // auto-truncates key, returns nil at cap
+        if slot == nil {
+            mb.Skip()
+            continue
+        }
+        if err := encodeValue(slot, value, depth-1); err != nil {
+            slot.SetInvalid()  // best-effort: key preserved, value invalid
+            if errors.Is(err, waferrors.ErrTimeout) {
+                return err
+            }
+        }
+    }
+    return nil
+}
+```
+
+> **Best-effort encoding philosophy**: The WAF prefers a malformed payload to no payload at all (so at least some inspection happens). When implementing `Encodable`, treat encoding errors as recoverable: leave the object as the zero value (which is `WAFInvalidType`) or call `obj.SetInvalid()` and continue. Only return errors from `Encode` for **fatal** conditions: `waferrors.ErrTimeout` (when `enc.Timeout()` returns true) or `waferrors.ErrMaxDepthExceeded` (when depth budget is exhausted). The `MapBuilder` preserves keys with invalid values on error; the `ArrayBuilder` lets you `DropLast()` to remove an entry that couldn't be encoded.
+
+Note: For more detailed examples, see the planned `migration_spike_test.go` companion.
+
 ```go
 // v4
 builder, _ := waf.NewBuilder("keyRegex", "valueRegex")

@@ -83,7 +83,7 @@ func (b *Builder) AddDefaultRecommendedRuleset() (Diagnostics, error) {
 	}
 	defer wafBindings.Lib.ObjectDestroy(&defaultRuleset, wafBindings.Lib.DefaultAllocator())
 
-	diag, err := b.addOrUpdateConfig(defaultRecommendedRulesetPath, wrapWAFObjectPtr(&defaultRuleset))
+	diag, err := b.addOrUpdateConfig(defaultRecommendedRulesetPath, &defaultRuleset)
 	if err == nil {
 		b.defaultLoaded = true
 	}
@@ -134,10 +134,10 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 // addOrUpdateConfig adds or updates a configuration fragment to this [Builder].
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) addOrUpdateConfig(path string, cfg *WAFObject) (Diagnostics, error) {
-	diagnosticsWafObj := newWAFObject()
-	defer wafBindings.Lib.ObjectDestroy(diagnosticsWafObj.raw(), wafBindings.Lib.DefaultAllocator())
+	var diagnosticsWafObj WAFObject
+	defer wafBindings.Lib.ObjectDestroy(&diagnosticsWafObj, wafBindings.Lib.DefaultAllocator())
 
-	res := wafBindings.Lib.BuilderAddOrUpdateConfig(b.handle, path, cfg.raw(), diagnosticsWafObj.raw())
+	res := wafBindings.Lib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
 
 	var diags Diagnostics
 	if !diagnosticsWafObj.IsInvalid() {

@@ -16,72 +16,65 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// wafResultMapBuilder is a helper for constructing WAFObject maps used as
-// input to the unwrapWafResult function in tests. It tracks a runtime.Pinner
-// that must be unpinned by the caller when the objects are no longer needed.
 type wafResultMapBuilder struct {
-	pinner  runtime.Pinner
-	entries []WAFObjectKV
+	pinner runtime.Pinner
+	enc    Encoder
+	obj    WAFObject
+	mb     *MapBuilder
+}
+
+func (b *wafResultMapBuilder) init() {
+	if b.mb != nil {
+		return
+	}
+	b.enc = Encoder{Config: newEncoderConfig(&b.pinner, WithUnlimitedLimits())}
+	b.mb = b.enc.Map(&b.obj)
 }
 
 func (b *wafResultMapBuilder) addBoolEntry(key string, val bool) {
-	entry := newWAFObjectKV()
-	entry.Key().SetString(&b.pinner, key)
-	entry.Value().SetBool(val)
-	b.entries = append(b.entries, entry)
+	b.init()
+	b.mb.NextValue(key).SetBool(val)
 }
 
 func (b *wafResultMapBuilder) addUintEntry(key string, val uint64) {
-	entry := newWAFObjectKV()
-	entry.Key().SetString(&b.pinner, key)
-	entry.Value().SetUint(val)
-	b.entries = append(b.entries, entry)
+	b.init()
+	b.mb.NextValue(key).SetUint(val)
 }
 
 func (b *wafResultMapBuilder) addStringEntry(key string, val string) {
-	entry := newWAFObjectKV()
-	entry.Key().SetString(&b.pinner, key)
-	entry.Value().SetString(&b.pinner, val)
-	b.entries = append(b.entries, entry)
+	b.init()
+	b.mb.NextValue(key).SetString(&b.pinner, val)
 }
 
 func (b *wafResultMapBuilder) addEmptyArrayEntry(key string) {
-	entry := newWAFObjectKV()
-	entry.Key().SetString(&b.pinner, key)
-	entry.Value().SetArray(&b.pinner, 0)
-	b.entries = append(b.entries, entry)
+	b.init()
+	b.mb.NextValue(key).SetArray(&b.pinner, 0)
 }
 
 func (b *wafResultMapBuilder) addArrayEntry(key string, items []WAFObject) {
-	entry := newWAFObjectKV()
-	entry.Key().SetString(&b.pinner, key)
-	_ = entry.Value().SetArrayData(&b.pinner, items)
-	b.entries = append(b.entries, entry)
+	b.init()
+	_ = b.mb.NextValue(key).SetArrayData(&b.pinner, items)
 }
 
 func (b *wafResultMapBuilder) addEmptyMapEntry(key string) {
-	entry := newWAFObjectKV()
-	entry.Key().SetString(&b.pinner, key)
-	entry.Value().SetMap(&b.pinner, 0)
-	b.entries = append(b.entries, entry)
+	b.init()
+	b.mb.NextValue(key).SetMap(&b.pinner, 0)
 }
 
 func (b *wafResultMapBuilder) addMapEntry(key string, items []WAFObjectKV) {
-	entry := newWAFObjectKV()
-	entry.Key().SetString(&b.pinner, key)
-	_ = entry.Value().SetMapData(&b.pinner, items)
-	b.entries = append(b.entries, entry)
+	b.init()
+	_ = b.mb.NextValue(key).SetMapData(&b.pinner, items)
 }
 
 func (b *wafResultMapBuilder) build() WAFObject {
-	obj := newWAFObject()
-	obj.SetMapData(&b.pinner, b.entries)
-	return obj
+	b.init()
+	b.mb.Close()
+	return b.obj
 }
 
 func TestUnwrapWafResult(t *testing.T) {
 	t.Run("result-not-a-map", func(t *testing.T) {
-		result := newWAFObject()
+		var result WAFObject
 		result.SetInvalid()
 		_, _, err := unwrapWafResult(bindings.WAFOK, &result)
 		require.Error(t, err)
@@ -213,7 +206,7 @@ func TestUnwrapWafResult(t *testing.T) {
 			var b wafResultMapBuilder
 			defer b.pinner.Unpin()
 
-			item := newWAFObject()
+			var item WAFObject
 			item.SetString(&b.pinner, "event-1")
 			b.addArrayEntry("events", []WAFObject{item})
 			result := b.build()
@@ -253,9 +246,9 @@ func TestUnwrapWafResult(t *testing.T) {
 			var b wafResultMapBuilder
 			defer b.pinner.Unpin()
 
-			item := newWAFObjectKV()
-			item.Key().SetString(&b.pinner, "block_request")
-			item.Value().SetString(&b.pinner, "blocked")
+			var item WAFObjectKV
+			item.Key.SetString(&b.pinner, "block_request")
+			item.Val.SetString(&b.pinner, "blocked")
 			b.addMapEntry("actions", []WAFObjectKV{item})
 			result := b.build()
 
@@ -293,9 +286,9 @@ func TestUnwrapWafResult(t *testing.T) {
 			var b wafResultMapBuilder
 			defer b.pinner.Unpin()
 
-			item := newWAFObjectKV()
-			item.Key().SetString(&b.pinner, "derivative-key")
-			item.Value().SetString(&b.pinner, "derivative-value")
+			var item WAFObjectKV
+			item.Key.SetString(&b.pinner, "derivative-key")
+			item.Val.SetString(&b.pinner, "derivative-value")
 			b.addMapEntry("attributes", []WAFObjectKV{item})
 			result := b.build()
 
@@ -334,13 +327,13 @@ func TestUnwrapWafResult(t *testing.T) {
 
 		b.addBoolEntry("timeout", true)
 
-		event := newWAFObject()
+		var event WAFObject
 		event.SetString(&b.pinner, "matched-rule")
 		b.addArrayEntry("events", []WAFObject{event})
 
-		action := newWAFObjectKV()
-		action.Key().SetString(&b.pinner, "block_request")
-		action.Value().SetString(&b.pinner, "blocked")
+		var action WAFObjectKV
+		action.Key.SetString(&b.pinner, "block_request")
+		action.Val.SetString(&b.pinner, "blocked")
 		b.addMapEntry("actions", []WAFObjectKV{action})
 
 		result := b.build()

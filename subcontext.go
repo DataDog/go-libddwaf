@@ -8,7 +8,6 @@ package libddwaf
 import (
 	"context"
 	"fmt"
-	"maps"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -40,7 +39,7 @@ type Subcontext struct {
 	mu            sync.Mutex
 	cSub          wafBindings.WAFSubcontext
 	truncationsMu sync.RWMutex
-	truncations   map[TruncationReason][]int
+	truncations   Truncations
 	pinner        pin.ConcurrentPinner
 }
 
@@ -97,9 +96,9 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	if err != nil {
 		return Result{}, err
 	}
-	if len(truncations) > 0 {
+	if !truncations.IsEmpty() {
 		s.truncationsMu.Lock()
-		s.truncations = merge(s.truncations, truncations)
+		s.truncations.Merge(truncations)
 		s.truncationsMu.Unlock()
 	}
 
@@ -110,11 +109,11 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
-	result := newWAFObject()
-	pinner.Pin(result.raw())
-	defer wafBindings.Lib.ObjectDestroy(result.raw(), wafBindings.Lib.DefaultAllocator())
+	var result WAFObject
+	pinner.Pin(&result)
+	defer wafBindings.Lib.ObjectDestroy(&result, wafBindings.Lib.DefaultAllocator())
 
-	ret := wafBindings.Lib.SubcontextEval(s.cSub, data.raw(), 0, result.raw(), timeout)
+	ret := wafBindings.Lib.SubcontextEval(s.cSub, data, 0, &result, timeout)
 
 	return decodeWafResult(ctx, ret, &result, runTimer)
 }
@@ -141,8 +140,12 @@ func (s *Subcontext) Close() {
 }
 
 // Truncations returns the truncations that occurred while encoding address data for WAF execution.
-func (s *Subcontext) Truncations() map[TruncationReason][]int {
+func (s *Subcontext) Truncations() Truncations {
 	s.truncationsMu.RLock()
 	defer s.truncationsMu.RUnlock()
-	return maps.Clone(s.truncations)
+	return Truncations{
+		StringTooLong:     append([]int(nil), s.truncations.StringTooLong...),
+		ContainerTooLarge: append([]int(nil), s.truncations.ContainerTooLarge...),
+		ObjectTooDeep:     append([]int(nil), s.truncations.ObjectTooDeep...),
+	}
 }

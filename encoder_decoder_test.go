@@ -52,26 +52,27 @@ func wafTest(t *testing.T, obj *WAFObject) {
 
 type abs int64
 
-func (p abs) Encode(config EncoderConfig, obj *WAFObject, depth int) (map[TruncationReason][]int, error) {
+func (p abs) Encode(_ *Encoder, obj *WAFObject, _ int) error {
 	i := p
 	if i < 0 {
 		i = -i
 	}
 
 	obj.SetInt(int64(i))
-	return nil, nil
+	return nil
 }
 
 type truncator struct{}
 
-func (t *truncator) Encode(_ EncoderConfig, _ *WAFObject, _ int) (map[TruncationReason][]int, error) {
-	return map[TruncationReason][]int{StringTooLong: {1}}, nil
+func (t *truncator) Encode(enc *Encoder, _ *WAFObject, _ int) error {
+	enc.Truncations.Record(StringTooLong, 1)
+	return nil
 }
 
 type errorer struct{}
 
-func (t *errorer) Encode(_ EncoderConfig, _ *WAFObject, _ int) (map[TruncationReason][]int, error) {
-	return nil, waferrors.ErrUnsupportedValue
+func (t *errorer) Encode(_ *Encoder, _ *WAFObject, _ int) error {
+	return waferrors.ErrUnsupportedValue
 }
 
 func TestEncodable(t *testing.T) {
@@ -101,7 +102,7 @@ func TestEncodable(t *testing.T) {
 		_, err := encoder.Encode(&input)
 		require.NoError(t, err, "unexpected error when encoding: %v", err)
 
-		require.Equal(t, map[TruncationReason][]int{StringTooLong: {1}}, encoder.truncations)
+		require.Equal(t, map[TruncationReason][]int{StringTooLong: {1}}, encoder.enc.Truncations.AsMap())
 	})
 
 	t.Run("errorer", func(t *testing.T) {
@@ -698,7 +699,7 @@ func TestEncoderLimits(t *testing.T) {
 		var encoded *WAFObject
 		encoded, err = encoder.Encode(tc.Input)
 		t.Run(tc.Name+"/assert", func(t *testing.T) {
-			require.Equal(t, tc.Truncations, sortValues(encoder.truncations))
+			require.Equal(t, tc.Truncations, sortValues(encoder.enc.Truncations.AsMap()))
 
 			if tc.EncodeError != nil {
 				require.Error(t, err, "expected an encoding error when encoding %v", tc.EncodeError)
@@ -731,7 +732,7 @@ type typeTree struct {
 }
 
 func assertEqualType(t *testing.T, expected typeTree, actual *WAFObject) {
-	actualType := actual.raw().Type()
+	actualType := actual.Type()
 	expectedType := expected._type
 
 	// Small strings (<=14 bytes) use WAFSmallStringType via inline storage.
@@ -740,7 +741,7 @@ func assertEqualType(t *testing.T, expected typeTree, actual *WAFObject) {
 		actualType = bindings.WAFStringType
 	}
 
-	require.Equal(t, expectedType, actualType, "expected type %v, got type %v", expected._type, actual.raw().Type())
+	require.Equal(t, expectedType, actualType, "expected type %v, got type %v", expected._type, actual.Type())
 
 	if expected._type != bindings.WAFMapType && expected._type != bindings.WAFArrayType {
 		return
@@ -767,7 +768,7 @@ func assertEqualType(t *testing.T, expected typeTree, actual *WAFObject) {
 	} else {
 		entries, _ := actual.MapEntries()
 		for i := range expected.children {
-			assertEqualType(t, expected.children[i], entries[i].Value())
+			assertEqualType(t, expected.children[i], &entries[i].Val)
 		}
 	}
 }
