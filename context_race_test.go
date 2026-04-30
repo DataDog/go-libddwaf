@@ -322,3 +322,29 @@ func TestContextCloseWithIdleSubcontexts(t *testing.T) {
 		require.ErrorIs(t, err, waferrors.ErrContextClosed, "subcontext %d should be closed after parent close", idx)
 	}
 }
+
+func TestSubcontextCloseAfterContextClose(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+
+	subCtx, err := ctx.SubContext(context.Background())
+	require.NoError(t, err)
+
+	data := RunAddressData{Data: map[string]any{
+		"server.request.headers.no_cookies": map[string]string{
+			"user-agent": "Arachni/test",
+		},
+	}}
+
+	_, err = subCtx.Run(context.Background(), data)
+	require.NoError(t, err)
+
+	require.NotPanics(t, func() { ctx.Close() })
+	require.NotPanics(t, func() { subCtx.Close() })
+	require.NotPanics(t, func() { ctx.Close() })
+	require.NotPanics(t, func() { subCtx.Close() })
+}
