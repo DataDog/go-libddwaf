@@ -21,7 +21,7 @@ import (
 )
 
 // numTruncationReasons is the number of known [TruncationReason]s; sized so
-// the truncations map allocated in NewContext/SubContext rarely grows.
+// the truncations map allocated in NewContext/NewSubcontext rarely grows.
 const numTruncationReasons = 3
 
 const (
@@ -38,7 +38,7 @@ const (
 // its own [Context]. New [Context] instances can be created by calling
 // [Handle.NewContext].
 //
-// Subcontexts can be created via [Context.SubContext]. Data passed to a subcontext is stored
+// Subcontexts can be created via [Context.NewSubcontext]. Data passed to a subcontext is stored
 // and persists across multiple calls to Run on that subcontext, until the subcontext is closed.
 type Context struct {
 	// Timer registers the time spent in the WAF and go-libddwaf. It is created alongside the Context using the options
@@ -51,6 +51,10 @@ type Context struct {
 	isSubCtx    bool                      // Whether this Context represents a subcontext
 	closed      atomic.Bool               // Whether this Context or subcontext has been closed
 	cSubcontext wafBindings.WAFSubcontext // The C ddwaf_subcontext pointer (nil for root context)
+
+	closedHint    atomic.Bool
+	evalsInFlight sync.WaitGroup
+	mu            sync.Mutex
 
 	// mutex protecting local fields such as pinner and cSubcontext.
 	mutex sync.Mutex
@@ -80,7 +84,7 @@ type contextRoot struct {
 // ignored and will not be visible to the WAF.
 //
 // Data passed to Run is stored and persists for the lifetime of the context or subcontext.
-// Use SubContext() to scope data to a shorter lifetime.
+// Use NewSubcontext() to scope data to a shorter lifetime.
 type RunAddressData struct {
 	// Data is the address data to pass to the WAF. Data is stored and persists across multiple
 	// calls to Run until the context or subcontext is closed.
@@ -129,9 +133,9 @@ func (context *Context) isClosedAssumingBothLocked() bool {
 	return false
 }
 
-// SubContext creates a subcontext derived from this context.
+// NewSubcontext creates a subcontext derived from this context.
 // The provided ctx only scopes the construction call itself and is not retained
-// after SubContext returns; per-run deadlines and cancellation must be supplied
+// after NewSubcontext returns; per-run deadlines and cancellation must be supplied
 // to [Context.Run] via its own ctx argument.
 // Data passed to the subcontext's Run() is stored and persists across multiple calls
 // to Run on that subcontext, but does not persist in the parent context.
@@ -140,20 +144,20 @@ func (context *Context) isClosedAssumingBothLocked() bool {
 // A subcontext gets its own timer whose initial budget is snapshotted from the
 // caller's remaining budget when the subcontext is created.
 //
-// Calling SubContext on an existing subcontext creates another subcontext from
+// Calling NewSubcontext on an existing subcontext creates another subcontext from
 // the same root WAF context. The new subcontext does not inherit the current
 // subcontext's ephemeral state.
 //
 // Usage:
 //
-//	subCtx, err := ctx.SubContext(context.Background())
+//	subCtx, err := ctx.NewSubcontext(context.Background())
 //	if err != nil {
 //	    return err
 //	}
 //	defer subCtx.Close()
 //	result, err := subCtx.Run(context.Background(), RunAddressData{Data: data})
-func (context *Context) SubContext(ctx context.Context) (*Context, error) {
-	if err := validateConstructionContext("Context.SubContext", ctx); err != nil {
+func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) {
+	if err := validateConstructionContext("Context.NewSubcontext", ctx); err != nil {
 		return nil, err
 	}
 
@@ -163,9 +167,6 @@ func (context *Context) SubContext(ctx context.Context) (*Context, error) {
 		}
 		return nil, waferrors.ErrHandleReleased
 	}
-	// Refcount bookkeeping: retain() above is released by the deferred Close()
-	// below on any failure path. On success, the returned subcontext owns the
-	// reference and will release it when its own Close() is called.
 	success := false
 	defer func() {
 		if !success {
@@ -211,13 +212,14 @@ func (context *Context) SubContext(ctx context.Context) (*Context, error) {
 	}
 
 	success = true
-	return &Context{
+	return &Subcontext{Context: &Context{
 		Timer:       subTimer,
 		handle:      context.handle,
 		root:        context.root,
 		isSubCtx:    true,
 		cSubcontext: cSubcontext,
-	}, nil
+		truncations: make(map[TruncationReason][]int, numTruncationReasons),
+	}}, nil
 }
 
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
@@ -360,7 +362,7 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 //
 // Note: in v5, a single [RunAddressData.Data] map is encoded per call.
 // Ephemeral data is no longer a separate field and is instead scoped via
-// [Context.SubContext].
+// [Context.NewSubcontext].
 //
 // If the encoder times out, [waferrors.ErrTimeout] is returned. Any truncations
 // recorded by the encoder are merged into context.truncations.
