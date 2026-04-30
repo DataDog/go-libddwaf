@@ -29,7 +29,7 @@ func TestContextRunCloseRace(t *testing.T) {
 	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 
-	subCtx, err := ctx.SubContext(context.Background())
+	subCtx, err := ctx.NewSubcontext(context.Background())
 	require.NoError(t, err)
 
 	data := RunAddressData{Data: map[string]any{
@@ -175,9 +175,9 @@ func TestConcurrentSiblingSubcontextsRun(t *testing.T) {
 		nbRuns    = 100
 	)
 
-	subCtxs := make([]*Context, 0, nbWorkers)
+	subCtxs := make([]*Subcontext, 0, nbWorkers)
 	for range nbWorkers {
-		subCtx, err := ctx.SubContext(context.Background())
+		subCtx, err := ctx.NewSubcontext(context.Background())
 		require.NoError(t, err)
 		subCtxs = append(subCtxs, subCtx)
 	}
@@ -194,7 +194,7 @@ func TestConcurrentSiblingSubcontextsRun(t *testing.T) {
 
 	for worker, subCtx := range subCtxs {
 		wg.Add(1)
-		go func(worker int, subCtx *Context) {
+		go func(worker int, subCtx *Subcontext) {
 			defer wg.Done()
 			<-start
 
@@ -230,7 +230,7 @@ func TestConcurrentContextAndSubcontextRun(t *testing.T) {
 	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 
-	subCtx, err := ctx.SubContext(context.Background())
+	subCtx, err := ctx.NewSubcontext(context.Background())
 	require.NoError(t, err)
 
 	const nbRuns = 100
@@ -296,9 +296,9 @@ func TestContextCloseWithIdleSubcontexts(t *testing.T) {
 	require.NoError(t, err)
 
 	const nbSubcontexts = 4
-	subCtxs := make([]*Context, 0, nbSubcontexts)
+	subCtxs := make([]*Subcontext, 0, nbSubcontexts)
 	for range nbSubcontexts {
-		subCtx, err := ctx.SubContext(context.Background())
+		subCtx, err := ctx.NewSubcontext(context.Background())
 		require.NoError(t, err)
 		subCtxs = append(subCtxs, subCtx)
 	}
@@ -331,7 +331,7 @@ func TestSubcontextCloseAfterContextClose(t *testing.T) {
 	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 
-	subCtx, err := ctx.SubContext(context.Background())
+	subCtx, err := ctx.NewSubcontext(context.Background())
 	require.NoError(t, err)
 
 	data := RunAddressData{Data: map[string]any{
@@ -368,7 +368,7 @@ func TestDoubleCloseSafety(t *testing.T) {
 	ctx2, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 
-	subCtx, err := ctx2.SubContext(context.Background())
+	subCtx, err := ctx2.NewSubcontext(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, int32(1), subCtx.handle.refCounter.Load())
 

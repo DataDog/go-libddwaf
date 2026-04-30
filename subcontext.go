@@ -4,3 +4,12 @@
 // Copyright 2016-present Datadog, Inc.
 
 package libddwaf
+
+// Subcontext is a derived ephemeral evaluation scope. Spawned via Context.NewSubcontext.
+//
+// Transitional implementation: embeds *Context so existing methods
+// (Run, Close, Truncations) are promoted. A later task replaces the embed
+// with explicit fields and methods.
+type Subcontext struct {
+	*Context
+}

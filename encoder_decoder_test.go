@@ -41,7 +41,7 @@ func wafTest(t *testing.T, obj *WAFObject) {
 	})
 	require.NoError(t, err)
 
-	subCtx, err := wafCtx.SubContext(context.Background())
+	subCtx, err := wafCtx.NewSubcontext(context.Background())
 	require.NoError(t, err)
 	t.Cleanup(func() { subCtx.Close() })
 	_, err = subCtx.Run(context.Background(), RunAddressData{
