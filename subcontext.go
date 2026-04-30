@@ -125,8 +125,8 @@ func (s *Subcontext) Close() {
 		return
 	}
 
+	//lint:ignore SA2001 synchronize with Run before pinner close
 	s.mu.Lock()
-	_ = s.cSub
 	s.mu.Unlock()
 
 	s.parent.mu.Lock()
