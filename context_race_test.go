@@ -222,3 +222,67 @@ func TestConcurrentSiblingSubcontextsRun(t *testing.T) {
 	ctx.Close()
 }
 
+func TestConcurrentContextAndSubcontextRun(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+
+	subCtx, err := ctx.SubContext(context.Background())
+	require.NoError(t, err)
+
+	const nbRuns = 100
+
+	ctxData := RunAddressData{Data: map[string]any{
+		"server.request.headers.no_cookies": map[string]string{
+			"user-agent": "Arachni/test",
+		},
+	}}
+	subCtxData := RunAddressData{Data: map[string]any{
+		"server.request.headers.no_cookies": map[string]string{
+			"user-agent": "Arachni/test-sub",
+		},
+	}}
+
+	errCh := make(chan error, 2)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		<-start
+		for run := range nbRuns {
+			_, err := ctx.Run(context.Background(), ctxData)
+			if err != nil && !errors.Is(err, waferrors.ErrContextClosed) {
+				errCh <- fmt.Errorf("ctx run %d: %w", run, err)
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		<-start
+		for run := range nbRuns {
+			_, err := subCtx.Run(context.Background(), subCtxData)
+			if err != nil && !errors.Is(err, waferrors.ErrContextClosed) {
+				errCh <- fmt.Errorf("subctx run %d: %w", run, err)
+				return
+			}
+		}
+	}()
+
+	close(start)
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		require.NoError(t, err)
+	}
+
+	subCtx.Close()
+	ctx.Close()
+}
