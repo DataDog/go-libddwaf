@@ -348,3 +348,36 @@ func TestSubcontextCloseAfterContextClose(t *testing.T) {
 	require.NotPanics(t, func() { ctx.Close() })
 	require.NotPanics(t, func() { subCtx.Close() })
 }
+
+func TestDoubleCloseSafety(t *testing.T) {
+	t.Skip("known bug; un-skipped in plan task 11")
+
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
+	require.NoError(t, err)
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+	require.Equal(t, int32(1), ctx.handle.refCounter.Load())
+
+	ctx.Close()
+	require.Equal(t, int32(0), ctx.handle.refCounter.Load())
+
+	ctx.Close()
+	require.Equal(t, int32(0), ctx.handle.refCounter.Load())
+
+	ctx2, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+
+	subCtx, err := ctx2.SubContext(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, int32(1), subCtx.handle.refCounter.Load())
+
+	subCtx.Close()
+	require.Equal(t, int32(0), subCtx.handle.refCounter.Load())
+
+	subCtx.Close()
+	require.Equal(t, int32(0), subCtx.handle.refCounter.Load())
+
+	ctx2.Close()
+	waf.Close()
+}
