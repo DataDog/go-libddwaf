@@ -33,6 +33,9 @@ func TestSiblingSubcontextParallelismSpeedup(t *testing.T) {
 	if n < 2 {
 		t.Skip("speedup test requires at least 2 CPUs")
 	}
+	if raceDetectorEnabled {
+		t.Skip("speedup test unreliable under -race due to instrumentation overhead")
+	}
 
 	subCtxs := make([]*Subcontext, n)
 	for i := range n {
