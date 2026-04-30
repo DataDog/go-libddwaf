@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -61,8 +60,7 @@ type Context struct {
 	// the run mutex, so that Truncations() does not block on long Run() calls.
 	truncationsMu sync.RWMutex
 
-	// truncations provides details about truncations that occurred while encoding address data for the WAF execution.
-	truncations map[TruncationReason][]int
+	truncations Truncations
 
 	// pinner is used to retain Go data that is being passed to the WAF as part of
 	// [RunAddressData.Data] until the [Context.Close] method results in the context being
@@ -143,10 +141,9 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 
 	success = true
 	return &Subcontext{
-		Timer:       subTimer,
-		parent:      context,
-		cSub:        cSubcontext,
-		truncations: make(map[TruncationReason][]int, numTruncationReasons),
+		Timer:  subTimer,
+		parent: context,
+		cSub:   cSubcontext,
 	}, nil
 }
 
@@ -203,9 +200,9 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	if err != nil {
 		return Result{}, err
 	}
-	if len(truncations) > 0 {
+	if !truncations.IsEmpty() {
 		context.truncationsMu.Lock()
-		context.truncations = merge(context.truncations, truncations)
+		context.truncations.Merge(truncations)
 		context.truncationsMu.Unlock()
 	}
 
@@ -216,12 +213,12 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	timeout := effectiveTimeoutMicros(ctx, runTimer)
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
-	result := newWAFObject()
-	pinner.Pin(result.raw())
-	defer wafBindings.Lib.ObjectDestroy(result.raw(), wafBindings.Lib.DefaultAllocator())
+	var result WAFObject
+	pinner.Pin(&result)
+	defer wafBindings.Lib.ObjectDestroy(&result, wafBindings.Lib.DefaultAllocator())
 
 	cContext := context.cContext
-	ret := wafBindings.Lib.ContextEval(cContext, data.raw(), 0, result.raw(), timeout)
+	ret := wafBindings.Lib.ContextEval(cContext, data, 0, &result, timeout)
 
 	return decodeWafResult(ctx, ret, &result, runTimer)
 }
@@ -249,13 +246,15 @@ func (context *Context) Close() {
 	context.handle.Close()
 }
 
-// Truncations returns the truncations that occurred while encoding address data for WAF execution.
-// The key is the truncation reason: either because the object was too deep, the arrays where to large or the strings were too long.
-// The value is a slice of integers, each integer being the original size of the object that was truncated.
-// In case of the [ObjectTooDeep] reason, the original size can only be approximated because of recursive objects.
-func (context *Context) Truncations() map[TruncationReason][]int {
+// Truncations returns the truncations that occurred while encoding address
+// data for WAF execution. The returned value is a snapshot; subsequent Run
+// calls may accumulate more truncations.
+func (context *Context) Truncations() Truncations {
 	context.truncationsMu.RLock()
 	defer context.truncationsMu.RUnlock()
-
-	return maps.Clone(context.truncations)
+	return Truncations{
+		StringTooLong:     append([]int(nil), context.truncations.StringTooLong...),
+		ContainerTooLarge: append([]int(nil), context.truncations.ContainerTooLarge...),
+		ObjectTooDeep:     append([]int(nil), context.truncations.ObjectTooDeep...),
+	}
 }

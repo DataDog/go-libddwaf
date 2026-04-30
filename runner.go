@@ -43,27 +43,27 @@ func newRunTimer(parent timer.NodeTimer, key timer.Key) (timer.NodeTimer, error)
 
 // encodeAddressData encodes address data into WAF objects. Returns the encoded
 // WAF object and any truncation info. The caller is responsible for merging
-// truncations into its own truncation map.
-func encodeAddressData(pinner pin.Pinner, addressData map[string]any, t timer.Timer) (*WAFObject, map[TruncationReason][]int, error) {
+// truncations into its own truncation set.
+func encodeAddressData(pinner pin.Pinner, addressData map[string]any, t timer.Timer) (*WAFObject, Truncations, error) {
 	if addressData == nil {
-		return nil, nil, nil
+		return nil, Truncations{}, nil
 	}
 
 	encoder, err := newEncoder(newEncoderConfig(pinner, WithTimer(t)))
 	if err != nil {
-		return nil, nil, fmt.Errorf("could not create encoder: %w", err)
+		return nil, Truncations{}, fmt.Errorf("could not create encoder: %w", err)
 	}
 
 	data, err := encoder.Encode(addressData)
 	if err != nil && !errors.Is(err, waferrors.ErrTimeout) {
-		return nil, nil, fmt.Errorf("failed to encode address data: %w", err)
+		return nil, Truncations{}, fmt.Errorf("failed to encode address data: %w", err)
 	}
 
 	if t.Exhausted() {
-		return nil, nil, waferrors.ErrTimeout
+		return nil, Truncations{}, waferrors.ErrTimeout
 	}
 
-	return data, encoder.truncations, nil
+	return data, encoder.enc.Truncations, nil
 }
 
 // effectiveTimeoutMicros computes the WAF call timeout in microseconds,

@@ -79,7 +79,7 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *WAFObject) (res Result,
 	}
 	var wafTimeout bool
 	for _, entry := range entries {
-		key, err := entry.Key().StringValue()
+		key, err := entry.Key.StringValue()
 		if err != nil {
 			return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
 		}
@@ -109,17 +109,17 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *WAFObject) (res Result,
 }
 
 func decodeActions(entry WAFObjectKV, res *Result) error {
-	if !entry.Value().IsMap() {
-		return fmt.Errorf("unwrapWafResult: %w: expected map for actions, got %s", waferrors.ErrResultInvalidType, entry.Value().Type())
+	if !entry.Val.IsMap() {
+		return fmt.Errorf("unwrapWafResult: %w: expected map for actions, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
 	}
-	size, err := entry.Value().MapSize()
+	size, err := entry.Val.MapSize()
 	if err != nil {
 		return fmt.Errorf("unwrapWafResult: %w: failed to get actions map size: %w", waferrors.ErrResultInvalidType, err)
 	}
 	if size == 0 {
 		return nil
 	}
-	actions, err := entry.Value().MapValue()
+	actions, err := entry.Val.MapValue()
 	if err != nil {
 		return fmt.Errorf("unwrapWafResult: %w: failed to decode actions: %w", waferrors.ErrResultInvalidType, err)
 	}
@@ -128,17 +128,17 @@ func decodeActions(entry WAFObjectKV, res *Result) error {
 }
 
 func decodeEvents(entry WAFObjectKV, res *Result) error {
-	if !entry.Value().IsArray() {
-		return fmt.Errorf("unwrapWafResult: %w: expected array for events, got %s", waferrors.ErrResultInvalidType, entry.Value().Type())
+	if !entry.Val.IsArray() {
+		return fmt.Errorf("unwrapWafResult: %w: expected array for events, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
 	}
-	size, err := entry.Value().ArraySize()
+	size, err := entry.Val.ArraySize()
 	if err != nil {
 		return fmt.Errorf("unwrapWafResult: %w: failed to get events array size: %w", waferrors.ErrResultInvalidType, err)
 	}
 	if size == 0 {
 		return nil
 	}
-	events, err := entry.Value().ArrayValue()
+	events, err := entry.Val.ArrayValue()
 	if err != nil {
 		return fmt.Errorf("unwrapWafResult: %w: failed to decode events: %w", waferrors.ErrResultInvalidType, err)
 	}
@@ -147,17 +147,17 @@ func decodeEvents(entry WAFObjectKV, res *Result) error {
 }
 
 func decodeAttributes(entry WAFObjectKV, res *Result) error {
-	if !entry.Value().IsMap() {
-		return fmt.Errorf("unwrapWafResult: %w: expected map for attributes, got %s", waferrors.ErrResultInvalidType, entry.Value().Type())
+	if !entry.Val.IsMap() {
+		return fmt.Errorf("unwrapWafResult: %w: expected map for attributes, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
 	}
-	size, err := entry.Value().MapSize()
+	size, err := entry.Val.MapSize()
 	if err != nil {
 		return fmt.Errorf("unwrapWafResult: %w: failed to get attributes map size: %w", waferrors.ErrResultInvalidType, err)
 	}
 	if size == 0 {
 		return nil
 	}
-	derivatives, err := entry.Value().MapValue()
+	derivatives, err := entry.Val.MapValue()
 	if err != nil {
 		return fmt.Errorf("unwrapWafResult: %w: failed to decode attributes: %w", waferrors.ErrResultInvalidType, err)
 	}
@@ -168,20 +168,20 @@ func decodeAttributes(entry WAFObjectKV, res *Result) error {
 func decodeTimeoutKeepDuration(entry WAFObjectKV, key string, wafTimeout bool, duration time.Duration, res *Result) (bool, time.Duration, error) {
 	switch key {
 	case "timeout":
-		timeoutVal, err := entry.Value().BoolValue()
+		timeoutVal, err := entry.Val.BoolValue()
 		if err != nil {
 			return false, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode timeout: %w", waferrors.ErrResultInvalidType, err)
 		}
 		return timeoutVal, duration, nil
 	case "keep":
-		keep, err := entry.Value().BoolValue()
+		keep, err := entry.Val.BoolValue()
 		if err != nil {
 			return false, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode keep: %w", waferrors.ErrResultInvalidType, err)
 		}
 		res.Keep = keep
 		return wafTimeout, duration, nil
 	case "duration":
-		dur, err := entry.Value().UIntValue()
+		dur, err := entry.Val.UIntValue()
 		if err != nil {
 			return false, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode duration: %w", waferrors.ErrResultInvalidType, err)
 		}

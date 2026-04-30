@@ -9,10 +9,6 @@ import (
 	"github.com/DataDog/go-libddwaf/v5/timer"
 )
 
-// numTruncationReasons is the number of known [TruncationReason]s; sized so
-// the truncations map allocated in NewContext/NewSubcontext rarely grows.
-const numTruncationReasons = 3
-
 // RunAddressData provides address data to the [Context.Run] method.
 // When encoding Go structs to the WAF-compatible format, fields with the `ddwaf:"ignore"` tag are
 // ignored and will not be visible to the WAF.
@@ -42,36 +38,3 @@ func (d RunAddressData) isEmpty() bool {
 // from a and b concatenated in that order. The named return keeps the
 // empty-input fast path concise while still allowing the accumulator to be
 // built without extra copies.
-func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
-	if len(a) == 0 && len(b) == 0 {
-		return
-	}
-
-	totalCount := 0
-	for _, v := range a {
-		totalCount += len(v)
-	}
-	for _, v := range b {
-		totalCount += len(v)
-	}
-
-	merged = make(map[K][]V, len(a)+len(b))
-	values := make([]V, 0, totalCount)
-
-	for k, av := range a {
-		start := len(values)
-		values = append(values, av...)
-		values = append(values, b[k]...)
-		merged[k] = values[start:]
-	}
-
-	for k, bv := range b {
-		if _, ok := merged[k]; !ok {
-			start := len(values)
-			values = append(values, bv...)
-			merged[k] = values[start:]
-		}
-	}
-
-	return
-}

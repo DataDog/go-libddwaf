@@ -1236,10 +1236,10 @@ func TestUnwrapWafResultTimeoutFromResultMap(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		result := newWAFObject()
+		var result WAFObject
 		kvs := result.SetMap(&pinner, 1)
-		kvs[0].Key().SetString(&pinner, "timeout")
-		kvs[0].Value().SetBool(true)
+		kvs[0].Key.SetString(&pinner, "timeout")
+		kvs[0].Val.SetBool(true)
 		result.SetMapSize(1)
 
 		_, _, err := unwrapWafResult(bindings.WAFOK, &result)
@@ -1250,10 +1250,10 @@ func TestUnwrapWafResultTimeoutFromResultMap(t *testing.T) {
 		var pinner runtime.Pinner
 		defer pinner.Unpin()
 
-		result := newWAFObject()
+		var result WAFObject
 		kvs := result.SetMap(&pinner, 1)
-		kvs[0].Key().SetString(&pinner, "timeout")
-		kvs[0].Value().SetBool(false)
+		kvs[0].Key.SetString(&pinner, "timeout")
+		kvs[0].Val.SetBool(false)
 		result.SetMapSize(1)
 
 		_, _, err := unwrapWafResult(bindings.WAFOK, &result)
@@ -1477,9 +1477,9 @@ func TestTruncationInformation(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Equal(t, map[TruncationReason][]int{
-		StringTooLong:     {int(bindings.MaxStringLength) + extra + 2},
-		ContainerTooLarge: {int(bindings.MaxContainerSize) + extra + 2},
+	require.Equal(t, Truncations{
+		StringTooLong:     []int{int(bindings.MaxStringLength) + extra + 2},
+		ContainerTooLarge: []int{int(bindings.MaxContainerSize) + extra + 2},
 	}, ctx.truncations)
 }
 

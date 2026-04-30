@@ -30,12 +30,12 @@ func decodeErrors(obj *WAFObject) (map[string][]string, error) {
 
 	wafErrors := make(map[string][]string, len(entries))
 	for _, entry := range entries {
-		errorMessage, err := entry.Key().StringValue()
+		errorMessage, err := entry.Key.StringValue()
 		if err != nil {
 			return nil, fmt.Errorf("decodeErrors: failed to decode error key: %w", err)
 		}
 
-		ruleIds, err := decodeStringArray(entry.Value())
+		ruleIds, err := decodeStringArray(&entry.Val)
 		if err != nil {
 			return nil, fmt.Errorf("decodeErrors: failed to decode rule IDs for error %q: %w", errorMessage, err)
 		}
@@ -57,34 +57,34 @@ func decodeDiagnostics(obj *WAFObject) (Diagnostics, error) {
 
 	var diags Diagnostics
 	for _, entry := range entries {
-		key, err := entry.Key().StringValue()
+		key, err := entry.Key.StringValue()
 		if err != nil {
 			return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
 		}
 
 		switch key {
 		case "actions":
-			diags.Actions, err = decodeFeature(entry.Value())
+			diags.Actions, err = decodeFeature(&entry.Val)
 		case "custom_rules":
-			diags.CustomRules, err = decodeFeature(entry.Value())
+			diags.CustomRules, err = decodeFeature(&entry.Val)
 		case "exclusions":
-			diags.Exclusions, err = decodeFeature(entry.Value())
+			diags.Exclusions, err = decodeFeature(&entry.Val)
 		case "rules":
-			diags.Rules, err = decodeFeature(entry.Value())
+			diags.Rules, err = decodeFeature(&entry.Val)
 		case "rules_data":
-			diags.RulesData, err = decodeFeature(entry.Value())
+			diags.RulesData, err = decodeFeature(&entry.Val)
 		case "exclusion_data":
-			diags.ExclusionData, err = decodeFeature(entry.Value())
+			diags.ExclusionData, err = decodeFeature(&entry.Val)
 		case "rules_override":
-			diags.RulesOverrides, err = decodeFeature(entry.Value())
+			diags.RulesOverrides, err = decodeFeature(&entry.Val)
 		case "processors":
-			diags.Processors, err = decodeFeature(entry.Value())
+			diags.Processors, err = decodeFeature(&entry.Val)
 		case "processor_overrides":
-			diags.ProcessorOverrides, err = decodeFeature(entry.Value())
+			diags.ProcessorOverrides, err = decodeFeature(&entry.Val)
 		case "scanners":
-			diags.Scanners, err = decodeFeature(entry.Value())
+			diags.Scanners, err = decodeFeature(&entry.Val)
 		case "ruleset_version":
-			diags.Version, err = entry.Value().StringValue()
+			diags.Version, err = entry.Val.StringValue()
 		default:
 			// Unknown diagnostic keys are intentionally ignored so newer libddwaf
 			// versions don't break this decoder.
@@ -108,24 +108,24 @@ func decodeFeature(obj *WAFObject) (*Feature, error) {
 
 	var feature Feature
 	for _, entry := range entries {
-		key, err := entry.Key().StringValue()
+		key, err := entry.Key.StringValue()
 		if err != nil {
 			return nil, fmt.Errorf("decodeFeature: failed to decode key: %w", err)
 		}
 
 		switch key {
 		case "error":
-			feature.Error, err = entry.Value().StringValue()
+			feature.Error, err = entry.Val.StringValue()
 		case "errors":
-			feature.Errors, err = decodeErrors(entry.Value())
+			feature.Errors, err = decodeErrors(&entry.Val)
 		case "failed":
-			feature.Failed, err = decodeStringArray(entry.Value())
+			feature.Failed, err = decodeStringArray(&entry.Val)
 		case "loaded":
-			feature.Loaded, err = decodeStringArray(entry.Value())
+			feature.Loaded, err = decodeStringArray(&entry.Val)
 		case "skipped":
-			feature.Skipped, err = decodeStringArray(entry.Value())
+			feature.Skipped, err = decodeStringArray(&entry.Val)
 		case "warnings":
-			feature.Warnings, err = decodeErrors(entry.Value())
+			feature.Warnings, err = decodeErrors(&entry.Val)
 		default:
 			return nil, fmt.Errorf("decodeFeature: %w: unknown field %q", waferrors.ErrUnsupportedValue, key)
 		}

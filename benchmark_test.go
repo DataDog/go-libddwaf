@@ -55,8 +55,8 @@ func benchSmallRuleHandle(b *testing.B) *Handle {
 
 func benchBenignRequest() map[string]any {
 	return map[string]any{
-		"http.client_ip":        "192.168.1.1",
-		"server.request.method": "GET",
+		"http.client_ip":         "192.168.1.1",
+		"server.request.method":  "GET",
 		"server.request.uri.raw": "/api/v1/users?page=1&limit=20",
 		"server.request.headers.no_cookies": map[string][]string{
 			"host":            {"example.com"},
@@ -81,8 +81,8 @@ func benchBenignRequest() map[string]any {
 
 func benchAttackRequest() map[string]any {
 	return map[string]any{
-		"http.client_ip":        "1.2.3.4",
-		"server.request.method": "POST",
+		"http.client_ip":         "1.2.3.4",
+		"server.request.method":  "POST",
 		"server.request.uri.raw": "/api/v1/users?id=' OR 1=1--",
 		"server.request.headers.no_cookies": map[string][]string{
 			"host":            {"example.com"},
