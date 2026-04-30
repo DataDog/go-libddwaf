@@ -350,34 +350,34 @@ func TestSubcontextCloseAfterContextClose(t *testing.T) {
 }
 
 func TestDoubleCloseSafety(t *testing.T) {
-	t.Skip("known bug; un-skipped in plan task 11")
-
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
 
 	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
+	require.Equal(t, int32(2), ctx.handle.refCounter.Load())
+
+	ctx.Close()
 	require.Equal(t, int32(1), ctx.handle.refCounter.Load())
 
 	ctx.Close()
-	require.Equal(t, int32(0), ctx.handle.refCounter.Load())
-
-	ctx.Close()
-	require.Equal(t, int32(0), ctx.handle.refCounter.Load())
+	require.Equal(t, int32(1), ctx.handle.refCounter.Load())
 
 	ctx2, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
+	require.Equal(t, int32(2), ctx2.handle.refCounter.Load())
 
 	subCtx, err := ctx2.NewSubcontext(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, int32(1), subCtx.parent.handle.refCounter.Load())
+	require.Equal(t, int32(3), subCtx.parent.handle.refCounter.Load())
 
 	subCtx.Close()
-	require.Equal(t, int32(0), subCtx.parent.handle.refCounter.Load())
+	require.Equal(t, int32(2), subCtx.parent.handle.refCounter.Load())
 
 	subCtx.Close()
-	require.Equal(t, int32(0), subCtx.parent.handle.refCounter.Load())
+	require.Equal(t, int32(2), subCtx.parent.handle.refCounter.Load())
 
 	ctx2.Close()
+	require.Equal(t, int32(1), ctx2.handle.refCounter.Load())
 	waf.Close()
 }

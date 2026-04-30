@@ -20,10 +20,6 @@ import (
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
-// numTruncationReasons is the number of known [TruncationReason]s; sized so
-// the truncations map allocated in NewContext/NewSubcontext rarely grows.
-const numTruncationReasons = 3
-
 const (
 	// EncodeTimeKey is the key used to track the time spent encoding the address data reported in [Result.TimerStats].
 	EncodeTimeKey timer.Key = "encode"
@@ -47,17 +43,10 @@ type Context struct {
 
 	handle *Handle // Instance of the WAF
 
-	root        *contextRoot              // Shared root state for the C ddwaf_context pointer
-	isSubCtx    bool                      // Whether this Context represents a subcontext
-	closed      atomic.Bool               // Whether this Context or subcontext has been closed
-	cSubcontext wafBindings.WAFSubcontext // The C ddwaf_subcontext pointer (nil for root context)
-
 	closedHint    atomic.Bool
 	evalsInFlight sync.WaitGroup
 	mu            sync.Mutex
-
-	// mutex protecting local fields such as pinner and cSubcontext.
-	mutex sync.Mutex
+	cContext      wafBindings.WAFContext
 
 	// truncationsMu protects reads and writes to truncations independently of
 	// the run mutex, so that Truncations() does not block on long Run() calls.
@@ -70,33 +59,6 @@ type Context struct {
 	// [RunAddressData.Data] until the [Context.Close] method results in the context being
 	// destroyed.
 	pinner pin.ConcurrentPinner
-}
-
-type contextRoot struct {
-	mu         sync.Mutex
-	cContext   wafBindings.WAFContext
-	closed     atomic.Bool
-	activeRuns atomic.Int64
-}
-
-// RunAddressData provides address data to the [Context.Run] method.
-// When encoding Go structs to the WAF-compatible format, fields with the `ddwaf:"ignore"` tag are
-// ignored and will not be visible to the WAF.
-//
-// Data passed to Run is stored and persists for the lifetime of the context or subcontext.
-// Use NewSubcontext() to scope data to a shorter lifetime.
-type RunAddressData struct {
-	// Data is the address data to pass to the WAF. Data is stored and persists across multiple
-	// calls to Run until the context or subcontext is closed.
-	Data map[string]any
-
-	// TimerKey is the key used to track the time spent in the WAF for this run.
-	// If left empty, a new timer with unlimited budget is started.
-	TimerKey timer.Key
-}
-
-func (d RunAddressData) isEmpty() bool {
-	return len(d.Data) == 0
 }
 
 // NewSubcontext creates a subcontext derived from this context.
@@ -139,14 +101,11 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	context.mu.Lock()
 	defer context.mu.Unlock()
 
-	context.root.mu.Lock()
-	defer context.root.mu.Unlock()
-
-	if context.closedHint.Load() || context.root.cContext == 0 {
+	if context.closedHint.Load() || context.cContext == 0 {
 		return nil, waferrors.ErrContextClosed
 	}
 
-	cSubcontext := wafBindings.Lib.SubcontextInit(context.root.cContext)
+	cSubcontext := wafBindings.Lib.SubcontextInit(context.cContext)
 	if cSubcontext == 0 {
 		return nil, errors.New("failed to create subcontext: ddwaf_subcontext_init returned null")
 	}
@@ -252,53 +211,10 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	pinner.Pin(result.raw())
 	defer wafBindings.Lib.ObjectDestroy(result.raw(), wafBindings.Lib.DefaultAllocator())
 
-	cContext := context.root.cContext
+	cContext := context.cContext
 	ret := wafBindings.Lib.ContextEval(cContext, data.raw(), 0, result.raw(), timeout)
 
 	return decodeWafResult(ctx, ret, &result, runTimer)
-}
-
-// merge combines two maps of slices into one. All returned slice values
-// share a single backing array for efficiency. Callers MUST NOT append
-// to individual slices in the returned map, as this would corrupt
-// adjacent entries in the shared backing array.
-//
-// It contains all keys from both a and b, with the corresponding values
-// from a and b concatenated in that order. The named return keeps the
-// empty-input fast path concise while still allowing the accumulator to be
-// built without extra copies.
-func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
-	if len(a) == 0 && len(b) == 0 {
-		return
-	}
-
-	totalCount := 0
-	for _, v := range a {
-		totalCount += len(v)
-	}
-	for _, v := range b {
-		totalCount += len(v)
-	}
-
-	merged = make(map[K][]V, len(a)+len(b))
-	values := make([]V, 0, totalCount)
-
-	for k, av := range a {
-		start := len(values)
-		values = append(values, av...)
-		values = append(values, b[k]...)
-		merged[k] = values[start:]
-	}
-
-	for k, bv := range b {
-		if _, ok := merged[k]; !ok {
-			start := len(values)
-			values = append(values, bv...)
-			merged[k] = values[start:]
-		}
-	}
-
-	return
 }
 
 // Close disposes of the underlying context or subcontext.
@@ -309,17 +225,16 @@ func (context *Context) Close() {
 		return
 	}
 
-	context.closed.Store(true)
-	context.root.closed.Store(true)
-
+	//lint:ignore SA2001 synchronize with Run/NewSubcontext before waiting for in-flight evals.
 	context.mu.Lock()
+	_ = context.cContext
 	context.mu.Unlock()
 
 	context.evalsInFlight.Wait()
 
-	if context.root.cContext != 0 {
-		wafBindings.Lib.ContextDestroy(context.root.cContext)
-		context.root.cContext = 0
+	if context.cContext != 0 {
+		wafBindings.Lib.ContextDestroy(context.cContext)
+		context.cContext = 0
 	}
 
 	context.pinner.Close()
