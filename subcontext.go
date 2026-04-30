@@ -21,17 +21,18 @@ import (
 
 // Lock order: Subcontext.mu MUST be acquired before parent.Context.mu. Never reverse.
 
-// Subcontext is a derived ephemeral evaluation scope, spawned from a [Context]
-// via [Context.NewSubcontext]. Data passed to a Subcontext's Run persists for
-// the Subcontext's lifetime and is released when the Subcontext is closed.
+// Subcontext is a derived ephemeral evaluation scope. Spawned via [Context.NewSubcontext].
+// Data passed to a Subcontext's Run persists for the Subcontext's lifetime and is
+// released when the Subcontext is closed.
 //
 // # Concurrency
 //
-// Subcontext.Run may be called concurrently across different Subcontexts of the
-// same parent Context. Same-Subcontext Run calls serialize internally.
+// Subcontext.Run may be called concurrently across different Subcontexts of
+// the same parent; same-Subcontext Run calls serialize internally.
 //
-// Subcontext.Close is idempotent and safe to call after the parent Context has
-// been closed.
+// Subcontext.Close should be called before its parent Context.Close for clean
+// teardown; if the parent is already closed, Subcontext.Close is still safe
+// (it skips the underlying destroy).
 type Subcontext struct {
 	Timer         timer.NodeTimer
 	parent        *Context
