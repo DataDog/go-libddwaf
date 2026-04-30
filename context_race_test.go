@@ -348,3 +348,43 @@ func TestSubcontextCloseAfterContextClose(t *testing.T) {
 	require.NotPanics(t, func() { ctx.Close() })
 	require.NotPanics(t, func() { subCtx.Close() })
 }
+
+func TestDoubleCloseSafety(t *testing.T) {
+	t.Skip("known bug: double-Close causes refcount underflow; un-skipped in plan task 11 after CAS gate fix")
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
+	require.NoError(t, err)
+	// NOTE: do NOT register waf.Close() via t.Cleanup here — we close it manually at the end
+	// so we can inspect the refcount before the cleanup runs.
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+
+	// After NewContext: handle.refCounter = 2 (1 own + 1 for context).
+	require.Greater(t, ctx.handle.refCounter.Load(), int32(0), "refcount must be > 0 before any Close")
+
+	ctx.Close()
+	// After first Close: context releases its ref → refCounter drops by 1.
+	require.GreaterOrEqual(t, ctx.handle.refCounter.Load(), int32(1), "refcount must be >= 1 after first Close (handle's own ref remains)")
+
+	ctx.Close()
+	// After second Close: idempotent — no extra decrement should happen.
+	require.GreaterOrEqual(t, ctx.handle.refCounter.Load(), int32(1), "refcount must be >= 1 after double-Close (no underflow)")
+
+	// Subcontext variant
+	ctx2, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+
+	subCtx, err := ctx2.SubContext(context.Background())
+	require.NoError(t, err)
+
+	require.Greater(t, subCtx.handle.refCounter.Load(), int32(0), "refcount must be > 0 before any subCtx Close")
+
+	subCtx.Close()
+	require.GreaterOrEqual(t, subCtx.handle.refCounter.Load(), int32(1), "refcount >= 1 after first subCtx.Close")
+
+	subCtx.Close()
+	require.GreaterOrEqual(t, subCtx.handle.refCounter.Load(), int32(1), "refcount >= 1 after double subCtx.Close")
+
+	ctx2.Close()
+	waf.Close()
+}
