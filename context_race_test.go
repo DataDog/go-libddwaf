@@ -161,3 +161,63 @@ func TestContextRunClosePinnedPointerLeakRegression(t *testing.T) {
 	runtime.GC()
 	runtime.GC()
 }
+
+func TestConcurrentSiblingSubcontextsRun(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+
+	const (
+		nbWorkers = 8
+		nbRuns    = 100
+	)
+
+	subCtxs := make([]*Context, 0, nbWorkers)
+	for range nbWorkers {
+		subCtx, err := ctx.SubContext(context.Background())
+		require.NoError(t, err)
+		subCtxs = append(subCtxs, subCtx)
+	}
+
+	data := RunAddressData{Data: map[string]any{
+		"server.request.headers.no_cookies": map[string]string{
+			"user-agent": "Arachni/test",
+		},
+	}}
+
+	errCh := make(chan error, nbWorkers)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+
+	for worker, subCtx := range subCtxs {
+		wg.Add(1)
+		go func(worker int, subCtx *Context) {
+			defer wg.Done()
+			<-start
+
+			for run := range nbRuns {
+				_, err := subCtx.Run(context.Background(), data)
+				if err != nil && !errors.Is(err, waferrors.ErrContextClosed) {
+					errCh <- fmt.Errorf("worker %d run %d: %w", worker, run, err)
+					return
+				}
+			}
+		}(worker, subCtx)
+	}
+
+	close(start)
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		require.NoError(t, err)
+	}
+
+	for _, subCtx := range subCtxs {
+		subCtx.Close()
+	}
+	ctx.Close()
+}
