@@ -20,6 +20,11 @@ import (
 // from [Builder.Build]; and must be disposed of by calling [Handle.Close]
 // once no longer in use.
 //
+// The reference count equals the number of alive [Context] values plus the
+// number of alive [Subcontext] values. Each [Handle.NewContext] call retains the
+// handle, each [Context.Close] releases it, each [Context.NewSubcontext] call
+// retains it, and each [Subcontext.Close] releases it.
+//
 // Library lifetime boundary: [Handle.retain] and [Handle.Close] only govern the
 // lifetime of the underlying C ddwaf_handle. They do not keep the libddwaf
 // shared library loaded. That shared library is a process-wide singleton
@@ -29,7 +34,6 @@ import (
 // resolvable for the entire lifetime of the process, and Context/SubContext
 // teardown paths that call into bindings.Lib after the Handle's refcount has
 // reached zero are safe with respect to the library itself.
-// The Handle's reference count tracks the number of alive Context and Subcontext instances.
 type Handle struct {
 	// Lock-less reference counter avoiding blocking calls to the [Handle.Close]
 	// method while WAF [Context]s are still using the WAF handle. Instead, we let
