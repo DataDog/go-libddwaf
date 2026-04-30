@@ -76,7 +76,20 @@ func (timer *nodeTimer) NewLeaf(name Key, options ...Option) (Timer, error) {
 	}, nil
 }
 
+var defaultLeafConfig = newConfig()
+
 func (timer *nodeTimer) MustLeaf(name Key, options ...Option) Timer {
+	if len(options) == 0 {
+		if _, ok := timer.lookup[name]; !ok {
+			panic(fmt.Sprintf("MustLeaf: component %s not found", name))
+		}
+		return &baseTimer{
+			clock:         timer.clock,
+			config:        defaultLeafConfig,
+			componentName: name,
+			parent:        timer,
+		}
+	}
 	leaf, err := timer.NewLeaf(name, options...)
 	if err != nil {
 		panic(err)
