@@ -18,6 +18,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSiblingSubcontextParallelismTarget(t *testing.T) {
+	require.True(t, meetsSiblingSubcontextSpeedupTarget(1.4))
+	require.True(t, meetsSiblingSubcontextSpeedupTarget(2.0))
+	require.False(t, meetsSiblingSubcontextSpeedupTarget(1.39))
+	require.False(t, meetsSiblingSubcontextSpeedupTarget(1.0))
+}
+
+func meetsSiblingSubcontextSpeedupTarget(ratio float64) bool {
+	return ratio >= 1.4
+	}
+
 func TestSiblingSubcontextParallelismSpeedup(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
@@ -50,8 +61,12 @@ func TestSiblingSubcontextParallelismSpeedup(t *testing.T) {
 	})
 
 	data := RunAddressData{Data: map[string]any{
-		"server.request.headers.no_cookies": map[string]string{
-			"user-agent": "Arachni/test",
+		"server.request.headers.no_cookies": map[string][]string{
+			"user-agent":      {"Arachni/test", "curl/8.0"},
+			"accept":          {"application/json", "text/html", "*/*"},
+			"accept-encoding": {"gzip", "deflate", "br"},
+			"x-forwarded-for": {"1.2.3.4", "5.6.7.8", "9.10.11.12", "13.14.15.16"},
+			"x-custom":        {"a", "b", "c", "d", "e", "f", "g", "h"},
 		},
 	}}
 
@@ -90,10 +105,6 @@ func TestSiblingSubcontextParallelismSpeedup(t *testing.T) {
 
 	ratio := float64(serializedTime) / float64(parallelTime)
 	t.Logf("n=%d iterations=%d serialized=%v parallel=%v ratio=%.2fx", n, iterations, serializedTime, parallelTime, ratio)
-
-	if ratio < 1.4 {
-		t.Logf("NOTE: ratio %.2fx below 1.4x target — goroutine scheduling overhead dominates on fast machines; see BenchmarkSiblingSubcontext* for throughput numbers", ratio)
-	}
-	require.Greater(t, ratio, 0.5,
-		"parallel execution must not be more than 2x slower than serialized (ratio=%.2f): scheduling overhead is too high", ratio)
+	require.True(t, meetsSiblingSubcontextSpeedupTarget(ratio),
+		"expected ≥1.4x speedup (ratio=%.2f): serialized=%v parallel=%v", ratio, serializedTime, parallelTime)
 }
