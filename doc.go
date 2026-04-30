@@ -11,6 +11,7 @@
 //   - [Builder]: constructs a [Handle] from one or more ruleset fragments.
 //   - [Handle]: holds a compiled ruleset; creates per-request [Context]s.
 //   - [Context]: evaluates input data against the ruleset.
+//   - [Subcontext]: scopes ephemeral data to a shorter lifetime within a [Context].
 //
 // A typical usage pattern:
 //
@@ -25,6 +26,9 @@
 //	if err != nil { /* handle */ }
 //	defer ctx.Close()
 //	result, err := ctx.Run(context.Background(), libddwaf.RunAddressData{Data: input})
+//	subCtx, err := ctx.NewSubcontext(context.Background())
+//	// ...
+//	result, err = subCtx.Run(context.Background(), libddwaf.RunAddressData{Data: ephemeral})
 //
 // For supported platforms, loading mechanics, and CGO/purego trade-offs, see
 // the repository README.
