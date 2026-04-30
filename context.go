@@ -29,25 +29,22 @@ const (
 	DecodeTimeKey timer.Key = "decode"
 )
 
-// Context is a root WAF execution context. It owns the underlying ddwaf_context
-// and allows running the WAF incrementally as new address data becomes available.
-// Each request should have its own Context, created via [Handle.NewContext].
+// Context is a WAF execution context. It allows running the WAF incrementally when calling it
+// multiple times to run its rules every time new addresses become available. Each request must have
+// its own [Context]. New [Context] instances can be created by calling
+// [Handle.NewContext].
 //
-// Subcontexts can be created via [Context.NewSubcontext] to scope ephemeral data
-// to a shorter lifetime.
+// Subcontexts can be created via [Context.NewSubcontext]. Data passed to a subcontext is stored
+// and persists across multiple calls to Run on that subcontext, until the subcontext is closed.
 //
 // # Concurrency
 //
-// Context.Run may be called from multiple goroutines; same-Context calls serialize
-// internally. Context.Run may run concurrently with Subcontext.Run calls from
-// subcontexts of the same parent.
+// Context.Run may be called concurrently; same-Context Run calls serialize
+// internally via a per-instance mutex. Context.Run may run concurrently with
+// Subcontext.Run calls under the same Context.
 //
-// Context.Close waits for all in-flight Run, NewSubcontext, and Subcontext.Close
-// operations to complete before destroying the underlying ddwaf_context.
-//
-// Subcontext.Close should be called before its parent's Close for clean teardown.
-// If the parent is already closed, Subcontext.Close is still safe (skips the
-// underlying destroy).
+// Context.Close waits for all in-flight Run and NewSubcontext operations to
+// complete before destroying the underlying ddwaf_context.
 type Context struct {
 	// Timer registers the time spent in the WAF and go-libddwaf. It is created alongside the Context using the options
 	// passed in to NewContext. Once its time budget is exhausted, each new call to Context.Run will return a timeout error.
