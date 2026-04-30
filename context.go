@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/internal/pin"
@@ -98,25 +97,7 @@ func (d RunAddressData) isEmpty() bool {
 
 // newTimer creates a new timer for this run. If the TimerKey is empty, a new timer without taking the parent into account is created.
 func (d RunAddressData) newTimer(parent timer.NodeTimer) (timer.NodeTimer, error) {
-	if d.TimerKey == "" {
-		return timer.NewTreeTimer(
-			timer.WithComponents(
-				EncodeTimeKey,
-				DurationTimeKey,
-				DecodeTimeKey,
-			),
-			timer.WithBudget(parent.SumRemaining()),
-		)
-	}
-
-	return parent.NewNode(d.TimerKey,
-		timer.WithComponents(
-			EncodeTimeKey,
-			DurationTimeKey,
-			DecodeTimeKey,
-		),
-		timer.WithInheritedSumBudget(),
-	)
+	return newRunTimer(parent, d.TimerKey)
 }
 
 func (context *Context) isSubcontext() bool {
@@ -386,29 +367,15 @@ func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
 //
 // The caller must hold context.mutex.
 func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[string]any, timer timer.Timer) (*WAFObject, error) {
-	if addressData == nil {
-		return nil, nil
-	}
-
-	encoder, err := newEncoder(newEncoderConfig(pinner, WithTimer(timer)))
+	data, truncations, err := encodeAddressData(pinner, addressData, timer)
 	if err != nil {
-		return nil, fmt.Errorf("could not create encoder: %w", err)
+		return nil, err
 	}
-
-	data, err := encoder.Encode(addressData)
-	if err != nil && !errors.Is(err, waferrors.ErrTimeout) {
-		return nil, fmt.Errorf("failed to encode address data: %w", err)
-	}
-	if len(encoder.truncations) > 0 {
+	if len(truncations) > 0 {
 		context.truncationsMu.Lock()
-		context.truncations = merge(context.truncations, encoder.truncations)
+		context.truncations = merge(context.truncations, truncations)
 		context.truncationsMu.Unlock()
 	}
-
-	if timer.Exhausted() {
-		return nil, waferrors.ErrTimeout
-	}
-
 	return data, nil
 }
 
@@ -422,20 +389,7 @@ func (context *Context) run(ctx context.Context, data *WAFObject, runTimer timer
 	pinner.Pin(result.raw())
 	defer wafBindings.Lib.ObjectDestroy(result.raw(), wafBindings.Lib.DefaultAllocator())
 
-	timeoutDuration := runTimer.SumRemaining()
-	if deadline, ok := ctx.Deadline(); ok {
-		ctxRemaining := time.Until(deadline)
-		if ctxRemaining < timeoutDuration || timeoutDuration == timer.UnlimitedBudget {
-			timeoutDuration = ctxRemaining
-		}
-	}
-	if timeoutDuration < 0 {
-		timeoutDuration = 0
-	}
-
-	// The value of the timeout cannot exceed 2^55 - 1 (55 bits)
-	// cf. https://en.cppreference.com/w/cpp/chrono/duration
-	timeout := uint64(timeoutDuration.Microseconds()) & 0x007FFFFFFFFFFFFF
+	timeout := effectiveTimeoutMicros(ctx, runTimer)
 	cContext := context.root.cContext
 	var ret wafBindings.WAFReturnCode
 	if context.isSubcontext() {
@@ -444,19 +398,7 @@ func (context *Context) run(ctx context.Context, data *WAFObject, runTimer timer
 		ret = wafBindings.Lib.ContextEval(cContext, data.raw(), 0, result.raw(), timeout)
 	}
 
-	decodeTimer := runTimer.MustLeaf(DecodeTimeKey)
-	decodeTimer.Start()
-	defer decodeTimer.Stop()
-
-	res, duration, err := unwrapWafResult(ret, &result)
-	runTimer.AddTime(DurationTimeKey, duration)
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return res, ctxErr
-	}
-	if runTimer.SumExhausted() {
-		return res, waferrors.ErrTimeout
-	}
-	return res, err
+	return decodeWafResult(ctx, ret, &result, runTimer)
 }
 
 // Close disposes of the underlying context or subcontext.
