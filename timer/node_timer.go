@@ -76,7 +76,20 @@ func (timer *nodeTimer) NewLeaf(name Key, options ...Option) (Timer, error) {
 	}, nil
 }
 
+var defaultLeafConfig = newConfig()
+
 func (timer *nodeTimer) MustLeaf(name Key, options ...Option) Timer {
+	if len(options) == 0 {
+		if _, ok := timer.lookup[name]; !ok {
+			panic(fmt.Sprintf("MustLeaf: component %s not found", name))
+		}
+		return &baseTimer{
+			clock:         timer.clock,
+			config:        defaultLeafConfig,
+			componentName: name,
+			parent:        timer,
+		}
+	}
 	leaf, err := timer.NewLeaf(name, options...)
 	if err != nil {
 		panic(err)
@@ -101,11 +114,22 @@ func (timer *nodeTimer) AddTime(name Key, duration time.Duration) {
 
 func (timer *nodeTimer) Stats() map[Key]time.Duration {
 	stats := make(map[Key]time.Duration, len(timer.lookup))
-	for name, component := range timer.lookup {
-		stats[name] = time.Duration(component.Load())
-	}
-
+	timer.StatsInto(stats)
 	return stats
+}
+
+func (timer *nodeTimer) StatsInto(dst map[Key]time.Duration) {
+	for name, component := range timer.lookup {
+		dst[name] = time.Duration(component.Load())
+	}
+}
+
+func (timer *nodeTimer) ComponentKeys() []Key {
+	keys := make([]Key, 0, len(timer.lookup))
+	for k := range timer.lookup {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func (timer *nodeTimer) SumSpent() time.Duration {

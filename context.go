@@ -117,10 +117,10 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 		return nil, errors.New("failed to create subcontext: ddwaf_subcontext_init returned null")
 	}
 
-	parentStats := context.Timer.Stats()
-	seen := make(map[timer.Key]struct{}, len(parentStats)+3)
-	components := make([]timer.Key, 0, len(parentStats)+3)
-	for k := range parentStats {
+	parentKeys := context.Timer.ComponentKeys()
+	seen := make(map[timer.Key]struct{}, len(parentKeys)+3)
+	components := make([]timer.Key, 0, len(parentKeys)+3)
+	for _, k := range parentKeys {
 		seen[k] = struct{}{}
 		components = append(components, k)
 	}
