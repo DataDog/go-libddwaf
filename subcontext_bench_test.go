@@ -106,3 +106,59 @@ func BenchmarkSiblingSubcontextSerialized(b *testing.B) {
 		_, _ = subCtxs[i%n].Run(context.Background(), data)
 	}
 }
+
+func BenchmarkContextRun(b *testing.B) {
+	waf, _, err := newDefaultHandle(b, newArachniTestRule(b, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { ctx.Close() })
+
+	data := RunAddressData{Data: map[string]any{
+		"server.request.headers.no_cookies": map[string]string{
+			"user-agent": "Arachni/test",
+		},
+	}}
+
+	b.ResetTimer()
+	for range b.N {
+		_, _ = ctx.Run(context.Background(), data)
+	}
+}
+
+func BenchmarkSubcontextRun(b *testing.B) {
+	waf, _, err := newDefaultHandle(b, newArachniTestRule(b, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { ctx.Close() })
+
+	subCtx, err := ctx.NewSubcontext(context.Background())
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { subCtx.Close() })
+
+	data := RunAddressData{Data: map[string]any{
+		"server.request.headers.no_cookies": map[string]string{
+			"user-agent": "Arachni/test",
+		},
+	}}
+
+	b.ResetTimer()
+	for range b.N {
+		_, _ = subCtx.Run(context.Background(), data)
+	}
+}
