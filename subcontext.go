@@ -5,11 +5,139 @@
 
 package libddwaf
 
+import (
+	"context"
+	"fmt"
+	"maps"
+	"runtime"
+	"sync"
+	"sync/atomic"
+
+	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/pin"
+	"github.com/DataDog/go-libddwaf/v5/timer"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
+)
+
+// Lock order: Subcontext.mu MUST be acquired before parent.Context.mu. Never reverse.
+
 // Subcontext is a derived ephemeral evaluation scope. Spawned via Context.NewSubcontext.
-//
-// Transitional implementation: embeds *Context so existing methods
-// (Run, Close, Truncations) are promoted. A later task replaces the embed
-// with explicit fields and methods.
 type Subcontext struct {
-	*Context
+	Timer         timer.NodeTimer
+	parent        *Context
+	closedHint    atomic.Bool
+	mu            sync.Mutex
+	cSub          wafBindings.WAFSubcontext
+	truncationsMu sync.RWMutex
+	truncations   map[TruncationReason][]int
+	pinner        pin.ConcurrentPinner
+}
+
+// NewSubcontext creates a sibling subcontext from the shared parent context.
+func (s *Subcontext) NewSubcontext(ctx context.Context) (*Subcontext, error) {
+	return s.parent.NewSubcontext(ctx)
+}
+
+// Run encodes the given [RunAddressData] values and runs them against the WAF rules.
+func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res Result, err error) {
+	if ctx == nil {
+		return Result{}, fmt.Errorf("Subcontext.Run: %w", waferrors.ErrNilContext)
+	}
+
+	if addressData.isEmpty() {
+		if s.closedHint.Load() || s.parent.closedHint.Load() {
+			return Result{}, waferrors.ErrContextClosed
+		}
+		return Result{}, nil
+	}
+
+	if s.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
+
+	if s.Timer.SumExhausted() {
+		return Result{}, waferrors.ErrTimeout
+	}
+
+	runTimer, err := newRunTimer(s.Timer, addressData.TimerKey)
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { res.TimerStats = runTimer.Stats() }()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
+
+	s.parent.mu.Lock()
+	if s.parent.closedHint.Load() {
+		s.parent.mu.Unlock()
+		return Result{}, waferrors.ErrContextClosed
+	}
+	s.parent.evalsInFlight.Add(1)
+	s.parent.mu.Unlock()
+	defer s.parent.evalsInFlight.Done()
+
+	runTimer.Start()
+	defer runTimer.Stop()
+
+	wafEncodeTimer := runTimer.MustLeaf(EncodeTimeKey)
+	wafEncodeTimer.Start()
+	data, truncations, err := encodeAddressData(&s.pinner, addressData.Data, wafEncodeTimer)
+	wafEncodeTimer.Stop()
+	if err != nil {
+		return Result{}, err
+	}
+	if len(truncations) > 0 {
+		s.truncationsMu.Lock()
+		s.truncations = merge(s.truncations, truncations)
+		s.truncationsMu.Unlock()
+	}
+
+	if runTimer.SumExhausted() {
+		return Result{}, waferrors.ErrTimeout
+	}
+	timeout := effectiveTimeoutMicros(ctx, runTimer)
+
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	result := newWAFObject()
+	pinner.Pin(result.raw())
+	defer wafBindings.Lib.ObjectDestroy(result.raw(), wafBindings.Lib.DefaultAllocator())
+
+	ret := wafBindings.Lib.SubcontextEval(s.cSub, data.raw(), 0, result.raw(), timeout)
+
+	return decodeWafResult(ctx, ret, &result, runTimer)
+}
+
+// Close disposes of the underlying subcontext.
+func (s *Subcontext) Close() {
+	if !s.closedHint.CompareAndSwap(false, true) {
+		return
+	}
+
+	s.mu.Lock()
+	_ = s.cSub
+	s.mu.Unlock()
+
+	s.parent.mu.Lock()
+	if !s.parent.closedHint.Load() && s.cSub != 0 {
+		wafBindings.Lib.SubcontextDestroy(s.cSub)
+	}
+	s.parent.mu.Unlock()
+	s.cSub = 0
+
+	s.pinner.Close()
+
+	s.parent.handle.Close()
+}
+
+// Truncations returns the truncations that occurred while encoding address data for WAF execution.
+func (s *Subcontext) Truncations() map[TruncationReason][]int {
+	s.truncationsMu.RLock()
+	defer s.truncationsMu.RUnlock()
+	return maps.Clone(s.truncations)
 }
