@@ -102,22 +102,24 @@ For the upstream libddwaf v2 migration details and release notes, prefer the can
 - https://github.com/DataDog/libddwaf/blob/master/docs/upgrading/UPGRADING-v2.0.md
 - https://github.com/DataDog/libddwaf/blob/master/docs/changelog/CHANGELOG-v2.0.0.md
 
-## Upgrading within v5 (Context/Subcontext split)
+## Upgrading within v5
 
-The `Context.Subcontext` method has been replaced by `Context.NewSubcontext`, which returns a dedicated `*Subcontext` type:
+### Context.SubContext → Context.NewSubcontext
+
+`Context.SubContext(ctx) (*Context, error)` has been renamed to `Context.NewSubcontext(ctx) (*Subcontext, error)`.
+
+The returned type is now `*Subcontext` instead of `*Context`. `Subcontext` has its own `Run`, `Close`, and `Truncations` methods.
+
+`Subcontext.NewSubcontext` is not available — only a `Context` can spawn `Subcontext`s. To create a sibling subcontext, call `parentContext.NewSubcontext(...)`.
 
 ```go
 // Before
-subCtx, err := ctx.Subcontext(context.Background())  // returned *Context
+subCtx, err := ctx.SubContext(context.Background())
 
 // After
-subCtx, err := ctx.NewSubcontext(context.Background())  // returns *Subcontext
+subCtx, err := ctx.NewSubcontext(context.Background())
+defer subCtx.Close()
 ```
-
-Key changes:
-- `Subcontext` is its own type with `Run`, `Close`, and `Truncations` methods
-- `Subcontext.NewSubcontext()` is not available — only `Context` can spawn subcontexts
-- Sibling subcontexts from the same parent context can run `Run` concurrently
 
 
 Originally this project only provided CGO wrappers for calls to libddwaf.
@@ -172,18 +174,18 @@ flowchart LR
 
     Context -->|Run| Library
     Subcontext -->|Run| Library
-    Encoder -->|Allocate Waf Objects| runtime.Pinner
+    Encoder -->|Allocate Waf Objects| pin.ConcurrentPinner
 
     Library -->|Call C code| libddwaf
 
     classDef hidden display: none;
 ```
 
-### `runtime.Pinner`
+### `pin.ConcurrentPinner`
 
 When passing Go values to the WAF, it is necessary to make sure that memory remains valid and does
-not move until the WAF no longer has any pointers to it. We do this by using a `runtime.Pinner`.
-Data passed to a root `Context` is added to a `Context`-associated `runtime.Pinner`; while data passed to a Subcontext is added to a per-Subcontext runtime.Pinner whose lifetime spans the Subcontext (released on Subcontext.Close)
+not move until the WAF no longer has any pointers to it. We do this by using a `pin.ConcurrentPinner`.
+Data passed to a root `Context` is added to a `Context`-associated `pin.ConcurrentPinner`; while data passed to a Subcontext is added to a per-Subcontext pin.ConcurrentPinner whose lifetime spans the Subcontext (released on Subcontext.Close)
 
 ### Typical call to Run()
 
