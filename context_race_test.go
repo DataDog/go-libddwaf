@@ -113,6 +113,60 @@ func TestContextCloseWaitsForActiveRun(t *testing.T) {
 	}
 }
 
+func TestNoGoroutineLeaks(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	data := RunAddressData{Data: map[string]any{
+		"server.request.headers.no_cookies": map[string]string{"user-agent": "Arachni/test"},
+	}}
+
+	// Warmup + stabilize goroutine count
+	for i := 0; i < 5; i++ {
+		ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+		subCtx, err := ctx.NewSubcontext(context.Background())
+		require.NoError(t, err)
+		_, _ = subCtx.Run(context.Background(), data)
+		subCtx.Close()
+		_, _ = ctx.Run(context.Background(), data)
+		ctx.Close()
+	}
+	runtime.GC()
+	runtime.GC()
+	time.Sleep(50 * time.Millisecond) // let runtime goroutines settle
+	n0 := runtime.NumGoroutine()
+
+	const iterations = 100
+	for i := 0; i < iterations; i++ {
+		ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+		require.NoError(t, err)
+		_, _ = ctx.Run(context.Background(), data)
+
+		subCtx, err := ctx.NewSubcontext(context.Background())
+		require.NoError(t, err)
+		_, _ = subCtx.Run(context.Background(), data)
+
+		subCtx.Close()
+		ctx.Close()
+	}
+
+	runtime.GC()
+	runtime.GC()
+	runtime.GC()
+	time.Sleep(50 * time.Millisecond)
+	n1 := runtime.NumGoroutine()
+
+	const tolerance = 3
+	if n1 > n0+tolerance {
+		buf := make([]byte, 1<<20)
+		n := runtime.Stack(buf, true)
+		t.Fatalf("goroutine leak: before=%d after=%d (tolerance=%d)\n\ngoroutine dump:\n%s", n0, n1, tolerance, buf[:n])
+	}
+	t.Logf("goroutine count: before=%d after=%d (tolerance=%d)", n0, n1, tolerance)
+}
+
 func TestContextRunClosePinnedPointerLeakRegression(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
