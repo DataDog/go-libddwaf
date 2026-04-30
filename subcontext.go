@@ -33,11 +33,6 @@ type Subcontext struct {
 	pinner        pin.ConcurrentPinner
 }
 
-// NewSubcontext creates a sibling subcontext from the shared parent context.
-func (s *Subcontext) NewSubcontext(ctx context.Context) (*Subcontext, error) {
-	return s.parent.NewSubcontext(ctx)
-}
-
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
 func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res Result, err error) {
 	if ctx == nil {
