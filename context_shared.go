@@ -10,18 +10,17 @@ import (
 )
 
 // RunAddressData provides address data to the [Context.Run] method.
-// When encoding Go structs to the WAF-compatible format, fields with the `ddwaf:"ignore"` tag are
-// ignored and will not be visible to the WAF.
+// Fields tagged `ddwaf:"ignore"` are omitted when encoding Go structs to the WAF-compatible format.
 //
-// Data passed to Run is stored and persists for the lifetime of the context or subcontext.
-// Use NewSubcontext() to scope data to a shorter lifetime.
+// Data passed to Run persists for the lifetime of the context or subcontext.
+// Use NewSubcontext() for shorter-lived data.
 type RunAddressData struct {
-	// Data is the address data to pass to the WAF. Data is stored and persists across multiple
-	// calls to Run until the context or subcontext is closed.
+	// Data is passed to the WAF and persists across multiple calls to Run
+	// until the context or subcontext closes.
 	Data map[string]any
 
-	// TimerKey is the key used to track the time spent in the WAF for this run.
-	// If left empty, a new timer with unlimited budget is started.
+	// TimerKey tracks time spent in the WAF for this run.
+	// Leave it empty to start a new timer with unlimited budget.
 	TimerKey timer.Key
 }
 
