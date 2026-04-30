@@ -111,6 +111,18 @@ type NodeTimer interface {
 	// Stats is thread-safe
 	Stats() map[Key]time.Duration
 
+	// StatsInto writes the time spent in each component into dst, which is
+	// allocated by the caller and reused across calls to avoid per-call map
+	// allocation. Existing entries in dst are overwritten; extra keys are
+	// not removed.
+	// StatsInto is thread-safe
+	StatsInto(dst map[Key]time.Duration)
+
+	// ComponentKeys returns the names of the components registered on this
+	// timer. The returned slice must not be modified by the caller.
+	// ComponentKeys is thread-safe
+	ComponentKeys() []Key
+
 	// childStarted is used to propagate the start of a child timer to the parent timer through the whole tree.
 	childStarted()
 

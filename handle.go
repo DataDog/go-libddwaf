@@ -102,10 +102,9 @@ func (handle *Handle) NewContext(ctx context.Context, timerOptions ...timer.Opti
 	}
 
 	return &Context{
-		handle:      handle,
-		Timer:       rootTimer,
-		cContext:    cContext,
-		truncations: make(map[TruncationReason][]int, numTruncationReasons),
+		handle:   handle,
+		Timer:    rootTimer,
+		cContext: cContext,
 	}, nil
 }
 
