@@ -1,0 +1,62 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/DataDog/go-libddwaf/v5
+cpu: Apple M4 Max
+BenchmarkWAF/Parallel             	   18884	     56987 ns/op	    5478 B/op	     102 allocs/op
+BenchmarkWAF/Parallel             	   20468	     56942 ns/op	    5475 B/op	     102 allocs/op
+BenchmarkWAF/Parallel             	   20583	     56902 ns/op	    5475 B/op	     102 allocs/op
+BenchmarkWAF/Parallel             	   19928	     57160 ns/op	    5476 B/op	     102 allocs/op
+BenchmarkWAF/Parallel             	   20384	     56946 ns/op	    5475 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-4           	   63880	     15712 ns/op	    5458 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-4           	   69147	     14811 ns/op	    5458 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-4           	   69092	     15115 ns/op	    5458 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-4           	   65424	     15474 ns/op	    5458 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-4           	   67236	     15242 ns/op	    5458 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-8           	  117642	      9723 ns/op	    5466 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-8           	  123236	     10161 ns/op	    5466 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-8           	  119409	      9870 ns/op	    5466 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-8           	  119871	      9753 ns/op	    5466 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-8           	  121902	      9874 ns/op	    5466 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-16          	  122731	      9838 ns/op	    5541 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-16          	  121706	      9786 ns/op	    5545 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-16          	  120302	     10007 ns/op	    5549 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-16          	  115694	     10127 ns/op	    5547 B/op	     102 allocs/op
+BenchmarkWAF/Parallel-16          	  116288	     10356 ns/op	    5555 B/op	     102 allocs/op
+BenchmarkNewContextParallel       	  908421	      1290 ns/op	    1601 B/op	      10 allocs/op
+BenchmarkNewContextParallel       	  912975	      1300 ns/op	    1601 B/op	      10 allocs/op
+BenchmarkNewContextParallel       	  906435	      1296 ns/op	    1601 B/op	      10 allocs/op
+BenchmarkNewContextParallel       	  911234	      1291 ns/op	    1601 B/op	      10 allocs/op
+BenchmarkNewContextParallel       	  915753	      1309 ns/op	    1601 B/op	      10 allocs/op
+BenchmarkNewContextParallel-4     	 2051853	       568.7 ns/op	    1602 B/op	      10 allocs/op
+BenchmarkNewContextParallel-4     	 2061091	       569.7 ns/op	    1602 B/op	      10 allocs/op
+BenchmarkNewContextParallel-4     	 2045883	       571.9 ns/op	    1602 B/op	      10 allocs/op
+BenchmarkNewContextParallel-4     	 2023658	       572.7 ns/op	    1602 B/op	      10 allocs/op
+BenchmarkNewContextParallel-4     	 2032687	       572.3 ns/op	    1602 B/op	      10 allocs/op
+BenchmarkNewContextParallel-8     	 1837648	       621.7 ns/op	    1607 B/op	      10 allocs/op
+BenchmarkNewContextParallel-8     	 1887966	       620.8 ns/op	    1607 B/op	      10 allocs/op
+BenchmarkNewContextParallel-8     	 1844312	       620.2 ns/op	    1607 B/op	      10 allocs/op
+BenchmarkNewContextParallel-8     	 1860658	       628.6 ns/op	    1607 B/op	      10 allocs/op
+BenchmarkNewContextParallel-8     	 1852609	       627.6 ns/op	    1607 B/op	      10 allocs/op
+BenchmarkNewContextParallel-16    	 1294868	       919.1 ns/op	    1616 B/op	      10 allocs/op
+BenchmarkNewContextParallel-16    	 1274959	       888.8 ns/op	    1615 B/op	      10 allocs/op
+BenchmarkNewContextParallel-16    	 1300899	       902.3 ns/op	    1616 B/op	      10 allocs/op
+BenchmarkNewContextParallel-16    	 1311187	       889.6 ns/op	    1616 B/op	      10 allocs/op
+BenchmarkNewContextParallel-16    	 1319061	       892.9 ns/op	    1616 B/op	      10 allocs/op
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5	68.329s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/bindings	0.417s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/invariant	0.227s
+?   	github.com/DataDog/go-libddwaf/v5/internal/lib	[no test files]
+?   	github.com/DataDog/go-libddwaf/v5/internal/log	[no test files]
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/pin	0.214s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/ruleset	0.286s
+?   	github.com/DataDog/go-libddwaf/v5/internal/support	[no test files]
+?   	github.com/DataDog/go-libddwaf/v5/internal/unsafeutil	[no test files]
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/timer	0.279s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/waferrors	0.223s
