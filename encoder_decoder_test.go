@@ -314,6 +314,170 @@ func TestEncoder_FastPathEquivalence_Scalar(t *testing.T) {
 	}
 }
 
+func TestEncoder_FastPathEquivalence_SliceAny(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		input []any
+	}{
+		{name: "nil", input: nil},
+		{name: "empty", input: []any{}},
+		{name: "single", input: []any{"hello"}},
+		{name: "multi", input: []any{"hello", int64(42), true, 3.5}},
+		{name: "nested-mixed", input: []any{"root", []any{"child", int64(7), false}, []string{"x", "y"}, []int{1, 2, 3}, []float64{1.25, 2.5}, []bool{true, false}, []any{[]any{"deep"}, nil, []int(nil)}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertSliceFastPathEquivalent(t, tc.input)
+		})
+	}
+}
+
+func TestEncoder_FastPathEquivalence_SliceString(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		input []string
+	}{
+		{name: "nil", input: nil},
+		{name: "empty", input: []string{}},
+		{name: "single", input: []string{"hello"}},
+		{name: "multi", input: []string{"hello", "fast", "path"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertSliceFastPathEquivalent(t, tc.input)
+		})
+	}
+}
+
+func TestEncoder_FastPathEquivalence_SliceInt(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		input []int
+	}{
+		{name: "nil", input: nil},
+		{name: "empty", input: []int{}},
+		{name: "single", input: []int{42}},
+		{name: "multi", input: []int{-7, 0, 12, 99}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertSliceFastPathEquivalent(t, tc.input)
+		})
+	}
+}
+
+func TestEncoder_FastPathEquivalence_SliceFloat64(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		input []float64
+	}{
+		{name: "nil", input: nil},
+		{name: "empty", input: []float64{}},
+		{name: "single", input: []float64{3.5}},
+		{name: "multi", input: []float64{-7.25, 0, 12.5, math.Copysign(0, -1)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertSliceFastPathEquivalent(t, tc.input)
+		})
+	}
+}
+
+func TestEncoder_FastPathEquivalence_SliceBool(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		input []bool
+	}{
+		{name: "nil", input: nil},
+		{name: "empty", input: []bool{}},
+		{name: "single", input: []bool{true}},
+		{name: "multi", input: []bool{true, false, false, true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertSliceFastPathEquivalent(t, tc.input)
+		})
+	}
+}
+
+func assertSliceFastPathEquivalent(t *testing.T, input any) {
+	t.Helper()
+
+	fastPathObj := encodeViaSliceFastPath(t, input)
+	reflectObj := encodeViaReflectValue(t, input)
+	publicObj := encodeViaPublicValue(t, input)
+
+	require.Equal(t, normalizedWAFType(reflectObj.Type()), normalizedWAFType(fastPathObj.Type()))
+	require.Equal(t, normalizedWAFType(reflectObj.Type()), normalizedWAFType(publicObj.Type()))
+
+	reflectDecoded, err := reflectObj.AnyValue()
+	require.NoError(t, err)
+	fastPathDecoded, err := fastPathObj.AnyValue()
+	require.NoError(t, err)
+	publicDecoded, err := publicObj.AnyValue()
+	require.NoError(t, err)
+
+	require.Equal(t, reflectDecoded, fastPathDecoded)
+	require.Equal(t, reflectDecoded, publicDecoded)
+}
+
+func normalizedWAFType(typ bindings.WAFObjectType) bindings.WAFObjectType {
+	if typ == bindings.WAFSmallStringType {
+		return bindings.WAFStringType
+	}
+	return typ
+}
+
+func encodeViaPublicValue(t *testing.T, input any) *WAFObject {
+	t.Helper()
+
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+	require.NoError(t, err)
+
+	obj, err := encoder.Encode(input)
+	require.NoError(t, err)
+	return obj
+}
+
+func encodeViaReflectValue(t *testing.T, input any) *WAFObject {
+	t.Helper()
+
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+	require.NoError(t, err)
+
+	var obj WAFObject
+	err = encoder.encode(reflect.ValueOf(input), &obj, encoder.enc.Config.maxObjectDepth())
+	require.NoError(t, err)
+	return &obj
+}
+
+func encodeViaSliceFastPath(t *testing.T, input any) *WAFObject {
+	t.Helper()
+
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+	require.NoError(t, err)
+
+	var obj WAFObject
+	handled, err := encoder.tryEncodeTypedSliceFastPath(input, &obj, encoder.enc.Config.maxObjectDepth())
+	require.True(t, handled, "expected typed slice fast path to handle %T", input)
+	require.NoError(t, err)
+	return &obj
+}
+
 func TestNewEncoderConfig(t *testing.T) {
 	t.Run("defaults", func(t *testing.T) {
 		var pinner runtime.Pinner
