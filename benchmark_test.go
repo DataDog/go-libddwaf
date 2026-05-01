@@ -10,6 +10,7 @@ package libddwaf
 import (
 	stdcontext "context"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -341,6 +342,141 @@ func BenchmarkWAF(b *testing.B) {
 				b.Fatal(err)
 			}
 			subCtx.Close()
+		}
+	})
+}
+
+// BenchmarkNewContextOnly measures Handle.NewContext in isolation.
+// Close is excluded from the timed region via StopTimer/StartTimer.
+func BenchmarkNewContextOnly(b *testing.B) {
+	handle := benchRecommendedHandle(b)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		ctx, err := handle.NewContext(stdcontext.Background(), timer.WithBudget(time.Second))
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		ctx.Close()
+		b.StartTimer()
+	}
+}
+
+// BenchmarkContextCloseOnly measures Context.Close in isolation.
+// NewContext is excluded from the timed region.
+func BenchmarkContextCloseOnly(b *testing.B) {
+	handle := benchRecommendedHandle(b)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		b.StopTimer()
+		ctx, err := handle.NewContext(stdcontext.Background(), timer.WithBudget(time.Second))
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.StartTimer()
+		ctx.Close()
+	}
+}
+
+// BenchmarkRunOnly measures Context.Run in isolation with the recommended
+// ruleset and benign request data. The context is created once and reused
+// across iterations to isolate Run's cost from NewContext/Close overhead.
+func BenchmarkRunOnly(b *testing.B) {
+	handle := benchRecommendedHandle(b)
+	data := benchBenignRequest()
+
+	ctx, err := handle.NewContext(stdcontext.Background(),
+		timer.WithBudget(time.Second),
+		timer.WithComponents(benchWAFTimerKey))
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { ctx.Close() })
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_, err = ctx.Run(stdcontext.Background(), RunAddressData{
+			Data:     data,
+			TimerKey: benchWAFTimerKey,
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkSubcontextRunOnly measures Subcontext.Run in isolation.
+// Parent context and subcontext are created once and reused.
+func BenchmarkSubcontextRunOnly(b *testing.B) {
+	handle := benchRecommendedHandle(b)
+	persistentData := benchBenignRequest()
+	ephemeralData := map[string]any{
+		"server.request.body": "some ephemeral body content to evaluate",
+	}
+
+	ctx, err := handle.NewContext(stdcontext.Background(), timer.WithUnlimitedBudget())
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { ctx.Close() })
+
+	_, err = ctx.Run(stdcontext.Background(), RunAddressData{Data: persistentData})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	subCtx, err := ctx.NewSubcontext(stdcontext.Background())
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { subCtx.Close() })
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_, err = subCtx.Run(stdcontext.Background(), RunAddressData{Data: ephemeralData})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkColdStart forces a GC before each iteration to drain sync.Pool.
+// This validates that optimizations are robust under GC pressure and measures
+// the worst-case allocation path when pools are empty.
+func BenchmarkColdStart(b *testing.B) {
+	handle := benchRecommendedHandle(b)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		runtime.GC()
+		ctx, err := handle.NewContext(stdcontext.Background(), timer.WithBudget(time.Second))
+		if err != nil {
+			b.Fatal(err)
+		}
+		ctx.Close()
+	}
+}
+
+// BenchmarkNewContextParallel measures NewContext+Close under parallel
+// goroutine pressure. Run with -cpu=1,4,8,16 to assess per-core scaling.
+func BenchmarkNewContextParallel(b *testing.B) {
+	handle := benchRecommendedHandle(b)
+
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			ctx, err := handle.NewContext(stdcontext.Background(), timer.WithBudget(time.Second))
+			if err != nil {
+				b.Fatal(err)
+			}
+			ctx.Close()
 		}
 	})
 }
