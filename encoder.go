@@ -241,6 +241,10 @@ func (encoder *encoder) Encode(data any) (*WAFObject, error) {
 		return &obj, nil
 	}
 
+	if handled, err := encoder.tryEncodeTypedSliceFastPath(data, &obj, encoder.enc.Config.maxObjectDepth()); handled {
+		return &obj, err
+	}
+
 	value := reflect.ValueOf(data)
 
 	err := encoder.encode(value, &obj, encoder.enc.Config.maxObjectDepth())
@@ -251,6 +255,181 @@ func (encoder *encoder) Encode(data any) (*WAFObject, error) {
 	}
 
 	return &obj, err
+}
+
+func (encoder *encoder) tryEncodeTypedSliceFastPath(data any, obj *WAFObject, depth int) (bool, error) {
+	switch v := data.(type) {
+	case []any:
+		if v == nil {
+			obj.SetNil()
+			return true, nil
+		}
+		return true, encoder.encodeTypedAnySliceFastPath(v, obj, depth)
+	case []string:
+		if v == nil {
+			obj.SetNil()
+			return true, nil
+		}
+		return true, encoder.encodeTypedStringSliceFastPath(v, obj, depth)
+	case []int:
+		if v == nil {
+			obj.SetNil()
+			return true, nil
+		}
+		return true, encoder.encodeTypedIntSliceFastPath(v, obj, depth)
+	case []float64:
+		if v == nil {
+			obj.SetNil()
+			return true, nil
+		}
+		return true, encoder.encodeTypedFloat64SliceFastPath(v, obj, depth)
+	case []bool:
+		if v == nil {
+			obj.SetNil()
+			return true, nil
+		}
+		return true, encoder.encodeTypedBoolSliceFastPath(v, obj, depth)
+	default:
+		return false, nil
+	}
+}
+
+func (encoder *encoder) beginTypedSliceFastPath(obj *WAFObject, length int, depth int) (*ArrayBuilder, error) {
+	if encoder.enc.Timeout() {
+		return nil, waferrors.ErrTimeout
+	}
+	if depth <= 0 {
+		encoder.enc.Truncations.Record(ObjectTooDeep, -1)
+		return nil, waferrors.ErrMaxDepthExceeded
+	}
+	return encoder.enc.Array(obj, length), nil
+}
+
+func (encoder *encoder) encodeTypedAnySliceFastPath(values []any, obj *WAFObject, depth int) error {
+	ab, err := encoder.beginTypedSliceFastPath(obj, len(values), depth)
+	if err != nil {
+		return err
+	}
+	defer ab.Close()
+
+	for _, value := range values {
+		if encoder.enc.Timeout() {
+			return nil
+		}
+
+		slot := ab.NextValue()
+		if slot == nil {
+			ab.Skip()
+			continue
+		}
+
+		if err := encoder.encode(reflect.ValueOf(value), slot, depth-1); err != nil {
+			ab.DropLast()
+			continue
+		}
+
+		if slot.IsUnusable() {
+			ab.DropLast()
+		}
+	}
+
+	return nil
+}
+
+func (encoder *encoder) encodeTypedStringSliceFastPath(values []string, obj *WAFObject, depth int) error {
+	ab, err := encoder.beginTypedSliceFastPath(obj, len(values), depth)
+	if err != nil {
+		return err
+	}
+	defer ab.Close()
+
+	for _, value := range values {
+		if encoder.enc.Timeout() {
+			return nil
+		}
+
+		slot := ab.NextValue()
+		if slot == nil {
+			ab.Skip()
+			continue
+		}
+
+		encoder.enc.WriteString(slot, value)
+	}
+
+	return nil
+}
+
+func (encoder *encoder) encodeTypedIntSliceFastPath(values []int, obj *WAFObject, depth int) error {
+	ab, err := encoder.beginTypedSliceFastPath(obj, len(values), depth)
+	if err != nil {
+		return err
+	}
+	defer ab.Close()
+
+	for _, value := range values {
+		if encoder.enc.Timeout() {
+			return nil
+		}
+
+		slot := ab.NextValue()
+		if slot == nil {
+			ab.Skip()
+			continue
+		}
+
+		slot.SetInt(int64(value))
+	}
+
+	return nil
+}
+
+func (encoder *encoder) encodeTypedFloat64SliceFastPath(values []float64, obj *WAFObject, depth int) error {
+	ab, err := encoder.beginTypedSliceFastPath(obj, len(values), depth)
+	if err != nil {
+		return err
+	}
+	defer ab.Close()
+
+	for _, value := range values {
+		if encoder.enc.Timeout() {
+			return nil
+		}
+
+		slot := ab.NextValue()
+		if slot == nil {
+			ab.Skip()
+			continue
+		}
+
+		slot.SetFloat(value)
+	}
+
+	return nil
+}
+
+func (encoder *encoder) encodeTypedBoolSliceFastPath(values []bool, obj *WAFObject, depth int) error {
+	ab, err := encoder.beginTypedSliceFastPath(obj, len(values), depth)
+	if err != nil {
+		return err
+	}
+	defer ab.Close()
+
+	for _, value := range values {
+		if encoder.enc.Timeout() {
+			return nil
+		}
+
+		slot := ab.NextValue()
+		if slot == nil {
+			ab.Skip()
+			continue
+		}
+
+		slot.SetBool(value)
+	}
+
+	return nil
 }
 
 var (
