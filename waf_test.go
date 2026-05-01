@@ -419,6 +419,47 @@ func TestTimeout(t *testing.T) {
 	})
 }
 
+func TestRun_TimerPoolReuse(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(time.Hour), timer.WithComponents("waf"))
+	require.NoError(t, err)
+	t.Cleanup(func() { ctx.Close() })
+
+	for range 10 {
+		_, err = ctx.Run(stdcontext.Background(), RunAddressData{
+			Data:     map[string]any{"my.input": "Arachni"},
+			TimerKey: "waf",
+		})
+		require.NoError(t, err)
+	}
+}
+
+func TestContextTimerAliasAfterClose(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(stdcontext.Background(), timer.WithBudget(time.Hour), timer.WithComponents("waf"))
+	require.NoError(t, err)
+
+	alias := ctx.Timer
+	_, err = ctx.Run(stdcontext.Background(), RunAddressData{
+		Data:     map[string]any{"my.input": "Arachni"},
+		TimerKey: "waf",
+	})
+	require.NoError(t, err)
+
+	before := alias.Stats()
+	ctx.Close()
+	require.Equal(t, before, alias.Stats())
+	require.Equal(t, before["waf"], alias.SumSpent())
+	_, err = alias.NewNode("waf", timer.WithComponents("child"))
+	require.Error(t, err)
+}
+
 func TestRunContext(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
 	require.NoError(t, err)

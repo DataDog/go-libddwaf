@@ -60,6 +60,13 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 		return Result{}, waferrors.ErrContextClosed
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
+
 	if s.Timer.SumExhausted() {
 		return Result{}, waferrors.ErrTimeout
 	}
@@ -68,14 +75,8 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	if err != nil {
 		return Result{}, err
 	}
+	defer timer.PutNodeTimer(runTimer)
 	defer func() { res.TimerStats = runTimer.Stats() }()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closedHint.Load() {
-		return Result{}, waferrors.ErrContextClosed
-	}
 
 	s.parent.mu.Lock()
 	if s.parent.closedHint.Load() {
@@ -132,6 +133,8 @@ func (s *Subcontext) Close() {
 	s.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run before pinner close
 
 	s.parent.mu.Lock()
+	// Skip SubcontextDestroy when the parent Context is already closed:
+	// ddwaf_context_destroy transitively destroys all associated subcontexts.
 	if !s.parent.closedHint.Load() && s.cSub != 0 {
 		wafBindings.Lib.SubcontextDestroy(s.cSub)
 	}
@@ -139,6 +142,8 @@ func (s *Subcontext) Close() {
 	s.cSub = 0
 
 	s.pinner.Close()
+	timer.PutNodeTimer(s.Timer)
+	s.Timer = nil
 
 	s.parent.handle.Close()
 }
