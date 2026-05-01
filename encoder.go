@@ -242,6 +242,10 @@ func (encoder *encoder) Encode(data any) (*WAFObject, error) {
 	}
 
 	if handled, err := encoder.tryEncodeTypedSliceFastPath(data, &obj, encoder.enc.Config.maxObjectDepth()); handled {
+		if len(encoder.enc.Truncations.ObjectTooDeep) > 0 && !encoder.enc.Config.Timer.Exhausted() {
+			depth, _ := depthOf(encoder.enc.Config.Timer, reflect.ValueOf(data))
+			encoder.enc.Truncations.ObjectTooDeep = []int{depth}
+		}
 		return &obj, err
 	}
 

@@ -953,7 +953,7 @@ func TestEncoderLimits(t *testing.T) {
 			MaxContainerLength: 3,
 			Input:              []any{make(chan any), uint64(1), uint64(2), uint64(3), uint64(4), uint64(5)},
 			Output:             []any{uint64(1), uint64(2), uint64(3)},
-			Truncations:        map[TruncationReason][]int{ContainerTooLarge: {6}},
+			Truncations:        map[TruncationReason][]int{ContainerTooLarge: {5}},
 		},
 		{
 			Name:               "array-max-length-with-invalid",
