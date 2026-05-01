@@ -405,6 +405,44 @@ func TestEncoder_FastPathEquivalence_SliceBool(t *testing.T) {
 	}
 }
 
+func TestEncoder_FastPathEquivalence_MapStringString(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		input map[string]string
+	}{
+		{name: "nil", input: nil},
+		{name: "empty", input: map[string]string{}},
+		{name: "single", input: map[string]string{"hello": "waf"}},
+		{name: "multi", input: map[string]string{"alpha": "one", "beta": "two", "gamma": "three"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertMapFastPathEquivalent(t, tc.input)
+		})
+	}
+}
+
+func TestEncoder_FastPathEquivalence_MapStringStringSlice(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		input map[string][]string
+	}{
+		{name: "nil", input: nil},
+		{name: "empty", input: map[string][]string{}},
+		{name: "single", input: map[string][]string{"hello": {"waf"}}},
+		{name: "empty-slice-value", input: map[string][]string{"empty": {}}},
+		{name: "nil-slice-value", input: map[string][]string{"nil": nil}},
+		{name: "multi", input: map[string][]string{"alpha": {"one", "two"}, "beta": {}, "gamma": nil, "delta": {"three"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertMapFastPathEquivalent(t, tc.input)
+		})
+	}
+}
+
 func assertSliceFastPathEquivalent(t *testing.T, input any) {
 	t.Helper()
 
@@ -476,6 +514,91 @@ func encodeViaSliceFastPath(t *testing.T, input any) *WAFObject {
 	require.True(t, handled, "expected typed slice fast path to handle %T", input)
 	require.NoError(t, err)
 	return &obj
+}
+
+func assertMapFastPathEquivalent(t *testing.T, input any) {
+	t.Helper()
+
+	fastPathObj := encodeViaMapFastPath(t, input)
+	reflectObj := encodeViaReflectValue(t, input)
+	publicObj := encodeViaPublicValue(t, input)
+
+	require.Equal(t, normalizedObjectSnapshot(reflectObj), normalizedObjectSnapshot(fastPathObj))
+	require.Equal(t, normalizedObjectSnapshot(reflectObj), normalizedObjectSnapshot(publicObj))
+}
+
+func encodeViaMapFastPath(t *testing.T, input any) *WAFObject {
+	t.Helper()
+
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+	require.NoError(t, err)
+
+	var obj WAFObject
+	handled, err := encoder.tryEncodeTypedMapFastPath(input, &obj, encoder.enc.Config.maxObjectDepth())
+	require.True(t, handled, "expected typed map fast path to handle %T", input)
+	require.NoError(t, err)
+	return &obj
+}
+
+type normalizedObject struct {
+	Type    bindings.WAFObjectType
+	String  string
+	Bool    bool
+	Int     int64
+	Uint    uint64
+	Float   float64
+	Array   []normalizedObject
+	Map     []normalizedMapEntry
+	Invalid bool
+}
+
+type normalizedMapEntry struct {
+	Key   string
+	Value normalizedObject
+}
+
+func normalizedObjectSnapshot(obj *WAFObject) normalizedObject {
+	if obj == nil {
+		return normalizedObject{}
+	}
+
+	snapshot := normalizedObject{Type: normalizedWAFType(obj.Type()), Invalid: obj.IsInvalid()}
+
+	switch snapshot.Type {
+	case WAFNilType, WAFInvalidType:
+		return snapshot
+	case WAFBoolType:
+		snapshot.Bool, _ = obj.BoolValue()
+	case WAFIntType:
+		snapshot.Int, _ = obj.IntValue()
+	case WAFUintType:
+		snapshot.Uint, _ = obj.UIntValue()
+	case WAFFloatType:
+		snapshot.Float, _ = obj.FloatValue()
+	case WAFStringType:
+		snapshot.String, _ = obj.StringValue()
+	case WAFArrayType:
+		items, _ := obj.ArrayValues()
+		snapshot.Array = make([]normalizedObject, len(items))
+		for i := range items {
+			snapshot.Array[i] = normalizedObjectSnapshot(&items[i])
+		}
+	case WAFMapType:
+		entries, _ := obj.MapEntries()
+		snapshot.Map = make([]normalizedMapEntry, len(entries))
+		for i := range entries {
+			key, _ := entries[i].Key.StringValue()
+			snapshot.Map[i] = normalizedMapEntry{Key: key, Value: normalizedObjectSnapshot(&entries[i].Val)}
+		}
+		sort.Slice(snapshot.Map, func(i, j int) bool {
+			return snapshot.Map[i].Key < snapshot.Map[j].Key
+		})
+	}
+
+	return snapshot
 }
 
 func TestNewEncoderConfig(t *testing.T) {
