@@ -79,7 +79,13 @@ func effectiveTimeoutMicros(ctx context.Context, runTimer timer.NodeTimer) uint6
 func decodeWafResult(ctx context.Context, ret wafBindings.WAFReturnCode, result *WAFObject, runTimer timer.NodeTimer) (Result, error) {
 	decodeTimer := runTimer.MustLeaf(DecodeTimeKey)
 	decodeTimer.Start()
-	defer decodeTimer.Stop()
+	defer func() {
+		decodeTimer.Stop()
+		if pooled, ok := decodeTimer.(interface{ ReleaseToPool() }); ok {
+			// Safe after Stop(): childStopped only does an atomic add into the parent's component lookup and retains no leaf reference.
+			pooled.ReleaseToPool()
+		}
+	}()
 
 	res, duration, err := unwrapWafResult(ret, result)
 	runTimer.AddTime(DurationTimeKey, duration)
