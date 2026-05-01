@@ -188,8 +188,60 @@ func (config EncoderConfig) maxObjectDepth() int {
 // Encode converts a Go value into a WAFObject tree.
 // It may return unsupported-value, timeout, max-depth, or too-many-indirections errors.
 func (encoder *encoder) Encode(data any) (*WAFObject, error) {
-	value := reflect.ValueOf(data)
 	var obj WAFObject
+
+	switch v := data.(type) {
+	case nil:
+		obj.SetNil()
+		return &obj, nil
+	case bool:
+		obj.SetBool(v)
+		return &obj, nil
+	case string:
+		encoder.enc.WriteString(&obj, v)
+		return &obj, nil
+	case int:
+		obj.SetInt(int64(v))
+		return &obj, nil
+	case int8:
+		obj.SetInt(int64(v))
+		return &obj, nil
+	case int16:
+		obj.SetInt(int64(v))
+		return &obj, nil
+	case int32:
+		obj.SetInt(int64(v))
+		return &obj, nil
+	case int64:
+		obj.SetInt(v)
+		return &obj, nil
+	case uint:
+		obj.SetUint(uint64(v))
+		return &obj, nil
+	case uint8:
+		obj.SetUint(uint64(v))
+		return &obj, nil
+	case uint16:
+		obj.SetUint(uint64(v))
+		return &obj, nil
+	case uint32:
+		obj.SetUint(uint64(v))
+		return &obj, nil
+	case uint64:
+		obj.SetUint(v)
+		return &obj, nil
+	case float32:
+		obj.SetFloat(float64(v))
+		return &obj, nil
+	case float64:
+		obj.SetFloat(v)
+		return &obj, nil
+	case json.Number:
+		encoder.encodeJSONNumber(v, &obj)
+		return &obj, nil
+	}
+
+	value := reflect.ValueOf(data)
 
 	err := encoder.encode(value, &obj, encoder.enc.Config.maxObjectDepth())
 

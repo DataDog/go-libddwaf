@@ -118,6 +118,202 @@ func TestEncodable(t *testing.T) {
 	})
 }
 
+func TestEncoder_FastPathEquivalence_Scalar(t *testing.T) {
+	encodeViaPublic := func(t *testing.T, input any) *WAFObject {
+		t.Helper()
+
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+		require.NoError(t, err)
+
+		obj, err := encoder.Encode(input)
+		require.NoError(t, err)
+		return obj
+	}
+
+	encodeViaReflect := func(t *testing.T, input any) *WAFObject {
+		t.Helper()
+
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+
+		encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+		require.NoError(t, err)
+
+		var obj WAFObject
+		err = encoder.encode(reflect.ValueOf(input), &obj, encoder.enc.Config.maxObjectDepth())
+		require.NoError(t, err)
+		return &obj
+	}
+
+	assertDecodedValue := func(t *testing.T, input any, obj *WAFObject) {
+		t.Helper()
+
+		switch expected := input.(type) {
+		case nil:
+			require.Equal(t, WAFNilType, obj.Type())
+			decoded, err := obj.AnyValue()
+			require.NoError(t, err)
+			require.Nil(t, decoded)
+		case bool:
+			require.Equal(t, WAFBoolType, obj.Type())
+			decoded, err := obj.BoolValue()
+			require.NoError(t, err)
+			require.Equal(t, expected, decoded)
+		case string:
+			assertEqualType(t, typeTree{_type: WAFStringType}, obj)
+			decoded, err := obj.StringValue()
+			require.NoError(t, err)
+			require.Equal(t, expected, decoded)
+		case int:
+			require.Equal(t, WAFIntType, obj.Type())
+			decoded, err := obj.IntValue()
+			require.NoError(t, err)
+			require.Equal(t, int64(expected), decoded)
+		case int8:
+			require.Equal(t, WAFIntType, obj.Type())
+			decoded, err := obj.IntValue()
+			require.NoError(t, err)
+			require.Equal(t, int64(expected), decoded)
+		case int16:
+			require.Equal(t, WAFIntType, obj.Type())
+			decoded, err := obj.IntValue()
+			require.NoError(t, err)
+			require.Equal(t, int64(expected), decoded)
+		case int32:
+			require.Equal(t, WAFIntType, obj.Type())
+			decoded, err := obj.IntValue()
+			require.NoError(t, err)
+			require.Equal(t, int64(expected), decoded)
+		case int64:
+			require.Equal(t, WAFIntType, obj.Type())
+			decoded, err := obj.IntValue()
+			require.NoError(t, err)
+			require.Equal(t, expected, decoded)
+		case uint:
+			require.Equal(t, WAFUintType, obj.Type())
+			decoded, err := obj.UIntValue()
+			require.NoError(t, err)
+			require.Equal(t, uint64(expected), decoded)
+		case uint8:
+			require.Equal(t, WAFUintType, obj.Type())
+			decoded, err := obj.UIntValue()
+			require.NoError(t, err)
+			require.Equal(t, uint64(expected), decoded)
+		case uint16:
+			require.Equal(t, WAFUintType, obj.Type())
+			decoded, err := obj.UIntValue()
+			require.NoError(t, err)
+			require.Equal(t, uint64(expected), decoded)
+		case uint32:
+			require.Equal(t, WAFUintType, obj.Type())
+			decoded, err := obj.UIntValue()
+			require.NoError(t, err)
+			require.Equal(t, uint64(expected), decoded)
+		case uint64:
+			require.Equal(t, WAFUintType, obj.Type())
+			decoded, err := obj.UIntValue()
+			require.NoError(t, err)
+			require.Equal(t, expected, decoded)
+		case float32:
+			require.Equal(t, WAFFloatType, obj.Type())
+			decoded, err := obj.FloatValue()
+			require.NoError(t, err)
+			if math.IsNaN(float64(expected)) {
+				require.True(t, math.IsNaN(decoded))
+			} else {
+				require.Equal(t, float64(expected), decoded)
+			}
+			if expected == 0 {
+				require.Equal(t, math.Signbit(float64(expected)), math.Signbit(decoded))
+			}
+		case float64:
+			require.Equal(t, WAFFloatType, obj.Type())
+			decoded, err := obj.FloatValue()
+			require.NoError(t, err)
+			if math.IsNaN(expected) {
+				require.True(t, math.IsNaN(decoded))
+			} else {
+				require.Equal(t, expected, decoded)
+			}
+			if expected == 0 {
+				require.Equal(t, math.Signbit(expected), math.Signbit(decoded))
+			}
+		case json.Number:
+			decoded, err := obj.AnyValue()
+			require.NoError(t, err)
+			if i, err := expected.Int64(); err == nil {
+				require.Equal(t, WAFIntType, obj.Type())
+				require.Equal(t, i, decoded)
+				return
+			}
+			if f, err := expected.Float64(); err == nil {
+				require.Equal(t, WAFFloatType, obj.Type())
+				require.Equal(t, f, decoded)
+				return
+			}
+			assertEqualType(t, typeTree{_type: WAFStringType}, obj)
+			require.Equal(t, expected.String(), decoded)
+		default:
+			t.Fatalf("unhandled scalar type %T", input)
+		}
+	}
+
+	for _, tc := range []struct {
+		name  string
+		input any
+	}{
+		{name: "nil", input: nil},
+		{name: "bool-true", input: true},
+		{name: "bool-false", input: false},
+		{name: "string-empty", input: ""},
+		{name: "string", input: "hello, waf"},
+		{name: "int", input: int(-42)},
+		{name: "int8", input: int8(-8)},
+		{name: "int16", input: int16(-16)},
+		{name: "int32", input: int32(-32)},
+		{name: "int64-max", input: int64(math.MaxInt64)},
+		{name: "uint", input: uint(42)},
+		{name: "uint8", input: uint8(8)},
+		{name: "uint16", input: uint16(16)},
+		{name: "uint32", input: uint32(32)},
+		{name: "uint64-max", input: uint64(math.MaxUint64)},
+		{name: "float32", input: float32(3.5)},
+		{name: "float32-nan", input: float32(math.NaN())},
+		{name: "float64", input: 42.25},
+		{name: "float64-negative-zero", input: math.Copysign(0, -1)},
+		{name: "json-number-int", input: json.Number("1234567890")},
+		{name: "json-number-float", input: json.Number("1234567890.42")},
+		{name: "json-number-bogus", input: json.Number("bogus")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			publicObj := encodeViaPublic(t, tc.input)
+			assertDecodedValue(t, tc.input, publicObj)
+
+			if tc.input == nil {
+				return
+			}
+
+			reflectObj := encodeViaReflect(t, tc.input)
+			assertDecodedValue(t, tc.input, reflectObj)
+
+			publicDecoded, err := publicObj.AnyValue()
+			require.NoError(t, err)
+			reflectDecoded, err := reflectObj.AnyValue()
+			require.NoError(t, err)
+
+			assertEqualType(t, typeTree{_type: reflectObj.Type()}, publicObj)
+			if f, ok := publicDecoded.(float64); ok && math.IsNaN(f) {
+				require.True(t, math.IsNaN(reflectDecoded.(float64)))
+				return
+			}
+			require.Equal(t, reflectDecoded, publicDecoded)
+		})
+	}
+}
+
 func TestNewEncoderConfig(t *testing.T) {
 	t.Run("defaults", func(t *testing.T) {
 		var pinner runtime.Pinner
@@ -302,9 +498,9 @@ func TestEncodeDecode(t *testing.T) {
 			Output: map[string]any{},
 		},
 		{
-			Name:        "invalid-interface-value",
-			Input:       nil,
-			EncodeError: waferrors.ErrUnsupportedValue,
+			Name:   "invalid-interface-value",
+			Input:  nil,
+			Output: nilOutput,
 		},
 		{
 			Name:   "nil-str-pointer-value",
@@ -809,9 +1005,9 @@ func TestEncoderTypeTree(t *testing.T) {
 			Output: typeTree{_type: bindings.WAFNilType},
 		},
 		{
-			Name:  "invalid-interface-value",
-			Input: nil,
-			Error: waferrors.ErrUnsupportedValue,
+			Name:   "invalid-interface-value",
+			Input:  nil,
+			Output: typeTree{_type: bindings.WAFNilType},
 		},
 		{
 			Name:   "nil-str-pointer-value",
