@@ -1,0 +1,50 @@
+go: downloading github.com/stretchr/testify v1.10.0
+go: downloading github.com/ebitengine/purego v0.10.0
+go: downloading golang.org/x/sys v0.43.0
+go: downloading gopkg.in/yaml.v3 v3.0.1
+go: downloading github.com/davecgh/go-spew v1.1.1
+go: downloading github.com/pmezard/go-difflib v1.0.0
+goos: linux
+goarch: amd64
+pkg: github.com/DataDog/go-libddwaf/v5
+cpu: VirtualApple @ 2.50GHz
+BenchmarkWAF/RequestResponse-16         	   11155	    105412 ns/op	    6741 B/op	     154 allocs/op
+BenchmarkWAF/RequestResponse-16         	   10000	    102478 ns/op	    6741 B/op	     154 allocs/op
+BenchmarkWAF/Run/SmallRuleset/NoAttack-16         	  105868	     11157 ns/op	    4187 B/op	      98 allocs/op
+BenchmarkWAF/Run/SmallRuleset/NoAttack-16         	  107620	     11186 ns/op	    4187 B/op	      98 allocs/op
+BenchmarkWAF/Run/SmallRuleset/Attack-16           	   81718	     14759 ns/op	    7021 B/op	     170 allocs/op
+BenchmarkWAF/Run/SmallRuleset/Attack-16           	   81064	     14131 ns/op	    7021 B/op	     170 allocs/op
+BenchmarkWAF/Run/RecommendedRuleset/NoAttack-16   	   16089	     74098 ns/op	    4956 B/op	     116 allocs/op
+BenchmarkWAF/Run/RecommendedRuleset/NoAttack-16   	   16344	     73580 ns/op	    4956 B/op	     116 allocs/op
+BenchmarkWAF/Run/RecommendedRuleset/Attack-16     	   15039	     80691 ns/op	   11264 B/op	     296 allocs/op
+BenchmarkWAF/Run/RecommendedRuleset/Attack-16     	   14491	     82942 ns/op	   11264 B/op	     296 allocs/op
+BenchmarkWAF/ContextLifecycle-16                  	  751233	      1594 ns/op	     568 B/op	       8 allocs/op
+BenchmarkWAF/ContextLifecycle-16                  	  750584	      1592 ns/op	     568 B/op	       8 allocs/op
+BenchmarkWAF/DataComplexity/Minimal-16            	   53368	     21120 ns/op	    2562 B/op	      42 allocs/op
+BenchmarkWAF/DataComplexity/Minimal-16            	   57931	     20641 ns/op	    2562 B/op	      42 allocs/op
+BenchmarkWAF/DataComplexity/Realistic-16          	   16186	     74421 ns/op	    4956 B/op	     116 allocs/op
+BenchmarkWAF/DataComplexity/Realistic-16          	   16130	     74435 ns/op	    4956 B/op	     116 allocs/op
+BenchmarkWAF/DataComplexity/Heavy-16              	    1240	    914571 ns/op	   20979 B/op	     512 allocs/op
+BenchmarkWAF/DataComplexity/Heavy-16              	    1336	    921914 ns/op	   20980 B/op	     512 allocs/op
+BenchmarkWAF/Parallel-16                          	   82908	     16518 ns/op	    4920 B/op	     113 allocs/op
+BenchmarkWAF/Parallel-16                          	   82533	     16084 ns/op	    4920 B/op	     113 allocs/op
+BenchmarkWAF/Subcontext-16                        	   32755	     36013 ns/op	    2586 B/op	      40 allocs/op
+BenchmarkWAF/Subcontext-16                        	   34472	     34951 ns/op	    2586 B/op	      40 allocs/op
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5	28.582s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/bindings	0.051s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/invariant	0.038s
+?   	github.com/DataDog/go-libddwaf/v5/internal/lib	[no test files]
+?   	github.com/DataDog/go-libddwaf/v5/internal/log	[no test files]
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/pin	0.036s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/ruleset	0.053s
+?   	github.com/DataDog/go-libddwaf/v5/internal/support	[no test files]
+?   	github.com/DataDog/go-libddwaf/v5/internal/unsafeutil	[no test files]
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/timer	0.052s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/waferrors	0.036s
