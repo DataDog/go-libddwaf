@@ -25,6 +25,37 @@ func TestClockConcurrentNow(t *testing.T) {
 	wg.Wait()
 }
 
+func TestPoolInvariants_Clock(t *testing.T) {
+	cached := newTimeCache()
+	for range 8 {
+		_ = cached.now()
+	}
+
+	stale := time.Now().Add(24 * time.Hour)
+	cached.lastRequest = stale
+	putTimeCache(cached)
+
+	reused := newTimeCache()
+	t.Cleanup(func() {
+		putTimeCache(reused)
+	})
+
+	if !reused.lastRequest.Before(stale) {
+		t.Fatalf("expected pooled clock to reset lastRequest before stale value %v, got %v", stale, reused.lastRequest)
+	}
+
+	start := reused.lastRequest
+	now := reused.now()
+	if now.Before(start) {
+		t.Fatalf("expected now() >= lastRequest after reset, start=%v now=%v", start, now)
+	}
+
+	next := reused.now()
+	if next.Before(now) {
+		t.Fatalf("expected monotonic now() across pooled reuse, previous=%v next=%v", now, next)
+	}
+}
+
 func BenchmarkMostUsedFunctions(b *testing.B) {
 	b.Run("timer.Start()", func(b *testing.B) {
 		var err error
