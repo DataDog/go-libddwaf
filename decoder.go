@@ -250,7 +250,7 @@ func decodeFeature(obj *WAFObject) (*Feature, error) {
 		case "warnings":
 			feature.Warnings, err = decodeErrors(&entry.Val)
 		default:
-			return nil, fmt.Errorf("decodeFeature: %w: unknown field %q", waferrors.ErrUnsupportedValue, key)
+			continue
 		}
 
 		if err != nil {
