@@ -29,6 +29,30 @@ const (
 	DecodeTimeKey timer.Key = "decode"
 )
 
+type pooledContexts struct{ sync.Pool }
+
+func (pool *pooledContexts) Get() any {
+	ctx := pool.Pool.Get().(*Context)
+	ctx.reset()
+	return ctx
+}
+
+var contextPool = pooledContexts{Pool: sync.Pool{
+	New: func() any {
+		return &Context{}
+	},
+}}
+
+func resetTruncationSlice(values []int) []int {
+	if values != nil {
+		clear(values[:cap(values)])
+	}
+	if cap(values) > 32 {
+		return nil
+	}
+	return values[:0]
+}
+
 // Context is a WAF execution context. It allows running the WAF incrementally when calling it
 // multiple times to run its rules every time new addresses become available. Each request must have
 // its own [Context]. New [Context] instances can be created by calling
@@ -67,6 +91,22 @@ type Context struct {
 	// [RunAddressData.Data] until the [Context.Close] method results in the context being
 	// destroyed.
 	pinner pin.ConcurrentPinner
+}
+
+func (context *Context) reset() {
+	context.Timer = nil
+	context.handle = nil
+	context.closedHint.Store(false)
+	context.evalsInFlight = sync.WaitGroup{}
+	context.mu = sync.Mutex{}
+	context.cContext = 0
+	context.truncationsMu = sync.RWMutex{}
+	context.truncations = Truncations{
+		StringTooLong:     resetTruncationSlice(context.truncations.StringTooLong),
+		ContainerTooLarge: resetTruncationSlice(context.truncations.ContainerTooLarge),
+		ObjectTooDeep:     resetTruncationSlice(context.truncations.ObjectTooDeep),
+	}
+	context.pinner = pin.ConcurrentPinner{}
 }
 
 // NewSubcontext creates a subcontext derived from this context.
@@ -158,11 +198,11 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	}
 
 	success = true
-	return &Subcontext{
-		Timer:  timer.WrapOwnedNodeTimer(subTimer),
-		parent: context,
-		cSub:   cSubcontext,
-	}, nil
+	subCtx := subcontextPool.Get().(*Subcontext)
+	subCtx.Timer = timer.WrapOwnedNodeTimer(subTimer)
+	subCtx.parent = context
+	subCtx.cSub = cSubcontext
+	return subCtx, nil
 }
 
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
@@ -255,22 +295,27 @@ func (context *Context) Close() {
 	}
 
 	context.mu.Lock()
-	context.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run/NewSubcontext before waiting for in-flight evals
+	_ = context.cContext
+	context.mu.Unlock()
 
 	context.evalsInFlight.Wait()
 	context.mu.Lock()
-	defer context.mu.Unlock()
+	handle := context.handle
+	cContext := context.cContext
+	timerNode := context.Timer
+	context.cContext = 0
+	context.Timer = nil
+	context.mu.Unlock()
 
-	if context.cContext != 0 {
-		wafBindings.Lib.ContextDestroy(context.cContext)
-		context.cContext = 0
+	if cContext != 0 {
+		wafBindings.Lib.ContextDestroy(cContext)
 	}
 
 	context.pinner.Close()
-	timer.PutNodeTimer(context.Timer)
-	context.Timer = nil
+	timer.PutNodeTimer(timerNode)
 
-	context.handle.Close()
+	handle.Close()
+	contextPool.Put(context)
 }
 
 // Truncations returns the truncations that occurred while encoding address

@@ -101,11 +101,11 @@ func (handle *Handle) NewContext(ctx context.Context, timerOptions ...timer.Opti
 		return nil, fmt.Errorf("failed to create WAF context timer: %w", err)
 	}
 
-	return &Context{
-		handle:   handle,
-		Timer:    timer.WrapOwnedNodeTimer(rootTimer),
-		cContext: cContext,
-	}, nil
+	context := contextPool.Get().(*Context)
+	context.handle = handle
+	context.Timer = timer.WrapOwnedNodeTimer(rootTimer)
+	context.cContext = cContext
+	return context, nil
 }
 
 // Addresses returns the list of addresses the WAF has been configured to monitor based on the input
