@@ -443,6 +443,36 @@ func TestEncoder_FastPathEquivalence_MapStringStringSlice(t *testing.T) {
 	}
 }
 
+func TestEncoder_FastPathEquivalence_MapStringAny(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		input map[string]any
+	}{
+		{name: "nil", input: nil},
+		{name: "empty", input: map[string]any{}},
+		{name: "realistic-waf-request", input: benchBenignRequest()},
+		{name: "mixed-values", input: map[string]any{
+			"string":  "hello",
+			"bool":    true,
+			"int":     int64(42),
+			"float":   3.5,
+			"nil":     nil,
+			"strings": []string{"a", "b"},
+			"nested": map[string]any{
+				"headers": map[string][]string{"accept": {"application/json"}},
+				"path":    map[string]string{"version": "v1"},
+				"payload": []any{"x", int64(7), false, nil},
+			},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertMapFastPathEquivalent(t, tc.input)
+		})
+	}
+}
+
 func assertSliceFastPathEquivalent(t *testing.T, input any) {
 	t.Helper()
 

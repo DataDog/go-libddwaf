@@ -308,6 +308,12 @@ func (encoder *encoder) tryEncodeTypedSliceFastPath(data any, obj *WAFObject, de
 
 func (encoder *encoder) tryEncodeTypedMapFastPath(data any, obj *WAFObject, depth int) (bool, error) {
 	switch v := data.(type) {
+	case map[string]any:
+		if v == nil {
+			obj.SetNil()
+			return true, nil
+		}
+		return true, encoder.encodeTypedMapStringAnyFastPath(v, obj, depth)
 	case map[string]string:
 		if v == nil {
 			obj.SetNil()
@@ -323,6 +329,38 @@ func (encoder *encoder) tryEncodeTypedMapFastPath(data any, obj *WAFObject, dept
 	default:
 		return false, nil
 	}
+}
+
+func (encoder *encoder) encodeTypedMapStringAnyFastPath(values map[string]any, obj *WAFObject, depth int) error {
+	mb, err := encoder.beginTypedMapFastPath(obj, len(values), depth)
+	if err != nil {
+		return err
+	}
+	defer mb.Close()
+
+	for key, value := range values {
+		if encoder.enc.Timeout() {
+			return nil
+		}
+
+		slot := mb.NextValue(key)
+		if slot == nil {
+			mb.Skip()
+			continue
+		}
+
+		if value == nil {
+			slot.SetNil()
+			continue
+		}
+
+		if err := encoder.encode(reflect.ValueOf(value), slot, depth-1); err != nil {
+			// Preserve the key like the reflect map path does, but mark the value unusable.
+			slot.SetInvalid()
+		}
+	}
+
+	return nil
 }
 
 func (encoder *encoder) beginTypedSliceFastPath(obj *WAFObject, length int, depth int) (*ArrayBuilder, error) {
