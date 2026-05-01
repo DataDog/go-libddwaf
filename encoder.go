@@ -190,55 +190,8 @@ func (config EncoderConfig) maxObjectDepth() int {
 func (encoder *encoder) Encode(data any) (*WAFObject, error) {
 	var obj WAFObject
 
-	switch v := data.(type) {
-	case nil:
-		obj.SetNil()
-		return &obj, nil
-	case bool:
-		obj.SetBool(v)
-		return &obj, nil
-	case string:
-		encoder.enc.WriteString(&obj, v)
-		return &obj, nil
-	case int:
-		obj.SetInt(int64(v))
-		return &obj, nil
-	case int8:
-		obj.SetInt(int64(v))
-		return &obj, nil
-	case int16:
-		obj.SetInt(int64(v))
-		return &obj, nil
-	case int32:
-		obj.SetInt(int64(v))
-		return &obj, nil
-	case int64:
-		obj.SetInt(v)
-		return &obj, nil
-	case uint:
-		obj.SetUint(uint64(v))
-		return &obj, nil
-	case uint8:
-		obj.SetUint(uint64(v))
-		return &obj, nil
-	case uint16:
-		obj.SetUint(uint64(v))
-		return &obj, nil
-	case uint32:
-		obj.SetUint(uint64(v))
-		return &obj, nil
-	case uint64:
-		obj.SetUint(v)
-		return &obj, nil
-	case float32:
-		obj.SetFloat(float64(v))
-		return &obj, nil
-	case float64:
-		obj.SetFloat(v)
-		return &obj, nil
-	case json.Number:
-		encoder.encodeJSONNumber(v, &obj)
-		return &obj, nil
+	if handled, err := encoder.tryEncodeScalarFastPath(data, &obj); handled {
+		return &obj, err
 	}
 
 	if handled, err := encoder.tryEncodeTypedSliceFastPath(data, &obj, encoder.enc.Config.maxObjectDepth()); handled {
@@ -267,6 +220,47 @@ func (encoder *encoder) Encode(data any) (*WAFObject, error) {
 	}
 
 	return &obj, err
+}
+
+func (encoder *encoder) tryEncodeScalarFastPath(data any, obj *WAFObject) (bool, error) {
+	switch v := data.(type) {
+	case nil:
+		obj.SetNil()
+	case bool:
+		obj.SetBool(v)
+	case string:
+		encoder.enc.WriteString(obj, v)
+	case int:
+		obj.SetInt(int64(v))
+	case int8:
+		obj.SetInt(int64(v))
+	case int16:
+		obj.SetInt(int64(v))
+	case int32:
+		obj.SetInt(int64(v))
+	case int64:
+		obj.SetInt(v)
+	case uint:
+		obj.SetUint(uint64(v))
+	case uint8:
+		obj.SetUint(uint64(v))
+	case uint16:
+		obj.SetUint(uint64(v))
+	case uint32:
+		obj.SetUint(uint64(v))
+	case uint64:
+		obj.SetUint(v)
+	case float32:
+		obj.SetFloat(float64(v))
+	case float64:
+		obj.SetFloat(v)
+	case json.Number:
+		encoder.encodeJSONNumber(v, obj)
+	default:
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (encoder *encoder) tryEncodeTypedSliceFastPath(data any, obj *WAFObject, depth int) (bool, error) {
