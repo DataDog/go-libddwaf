@@ -51,9 +51,7 @@ type shard struct {
 }
 
 // ConcurrentPinner is a [Pinner] that is safe for concurrent use by multiple
-// goroutines. Once [ConcurrentPinner.Close] has been called, the pinner is in
-// a terminal state and any subsequent [ConcurrentPinner.Pin] call is a no-op.
-// A closed pinner cannot be reused.
+// goroutines.
 type ConcurrentPinner struct {
 	shards [maxShardCount]shard
 	closed atomic.Bool
