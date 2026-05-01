@@ -83,6 +83,8 @@ func (timer *nodeTimer) reset() {
 }
 
 // PutNodeTimer returns a pooled node timer to the timer package pool.
+// This is an internal API used by Context/Subcontext lifecycle management
+// and should not be called by external consumers.
 func PutNodeTimer(t NodeTimer) {
 	if t == nil {
 		return
@@ -104,6 +106,8 @@ func PutNodeTimer(t NodeTimer) {
 
 // WrapOwnedNodeTimer protects externally reachable node timers so aliases remain
 // safe after the underlying pooled timer is returned.
+// This is an internal API used by Context/Subcontext lifecycle management
+// and should not be called by external consumers.
 func WrapOwnedNodeTimer(t NodeTimer) NodeTimer {
 	if t == nil {
 		return nil
