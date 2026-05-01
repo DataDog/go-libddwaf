@@ -23,8 +23,8 @@ func TestChildTimersShareClockPointer(t *testing.T) {
 		rootImpl := root.(*nodeTimer)
 		leafImpl := leaf.(*baseTimer)
 
-		require.Equal(t, reflect.Ptr, reflect.TypeOf(rootImpl.baseTimer.clock).Kind())
-		require.Equal(t, reflect.Ptr, reflect.TypeOf(leafImpl.clock).Kind())
+		require.Equal(t, reflect.Pointer, reflect.TypeOf(rootImpl.baseTimer.clock).Kind())
+		require.Equal(t, reflect.Pointer, reflect.TypeOf(leafImpl.clock).Kind())
 		require.Equal(t, reflect.ValueOf(rootImpl.baseTimer.clock).Pointer(), reflect.ValueOf(leafImpl.clock).Pointer())
 	})
 
@@ -35,8 +35,8 @@ func TestChildTimersShareClockPointer(t *testing.T) {
 		rootImpl := root.(*nodeTimer)
 		nodeImpl := node.(*nodeTimer)
 
-		require.Equal(t, reflect.Ptr, reflect.TypeOf(rootImpl.baseTimer.clock).Kind())
-		require.Equal(t, reflect.Ptr, reflect.TypeOf(nodeImpl.baseTimer.clock).Kind())
+		require.Equal(t, reflect.Pointer, reflect.TypeOf(rootImpl.baseTimer.clock).Kind())
+		require.Equal(t, reflect.Pointer, reflect.TypeOf(nodeImpl.baseTimer.clock).Kind())
 		require.Equal(t, reflect.ValueOf(rootImpl.baseTimer.clock).Pointer(), reflect.ValueOf(nodeImpl.baseTimer.clock).Pointer())
 	})
 }
