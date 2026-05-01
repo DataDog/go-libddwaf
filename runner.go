@@ -71,6 +71,8 @@ func effectiveTimeoutMicros(ctx context.Context, runTimer timer.NodeTimer) uint6
 	if timeoutDuration < 0 {
 		timeoutDuration = 0
 	}
+	// Mask to 51 bits: libddwaf uses the upper bits of the timeout value
+	// internally, so we must clear them to avoid misinterpretation.
 	return uint64(timeoutDuration.Microseconds()) & 0x007FFFFFFFFFFFFF
 }
 
