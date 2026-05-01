@@ -1,10 +1,13 @@
 package timer
 
 import (
+	"reflect"
 	"runtime"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestClockConcurrentNow(t *testing.T) {
@@ -23,6 +26,35 @@ func TestClockConcurrentNow(t *testing.T) {
 	}
 	close(barrier)
 	wg.Wait()
+}
+
+func TestChildTimersShareClockPointer(t *testing.T) {
+	root, err := NewTreeTimer(WithBudget(1), WithComponents("a"))
+	require.NoError(t, err)
+
+	t.Run("leaf", func(t *testing.T) {
+		leaf, err := root.NewLeaf("a")
+		require.NoError(t, err)
+
+		rootImpl := root.(*nodeTimer)
+		leafImpl := leaf.(*baseTimer)
+
+		require.Equal(t, reflect.Pointer, reflect.TypeOf(rootImpl.baseTimer.clock).Kind())
+		require.Equal(t, reflect.Pointer, reflect.TypeOf(leafImpl.clock).Kind())
+		require.Equal(t, reflect.ValueOf(rootImpl.baseTimer.clock).Pointer(), reflect.ValueOf(leafImpl.clock).Pointer())
+	})
+
+	t.Run("node", func(t *testing.T) {
+		node, err := root.NewNode("a", WithComponents("b"))
+		require.NoError(t, err)
+
+		rootImpl := root.(*nodeTimer)
+		nodeImpl := node.(*nodeTimer)
+
+		require.Equal(t, reflect.Pointer, reflect.TypeOf(rootImpl.baseTimer.clock).Kind())
+		require.Equal(t, reflect.Pointer, reflect.TypeOf(nodeImpl.baseTimer.clock).Kind())
+		require.Equal(t, reflect.ValueOf(rootImpl.baseTimer.clock).Pointer(), reflect.ValueOf(nodeImpl.baseTimer.clock).Pointer())
+	})
 }
 
 func BenchmarkMostUsedFunctions(b *testing.B) {

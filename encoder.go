@@ -43,6 +43,34 @@ type EncoderConfig struct {
 // EncoderOption mutates an [EncoderConfig] created by [newEncoderConfig].
 type EncoderOption func(*EncoderConfig)
 
+// Encoder is the public encoding helper exposed to [Encodable] implementers.
+// It provides string-writing utilities, map/array builders, timer checking,
+// and truncation accounting.
+type Encoder struct {
+	Config      EncoderConfig
+	Truncations Truncations
+}
+
+func (e *Encoder) WriteString(obj *WAFObject, str string) {
+	if len(str) > e.Config.maxStringSize() {
+		e.Truncations.Record(StringTooLong, len(str))
+		str = str[:e.Config.maxStringSize()]
+	}
+	obj.SetString(e.Config.Pinner, str)
+}
+
+func (e *Encoder) WriteLiteralString(obj *WAFObject, str string) {
+	if len(str) > e.Config.maxStringSize() {
+		e.Truncations.Record(StringTooLong, len(str))
+		str = str[:e.Config.maxStringSize()]
+	}
+	obj.SetLiteralString(e.Config.Pinner, str)
+}
+
+func (e *Encoder) Timeout() bool {
+	return e.Config.Timer != nil && e.Config.Timer.Exhausted()
+}
+
 // encoder encodes Go values into wafObjects. Only the subset of Go types representable into wafObjects
 // will be encoded while ignoring the rest of it.
 // The encoder allocates memory for wafObjects in Go memory, which must remain referenced for their
@@ -82,6 +110,51 @@ func (reason TruncationReason) String() string {
 	default:
 		return fmt.Sprintf("TruncationReason(%v)", int(reason))
 	}
+}
+
+// Truncations accumulates truncation events that occurred during encoding.
+type Truncations struct {
+	StringTooLong     []int
+	ContainerTooLarge []int
+	ObjectTooDeep     []int
+}
+
+func (t *Truncations) Record(reason TruncationReason, size int) {
+	switch reason {
+	case StringTooLong:
+		t.StringTooLong = append(t.StringTooLong, size)
+	case ContainerTooLarge:
+		t.ContainerTooLarge = append(t.ContainerTooLarge, size)
+	case ObjectTooDeep:
+		t.ObjectTooDeep = append(t.ObjectTooDeep, size)
+	}
+}
+
+func (t *Truncations) Merge(other Truncations) {
+	t.StringTooLong = append(t.StringTooLong, other.StringTooLong...)
+	t.ContainerTooLarge = append(t.ContainerTooLarge, other.ContainerTooLarge...)
+	t.ObjectTooDeep = append(t.ObjectTooDeep, other.ObjectTooDeep...)
+}
+
+func (t Truncations) IsEmpty() bool {
+	return len(t.StringTooLong) == 0 && len(t.ContainerTooLarge) == 0 && len(t.ObjectTooDeep) == 0
+}
+
+func (t Truncations) AsMap() map[TruncationReason][]int {
+	if t.IsEmpty() {
+		return nil
+	}
+	m := make(map[TruncationReason][]int, 3)
+	if len(t.StringTooLong) > 0 {
+		m[StringTooLong] = t.StringTooLong
+	}
+	if len(t.ContainerTooLarge) > 0 {
+		m[ContainerTooLarge] = t.ContainerTooLarge
+	}
+	if len(t.ObjectTooDeep) > 0 {
+		m[ObjectTooDeep] = t.ObjectTooDeep
+	}
+	return m
 }
 
 const (

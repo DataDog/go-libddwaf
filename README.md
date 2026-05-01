@@ -23,7 +23,7 @@ func main() {
     if err != nil {
         panic(err)
     }
-    _, err := builder.AddOrUpdateConfig("/rules", parsedRuleset)
+    _, err = builder.AddOrUpdateConfig("/rules", parsedRuleset)
     if err != nil {
         panic(err)
     }
@@ -74,8 +74,8 @@ go-libddwaf v5 tracks libddwaf v2 and includes a few breaking API changes:
 - ephemeral evaluation now goes through `NewSubcontext()`
 - `Context.Run`, `Handle.NewContext`, and `Context.NewSubcontext` now require a `context.Context`
 - `Builder.Build()` now returns `(*Handle, error)`
-- `WAFObject` and `WAFObjectKV` are now opaque structs wrapping internal types
-- The `Encodable` interface's `Encode` method now takes `*WAFObject` and `EncoderConfig` instead of `*bindings.WAFObject`
+- `WAFObject` and `WAFObjectKV` are now type aliases to internal binding types (transparent but no longer require importing `internal/bindings`)
+- The `Encodable` interface's `Encode` method is now `Encode(enc *Encoder, obj *WAFObject, depth int) error` instead of taking `*bindings.WAFObject`
 - The internal `depthOf` function now takes a `timer.Timer` instead of relying on `context.Background()`
 
 ### Migration Guide
@@ -84,7 +84,7 @@ The v5 update introduces a more ergonomic and performant encoding API. Key chang
 
 1.  **Type changes**: `WAFObject` and `WAFObjectKV` are now value types (type aliases to bindings). A `WAFObject{}` is a valid zero-value.
 2.  **Direct field access for KV**: Use `kv.Key.SetString(pinner, "...")` and `kv.Val.SetBool(true)` directly. The `kv.Key()` and `kv.Value()` accessors have been removed.
-3.  **Pinner re-export**: External `Encodable` implementers should now import `libddwaf.Pinner` instead of using `internal/pin`.
+3.  **Pinner access**: External `Encodable` implementers access `*runtime.Pinner` via `enc.Config.Pinner` (the `internal/pin` package has been removed).
 4.  **Truncations value type**: The `map[TruncationReason][]int` has been replaced by a `Truncations` value type. Use `t.StringTooLong` etc. for direct access, or `t.AsMap()` for backward compatibility.
 5.  **Encoder helper**: A bundle for `Encodable` implementers that provides `WriteString`, `Map`, `Array`, and `Timeout` helpers.
 6.  **MapBuilder / ArrayBuilder**: Ergonomic builders that replace the manual slice juggling and `SetMapData`/`SetArrayData` pattern.
@@ -283,28 +283,29 @@ flowchart LR
 
     Context -->|Run| Library
     Subcontext -->|Run| Library
-    Encoder -->|Allocate Waf Objects| pin.ConcurrentPinner
+    Encoder -->|Allocate Waf Objects| runtime.Pinner
 
     Library -->|Call C code| libddwaf
 
     classDef hidden display: none;
 ```
 
-### `pin.ConcurrentPinner`
+### `runtime.Pinner`
 
 When passing Go values to the WAF, it is necessary to make sure that memory remains valid and does
-not move until the WAF no longer has any pointers to it. We do this by using a `pin.ConcurrentPinner`.
-Data passed to a root `Context` is added to a `Context`-associated `pin.ConcurrentPinner`; while data passed to a Subcontext is added to a per-Subcontext pin.ConcurrentPinner whose lifetime spans the Subcontext (released on Subcontext.Close)
+not move until the WAF no longer has any pointers to it. We do this by using `runtime.Pinner` from the standard library.
+Each call to `Run()` creates a new `runtime.Pinner`; pinners are collected per-Context (or per-Subcontext) and unpinned when the Context (or Subcontext) is closed.
 
 ### Typical call to Run()
 
 Here is an example of the flow of operations on a simple call to `Run()`:
 
-- Encode input data into WAF Objects and store references in the temporary pool
-- Lock the context mutex until the end of the call
-- Store references from the temporary pool into the context level pool
+- Create a `runtime.Pinner` for this call
+- Encode input data into WAF Objects, pinning Go pointers via the pinner
+- Lock the context mutex
 - Call `ddwaf_run`
 - Decode the matches and actions
+- Unlock the mutex; append the pinner to the context's pinner list (unpinned on `Close()`)
 
 ### CGO-less C Bindings
 

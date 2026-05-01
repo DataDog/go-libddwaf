@@ -17,6 +17,25 @@ import (
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
+// RunAddressData provides address data to the [Context.Run] method.
+// Fields tagged `ddwaf:"ignore"` are omitted when encoding Go structs to the WAF-compatible format.
+//
+// Data passed to Run persists for the lifetime of the context or subcontext.
+// Use NewSubcontext() for shorter-lived data.
+type RunAddressData struct {
+	// Data is passed to the WAF and persists across multiple calls to Run
+	// until the context or subcontext closes.
+	Data map[string]any
+
+	// TimerKey tracks time spent in the WAF for this run.
+	// Leave it empty to start a new timer with unlimited budget.
+	TimerKey timer.Key
+}
+
+func (d RunAddressData) isEmpty() bool {
+	return len(d.Data) == 0
+}
+
 var runTimerComponents = timer.WithComponents(EncodeTimeKey, DurationTimeKey, DecodeTimeKey)
 
 func newRunTimer(parent timer.NodeTimer, key timer.Key) (timer.NodeTimer, error) {
