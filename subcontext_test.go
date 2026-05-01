@@ -125,3 +125,45 @@ func TestSiblingSubcontextParallelismSpeedup(t *testing.T) {
 	require.True(t, meetsSiblingSubcontextSpeedupTarget(bestRatio),
 		"expected ≥1.2x speedup in at least one of %d attempts (best ratio=%.2f): serialized=%v parallel=%v", attempts, bestRatio, bestSerializedTime, bestParallelTime)
 }
+
+func TestNewSubcontext_StackPath_DDTraceGo(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget), timer.WithComponents("waf", "rasp"))
+	require.NoError(t, err)
+	t.Cleanup(func() { ctx.Close() })
+
+	subCtx, err := ctx.NewSubcontext(context.Background())
+	require.NoError(t, err)
+	t.Cleanup(func() { subCtx.Close() })
+
+	require.ElementsMatch(t,
+		[]timer.Key{"waf", "rasp", EncodeTimeKey, DurationTimeKey, DecodeTimeKey},
+		subCtx.Timer.ComponentKeys(),
+	)
+}
+
+func TestNewSubcontext_HeapFallback(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(
+		context.Background(),
+		timer.WithBudget(timer.UnlimitedBudget),
+		timer.WithComponents("waf", "rasp", "appsec", "gateway"),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { ctx.Close() })
+
+	subCtx, err := ctx.NewSubcontext(context.Background())
+	require.NoError(t, err)
+	t.Cleanup(func() { subCtx.Close() })
+
+	require.ElementsMatch(t,
+		[]timer.Key{"waf", "rasp", "appsec", "gateway", EncodeTimeKey, DurationTimeKey, DecodeTimeKey},
+		subCtx.Timer.ComponentKeys(),
+	)
+}

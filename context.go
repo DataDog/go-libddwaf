@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -118,16 +119,33 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	}
 
 	parentKeys := context.Timer.ComponentKeys()
-	seen := make(map[timer.Key]struct{}, len(parentKeys)+3)
-	components := make([]timer.Key, 0, len(parentKeys)+3)
-	for _, k := range parentKeys {
-		seen[k] = struct{}{}
-		components = append(components, k)
+	var staging [5]timer.Key
+	var components []timer.Key
+	if len(parentKeys)+3 <= cap(staging) {
+		components = staging[:0]
+		components = append(components, parentKeys...)
+		for _, key := range [...]timer.Key{EncodeTimeKey, DurationTimeKey, DecodeTimeKey} {
+			if !slices.Contains(components, key) {
+				if len(components) >= cap(staging) {
+					components = nil
+					break
+				}
+				components = append(components, key)
+			}
+		}
 	}
-	for _, key := range []timer.Key{EncodeTimeKey, DurationTimeKey, DecodeTimeKey} {
-		if _, ok := seen[key]; !ok {
-			components = append(components, key)
+	if components == nil {
+		seen := make(map[timer.Key]struct{}, len(parentKeys)+3)
+		components = make([]timer.Key, 0, len(parentKeys)+3)
+		components = append(components, parentKeys...)
+		for _, key := range parentKeys {
 			seen[key] = struct{}{}
+		}
+		for _, key := range []timer.Key{EncodeTimeKey, DurationTimeKey, DecodeTimeKey} {
+			if _, ok := seen[key]; !ok {
+				seen[key] = struct{}{}
+				components = append(components, key)
+			}
 		}
 	}
 	subTimer, err := timer.NewTreeTimer(
