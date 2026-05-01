@@ -26,6 +26,14 @@ func TestClockConcurrentNow(t *testing.T) {
 }
 
 func TestPoolInvariants_Clock(t *testing.T) {
+	resettable := &clock{}
+	resettable.mu.Lock()
+	resettable.lastRequest = time.Now().Add(48 * time.Hour)
+	resettable.reset()
+	if resettable.mu != (sync.Mutex{}) {
+		t.Fatalf("expected clock.reset to zero mutex")
+	}
+
 	cached := newTimeCache()
 	for range 8 {
 		_ = cached.now()
@@ -34,6 +42,9 @@ func TestPoolInvariants_Clock(t *testing.T) {
 	stale := time.Now().Add(24 * time.Hour)
 	cached.lastRequest = stale
 	putTimeCache(cached)
+	if !cached.lastRequest.Before(stale) {
+		t.Fatalf("expected putTimeCache to reset lastRequest before pooling")
+	}
 
 	reused := newTimeCache()
 	t.Cleanup(func() {
@@ -42,6 +53,9 @@ func TestPoolInvariants_Clock(t *testing.T) {
 
 	if !reused.lastRequest.Before(stale) {
 		t.Fatalf("expected pooled clock to reset lastRequest before stale value %v, got %v", stale, reused.lastRequest)
+	}
+	if reused.mu != (sync.Mutex{}) {
+		t.Fatalf("expected pooled clock mutex to be zero-value after reset")
 	}
 
 	start := reused.lastRequest

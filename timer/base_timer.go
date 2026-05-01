@@ -74,9 +74,7 @@ var baseTimerPool = baseTimerSyncPool{
 }
 
 func getBaseTimer() *baseTimer {
-	timer := baseTimerPool.Get().(*baseTimer)
-	timer.reset()
-	return timer
+	return baseTimerPool.Get().(*baseTimer)
 }
 
 func putBaseTimer(timer *baseTimer) {

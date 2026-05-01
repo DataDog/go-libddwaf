@@ -23,13 +23,12 @@ type clock struct {
 }
 
 func (ct *clock) reset() {
+	ct.mu = sync.Mutex{}
 	ct.lastRequest = time.Now()
 }
 
 func newTimeCache() *clock {
-	ct := clockPool.Get().(*clock)
-	ct.reset()
-	return ct
+	return clockPool.Get().(*clock)
 }
 
 func putTimeCache(ct *clock) {
@@ -37,6 +36,7 @@ func putTimeCache(ct *clock) {
 		return
 	}
 
+	ct.reset()
 	clockPool.Put(ct)
 }
 

@@ -102,6 +102,7 @@ func (handle *Handle) NewContext(ctx context.Context, timerOptions ...timer.Opti
 	}
 
 	context := contextPool.Get().(*Context)
+	context.closedHint.Store(false)
 	context.handle = handle
 	context.Timer = timer.WrapOwnedNodeTimer(rootTimer)
 	context.cContext = cContext
