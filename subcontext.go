@@ -1,0 +1,167 @@
+// Unless explicitly stated otherwise all files in this repository are licensed
+// under the Apache License Version 2.0.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2016-present Datadog, Inc.
+
+package libddwaf
+
+import (
+	"context"
+	"fmt"
+	"runtime"
+	"sync"
+	"sync/atomic"
+
+	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/timer"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
+)
+
+// Lock order: Subcontext.mu MUST be acquired before parent.Context.mu. Never reverse.
+
+// Subcontext is a derived ephemeral evaluation scope. Spawned via [Context.NewSubcontext].
+// Data passed to a Subcontext's Run persists for the Subcontext's lifetime and is
+// released when the Subcontext is closed.
+//
+// # Concurrency
+//
+// Subcontext.Run may be called concurrently across different Subcontexts of
+// the same parent; same-Subcontext Run calls serialize internally.
+//
+// Subcontext.Close should be called before its parent Context.Close for clean
+// teardown; if the parent is already closed, Subcontext.Close is still safe
+// (it skips the underlying destroy).
+type Subcontext struct {
+	Timer         timer.NodeTimer
+	parent        *Context
+	closedHint    atomic.Bool
+	mu            sync.Mutex
+	cSub          wafBindings.WAFSubcontext
+	truncationsMu sync.RWMutex
+	truncations   Truncations
+	pinners       []*runtime.Pinner
+	pinnersMu     sync.Mutex
+}
+
+// Run encodes the given [RunAddressData] values and runs them against the WAF rules.
+func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res Result, err error) {
+	if ctx == nil {
+		return Result{}, fmt.Errorf("Subcontext.Run: %w", waferrors.ErrNilContext)
+	}
+
+	if addressData.isEmpty() {
+		if s.closedHint.Load() || s.parent.closedHint.Load() {
+			return Result{}, waferrors.ErrContextClosed
+		}
+		return Result{}, nil
+	}
+
+	if s.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
+
+	if s.Timer.SumExhausted() {
+		return Result{}, waferrors.ErrTimeout
+	}
+
+	runTimer, err := newRunTimer(s.Timer, addressData.TimerKey)
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { res.TimerStats = runTimer.Stats() }()
+
+	runTimer.Start()
+	defer runTimer.Stop()
+
+	pinner := new(runtime.Pinner)
+
+	defer func() {
+		s.pinnersMu.Lock()
+		defer s.pinnersMu.Unlock()
+		if s.closedHint.Load() {
+			pinner.Unpin()
+			return
+		}
+		s.pinners = append(s.pinners, pinner)
+	}()
+
+	wafEncodeTimer := runTimer.MustLeaf(EncodeTimeKey)
+	wafEncodeTimer.Start()
+	data, truncations, err := encodeAddressData(pinner, addressData.Data, wafEncodeTimer)
+	wafEncodeTimer.Stop()
+	if err != nil {
+		return Result{}, err
+	}
+	if !truncations.IsEmpty() {
+		s.truncationsMu.Lock()
+		s.truncations.Merge(truncations)
+		s.truncationsMu.Unlock()
+	}
+
+	if runTimer.SumExhausted() {
+		return Result{}, waferrors.ErrTimeout
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
+
+	s.parent.mu.Lock()
+	if s.parent.closedHint.Load() {
+		s.parent.mu.Unlock()
+		return Result{}, waferrors.ErrContextClosed
+	}
+	s.parent.evalsInFlight.Add(1)
+	s.parent.mu.Unlock()
+	defer s.parent.evalsInFlight.Done()
+
+	var resultPinner runtime.Pinner
+	defer resultPinner.Unpin()
+	var result WAFObject
+	resultPinner.Pin(&result)
+	defer wafBindings.Lib.ObjectDestroy(&result, wafBindings.Lib.DefaultAllocator())
+
+	ret := wafBindings.Lib.SubcontextEval(s.cSub, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
+
+	return decodeWafResult(ctx, ret, &result, runTimer)
+}
+
+// Close disposes of the underlying subcontext.
+func (s *Subcontext) Close() {
+	if !s.closedHint.CompareAndSwap(false, true) {
+		return
+	}
+
+	s.mu.Lock()
+	s.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run before pinner close
+
+	s.parent.mu.Lock()
+	defer s.parent.mu.Unlock()
+	if !s.parent.closedHint.Load() && s.cSub != 0 {
+		wafBindings.Lib.SubcontextDestroy(s.cSub)
+	}
+	s.cSub = 0
+
+	s.pinnersMu.Lock()
+	defer s.pinnersMu.Unlock()
+	for _, p := range s.pinners {
+		p.Unpin()
+	}
+	s.pinners = nil
+
+	s.parent.handle.Close()
+}
+
+// Truncations returns the truncations that occurred while encoding address data for WAF execution.
+func (s *Subcontext) Truncations() Truncations {
+	s.truncationsMu.RLock()
+	defer s.truncationsMu.RUnlock()
+	return Truncations{
+		StringTooLong:     append([]int(nil), s.truncations.StringTooLong...),
+		ContainerTooLarge: append([]int(nil), s.truncations.ContainerTooLarge...),
+		ObjectTooDeep:     append([]int(nil), s.truncations.ObjectTooDeep...),
+	}
+}

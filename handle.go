@@ -6,20 +6,34 @@
 package libddwaf
 
 import (
+	"context"
 	"fmt"
-	"runtime"
 	"sync/atomic"
-	"unsafe"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/ffi"
-	"github.com/DataDog/go-libddwaf/v4/timer"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
+	"github.com/DataDog/go-libddwaf/v5/timer"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 // Handle represents an instance of the WAF for a given ruleset. It is obtained
 // from [Builder.Build]; and must be disposed of by calling [Handle.Close]
 // once no longer in use.
+//
+// The reference count equals the number of alive [Context] values plus the
+// number of alive [Subcontext] values. Each [Handle.NewContext] call retains the
+// handle, each [Context.Close] releases it, each [Context.NewSubcontext] call
+// retains it, and each [Subcontext.Close] releases it.
+//
+// Library lifetime boundary: [Handle.retain] and [Handle.Close] only govern the
+// lifetime of the underlying C ddwaf_handle. They do not keep the libddwaf
+// shared library loaded. That shared library is a process-wide singleton
+// loaded once via purego.Dlopen (see internal/bindings) and is never Dlclosed
+// during normal operation. As a consequence, symbols such as
+// bindings.Lib.ContextDestroy or bindings.Lib.SubcontextDestroy remain
+// resolvable for the entire lifetime of the process, and Context/SubContext
+// teardown paths that call into bindings.Lib after the Handle's refcount has
+// reached zero are safe with respect to the library itself.
 type Handle struct {
 	// Lock-less reference counter avoiding blocking calls to the [Handle.Close]
 	// method while WAF [Context]s are still using the WAF handle. Instead, we let
@@ -33,7 +47,6 @@ type Handle struct {
 	// block the request handlers for the time of the security rules update.
 	refCounter atomic.Int32
 
-	// Instance of the WAF
 	cHandle bindings.WAFHandle
 }
 
@@ -43,35 +56,55 @@ type Handle struct {
 // on it.
 func wrapHandle(cHandle bindings.WAFHandle) *Handle {
 	handle := &Handle{cHandle: cHandle}
-	handle.refCounter.Store(1) // We count the handle itself in the counter
+	handle.refCounter.Store(1)
 	return handle
 }
 
-// NewContext returns a new WAF context for the given WAF handle.
-// An error is returned when the WAF handle was released or when the WAF context
-// couldn't be created.
-func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error) {
-	// Handle has been released
-	if !handle.retain() {
-		return nil, fmt.Errorf("handle was released")
+func validateConstructionContext(op string, ctx context.Context) error {
+	if ctx == nil {
+		return fmt.Errorf("%s: %w", op, waferrors.ErrNilContext)
 	}
 
-	cContext := bindings.Lib.ContextInit(handle.cHandle)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
+// NewContext returns a new WAF context for the given WAF handle.
+// The provided ctx only scopes the construction call itself and is not retained
+// after NewContext returns; per-run deadlines and cancellation must be supplied
+// to [Context.Run] via its own ctx argument.
+// An error is returned when the WAF handle was released or when the WAF context
+// couldn't be created.
+func (handle *Handle) NewContext(ctx context.Context, timerOptions ...timer.Option) (*Context, error) {
+	if err := validateConstructionContext("Handle.NewContext", ctx); err != nil {
+		return nil, err
+	}
+
+	if !handle.retain() {
+		return nil, waferrors.ErrHandleReleased
+	}
+
+	cContext := bindings.Lib.ContextInit(handle.cHandle, bindings.Lib.DefaultAllocator())
 	if cContext == 0 {
 		handle.Close() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
-		return nil, fmt.Errorf("could not get C context")
+		return nil, fmt.Errorf("%w: ddwaf_context_init returned null", waferrors.ErrContextInitFailed)
 	}
 
 	rootTimer, err := timer.NewTreeTimer(timerOptions...)
 	if err != nil {
-		return nil, err
+		bindings.Lib.ContextDestroy(cContext)
+		handle.Close()
+		return nil, fmt.Errorf("failed to create WAF context timer: %w", err)
 	}
 
 	return &Context{
-		handle:      handle,
-		cContext:    cContext,
-		Timer:       rootTimer,
-		truncations: make(map[TruncationReason][]int, 3),
+		handle:   handle,
+		Timer:    rootTimer,
+		cContext: cContext,
 	}, nil
 }
 
@@ -90,14 +123,15 @@ func (handle *Handle) Actions() []string {
 // Close decrements the reference counter of this [Handle], possibly allowing it to be destroyed
 // and all the resources associated with it to be released.
 func (handle *Handle) Close() {
+	if handle == nil {
+		return
+	}
 	if handle.addRefCounter(-1) != 0 {
-		// Either the counter is still positive (this Handle is still referenced), or it had previously
-		// reached 0 and some other call has done the cleanup already.
 		return
 	}
 
 	bindings.Lib.Destroy(handle.cHandle)
-	handle.cHandle = 0 // Makes it easy to spot use-after-free/double-free issues
+	handle.cHandle = 0
 }
 
 // retain increments the reference counter of this [Handle]. Returns true if the
@@ -124,50 +158,17 @@ func (handle *Handle) addRefCounter(x int32) int32 {
 		}
 
 		next := current + x
-		if swapped := handle.refCounter.CompareAndSwap(current, next); swapped {
-			if next < 0 {
-				// TODO(romain.marcadier): somehow signal unexpected behavior to the
-				// caller (panic? error?). We currently clamp to 0 in order to avoid
-				// causing a customer program crash, but this is the symptom of a bug
-				// and should be investigated (however this clamping hides the issue).
+		if next < 0 {
+			if swapped := handle.refCounter.CompareAndSwap(current, 0); swapped {
+				// Refcount underflow is surfaced via internal/invariant under ci builds (see ADR-003).
+				invariant.Assert(false, "refCounter went negative: current=%d, delta=%d", current, x)
 				return 0
 			}
+			continue
+		}
+
+		if swapped := handle.refCounter.CompareAndSwap(current, next); swapped {
 			return next
 		}
-	}
-}
-
-func newConfig(pinner *runtime.Pinner, keyObfuscatorRegex string, valueObfuscatorRegex string) *bindings.WAFConfig {
-	return &bindings.WAFConfig{
-		Limits: bindings.WAFConfigLimits{
-			MaxContainerDepth: bindings.MaxContainerDepth,
-			MaxContainerSize:  bindings.MaxContainerSize,
-			MaxStringLength:   bindings.MaxStringLength,
-		},
-		Obfuscator: bindings.WAFConfigObfuscator{
-			KeyRegex:   uintptr(unsafe.Pointer(ffi.Cstring(pinner, keyObfuscatorRegex))),
-			ValueRegex: uintptr(unsafe.Pointer(ffi.Cstring(pinner, valueObfuscatorRegex))),
-		},
-		// Prevent libddwaf from freeing our Go-memory-allocated ddwaf_objects
-		FreeFn: 0,
-	}
-}
-
-// goRunError returns decodes a [bindings.WAFReturnCode] and returns the
-// corresponding [waferrors] constant. If no error is matched ([bindings.WAFOK]
-// or [bindings.WAFMatch]), the value of [err] is returned instead.
-func goRunError(rc bindings.WAFReturnCode, err error) error {
-	switch rc {
-	case bindings.WAFErrInternal:
-		return waferrors.ErrInternal
-	case bindings.WAFErrInvalidObject:
-		return waferrors.ErrInvalidObject
-	case bindings.WAFErrInvalidArgument:
-		return waferrors.ErrInvalidArgument
-	case bindings.WAFOK, bindings.WAFMatch:
-		// No error...
-		return err
-	default:
-		return fmt.Errorf("unknown waf return code %d", int(rc))
 	}
 }

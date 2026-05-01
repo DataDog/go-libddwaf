@@ -11,9 +11,9 @@ import (
 	"flag"
 	"testing"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/log"
-	"github.com/DataDog/go-libddwaf/v4/internal/support"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	"github.com/DataDog/go-libddwaf/v5/internal/log"
+	"github.com/DataDog/go-libddwaf/v5/internal/support"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,6 +33,9 @@ func TestSupport(t *testing.T) {
 	require.NotNil(t, wafSupportedFlag, "The `waf-supported` flag should be set")
 	require.Contains(t, []string{"true", "false", "maybe"}, *wafSupportedFlag, "The `waf-supported` flag should be set to true, false or maybe")
 	require.NotNil(t, wafBuildTags, "The `waf-build-tags` flag should be set")
+	if *wafBuildTags == "" {
+		t.Skip("waf-build-tags is provided by ci.sh")
+	}
 	require.NotEmpty(t, *wafBuildTags, "The `waf-build-tags` flag should not be empty")
 
 	errors := make([]error, len(support.WafSupportErrors()))

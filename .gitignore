@@ -2,6 +2,9 @@
 *.exe
 *.exe~
 
+.bench
+.sisyphus/
+internal/pool/
 # Test binary, built with `go test -c`
 *.test
 
@@ -20,4 +23,3 @@
 ## Ensure WAF static libraries are not excluded from vendor folders
 !internal/lib/*.so.gz
 !internal/lib/*.dylib.gz
-

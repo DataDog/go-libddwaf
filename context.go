@@ -6,22 +6,43 @@
 package libddwaf
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"maps"
 	"runtime"
 	"sync"
-	"time"
+	"sync/atomic"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/pin"
-	"github.com/DataDog/go-libddwaf/v4/timer"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
+	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/timer"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
+)
+
+const (
+	// EncodeTimeKey is the key used to track the time spent encoding the address data reported in [Result.TimerStats].
+	EncodeTimeKey timer.Key = "encode"
+	// DurationTimeKey is the key used to track the time spent in libddwaf ddwaf_run C function reported in [Result.TimerStats].
+	DurationTimeKey timer.Key = "duration"
+	// DecodeTimeKey is the key used to track the time spent decoding the address data reported in [Result.TimerStats].
+	DecodeTimeKey timer.Key = "decode"
 )
 
 // Context is a WAF execution context. It allows running the WAF incrementally when calling it
 // multiple times to run its rules every time new addresses become available. Each request must have
 // its own [Context]. New [Context] instances can be created by calling
 // [Handle.NewContext].
+//
+// Subcontexts can be created via [Context.NewSubcontext]. Data passed to a subcontext is stored
+// and persists across multiple calls to Run on that subcontext, until the subcontext is closed.
+//
+// # Concurrency
+//
+// Context.Run may be called concurrently; same-Context Run calls serialize
+// internally via a per-instance mutex. Context.Run may run concurrently with
+// Subcontext.Run calls under the same Context.
+//
+// Context.Close waits for all in-flight Run and NewSubcontext operations to
+// complete before destroying the underlying ddwaf_context.
 type Context struct {
 	// Timer registers the time spent in the WAF and go-libddwaf. It is created alongside the Context using the options
 	// passed in to NewContext. Once its time budget is exhausted, each new call to Context.Run will return a timeout error.
@@ -29,315 +50,226 @@ type Context struct {
 
 	handle *Handle // Instance of the WAF
 
-	cContext bindings.WAFContext // The C ddwaf_context pointer
+	closedHint    atomic.Bool
+	evalsInFlight sync.WaitGroup
+	mu            sync.Mutex
+	cContext      wafBindings.WAFContext
 
-	// mutex protecting the use of cContext which is not thread-safe and truncations
-	mutex sync.Mutex
+	// truncationsMu protects reads and writes to truncations independently of
+	// the run mutex, so that Truncations() does not block on long Run() calls.
+	truncationsMu sync.RWMutex
 
-	// truncations provides details about truncations that occurred while encoding address data for the WAF execution.
-	truncations map[TruncationReason][]int
+	truncations Truncations
 
-	// pinner is used to retain Go data that is being passed to the WAF as part of
-	// [RunAddressData.Persistent] until the [Context.Close] method results in the context being
-	// destroyed.
-	pinner pin.ConcurrentPinner
+	// pinners retains Go data passed to the WAF as part of [RunAddressData.Data].
+	// Each Run call gets its own [runtime.Pinner]; all are unpinned on [Context.Close].
+	pinners   []*runtime.Pinner
+	pinnersMu sync.Mutex
 }
 
-// RunAddressData provides address data to the [Context.Run] method. If a given key is present in
-// both `Persistent` and `Ephemeral`, the value from `Persistent` will take precedence.
-// When encoding Go structs to the WAF-compatible format, fields with the `ddwaf:"ignore"` tag are
-// ignored and will not be visible to the WAF.
-type RunAddressData struct {
-	// Persistent address data is scoped to the lifetime of a given Context, and subsquent calls to
-	// Context.Run with the same address name will be silently ignored.
-	Persistent map[string]any
-	// Ephemeral address data is scoped to a given Context.Run call and is not persisted across
-	// calls. This is used for protocols such as gRPC client/server streaming or GraphQL, where a
-	// single request can incur multiple subrequests.
-	Ephemeral map[string]any
-
-	// TimerKey is the key used to track the time spent in the WAF for this run.
-	// If left empty, a new timer with unlimited budget is started.
-	TimerKey timer.Key
-}
-
-func (d RunAddressData) isEmpty() bool {
-	return len(d.Persistent) == 0 && len(d.Ephemeral) == 0
-}
-
-// newTimer creates a new timer for this run. If the TimerKey is empty, a new timer without taking the parent into account is created.
-func (d RunAddressData) newTimer(parent timer.NodeTimer) (timer.NodeTimer, error) {
-	if d.TimerKey == "" {
-		return timer.NewTreeTimer(
-			timer.WithComponents(
-				EncodeTimeKey,
-				DurationTimeKey,
-				DecodeTimeKey,
-			),
-			timer.WithBudget(parent.SumRemaining()),
-		)
+// NewSubcontext creates a subcontext derived from this context.
+// The provided ctx only scopes the construction call itself and is not retained
+// after NewSubcontext returns; per-run deadlines and cancellation must be supplied
+// to [Context.Run] via its own ctx argument.
+// Data passed to the subcontext's Run() is stored and persists across multiple calls
+// to Run on that subcontext, but does not persist in the parent context.
+// When the subcontext is closed, its data is released.
+//
+// A subcontext gets its own timer whose initial budget is snapshotted from the
+// caller's remaining budget when the subcontext is created.
+//
+// Usage:
+//
+//	subCtx, err := ctx.NewSubcontext(context.Background())
+//	if err != nil {
+//	    return err
+//	}
+//	defer subCtx.Close()
+//	result, err := subCtx.Run(context.Background(), RunAddressData{Data: data})
+func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) {
+	if err := validateConstructionContext("Context.NewSubcontext", ctx); err != nil {
+		return nil, err
 	}
 
-	return parent.NewNode(d.TimerKey,
-		timer.WithComponents(
-			EncodeTimeKey,
-			DurationTimeKey,
-			DecodeTimeKey,
-		),
-		timer.WithInheritedSumBudget(),
+	if !context.handle.retain() {
+		if context.closedHint.Load() {
+			return nil, waferrors.ErrContextClosed
+		}
+		return nil, waferrors.ErrHandleReleased
+	}
+	success := false
+	defer func() {
+		if !success {
+			context.handle.Close()
+		}
+	}()
+
+	context.mu.Lock()
+	defer context.mu.Unlock()
+
+	if context.closedHint.Load() || context.cContext == 0 {
+		return nil, waferrors.ErrContextClosed
+	}
+
+	cSubcontext := wafBindings.Lib.SubcontextInit(context.cContext)
+	if cSubcontext == 0 {
+		return nil, errors.New("failed to create subcontext: ddwaf_subcontext_init returned null")
+	}
+
+	parentKeys := context.Timer.ComponentKeys()
+	seen := make(map[timer.Key]struct{}, len(parentKeys)+3)
+	components := make([]timer.Key, 0, len(parentKeys)+3)
+	for _, k := range parentKeys {
+		seen[k] = struct{}{}
+		components = append(components, k)
+	}
+	for _, key := range []timer.Key{EncodeTimeKey, DurationTimeKey, DecodeTimeKey} {
+		if _, ok := seen[key]; !ok {
+			components = append(components, key)
+			seen[key] = struct{}{}
+		}
+	}
+	subTimer, err := timer.NewTreeTimer(
+		timer.WithComponents(components...),
+		timer.WithBudget(context.Timer.SumRemaining()),
 	)
+	if err != nil {
+		wafBindings.Lib.SubcontextDestroy(cSubcontext)
+		return nil, fmt.Errorf("failed to create subcontext timer: %w", err)
+	}
+
+	success = true
+	return &Subcontext{
+		Timer:  subTimer,
+		parent: context,
+		cSub:   cSubcontext,
+	}, nil
 }
 
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
 // Callers must check the returned [Result] object even when an error is returned, as the WAF might
-// have been able to match some rules and generate events or actions before the error was reached;
-// especially when the error is [waferrors.ErrTimeout].
-func (context *Context) Run(addressData RunAddressData) (res Result, err error) {
+// have been able to match some rules and generate events or actions before the error was reached.
+//
+// Deadline precedence is the minimum of ctx's deadline and the remaining [Context.Timer] budget.
+// If ctx fires first, Run returns ctx.Err(). If the timer budget fires first, Run returns
+// [waferrors.ErrTimeout].
+func (context *Context) Run(ctx context.Context, addressData RunAddressData) (res Result, err error) {
+	if ctx == nil {
+		return Result{}, fmt.Errorf("Context.Run: %w", waferrors.ErrNilContext)
+	}
+
 	if addressData.isEmpty() {
+		if context.closedHint.Load() {
+			return Result{}, waferrors.ErrContextClosed
+		}
 		return Result{}, nil
 	}
 
-	// If the context has already timed out, we don't need to run the WAF again
+	if context.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
+
 	if context.Timer.SumExhausted() {
 		return Result{}, waferrors.ErrTimeout
 	}
 
-	runTimer, err := addressData.newTimer(context.Timer)
+	runTimer, err := newRunTimer(context.Timer, addressData.TimerKey)
 	if err != nil {
 		return Result{}, err
 	}
-
-	defer func() {
-		res.TimerStats = runTimer.Stats()
-	}()
+	defer func() { res.TimerStats = runTimer.Stats() }()
 
 	runTimer.Start()
 	defer runTimer.Stop()
 
+	pinner := new(runtime.Pinner)
+
+	defer func() {
+		context.pinnersMu.Lock()
+		defer context.pinnersMu.Unlock()
+		if context.closedHint.Load() {
+			pinner.Unpin()
+			return
+		}
+		context.pinners = append(context.pinners, pinner)
+	}()
+
 	wafEncodeTimer := runTimer.MustLeaf(EncodeTimeKey)
 	wafEncodeTimer.Start()
-	defer wafEncodeTimer.Stop()
-
-	persistentData, err := context.encodeOneAddressType(&context.pinner, addressData.Persistent, wafEncodeTimer)
-	if err != nil {
-		return Result{}, err
-	}
-
-	// The WAF releases ephemeral address data at the max of each run call, so we need not keep the Go
-	// values live beyond that in the same way we need for persistent data. We hence use a separate
-	// encoder.
-	var ephemeralPinner runtime.Pinner
-	defer ephemeralPinner.Unpin()
-	ephemeralData, err := context.encodeOneAddressType(&ephemeralPinner, addressData.Ephemeral, wafEncodeTimer)
-	if err != nil {
-		return Result{}, err
-	}
-
+	data, truncations, err := encodeAddressData(pinner, addressData.Data, wafEncodeTimer)
 	wafEncodeTimer.Stop()
-
-	// ddwaf_run cannot run concurrently, so we need to lock the context
-	context.mutex.Lock()
-	defer context.mutex.Unlock()
-
-	if context.cContext == 0 {
-		// Context has been closed, returning an empty result...
-		return Result{}, waferrors.ErrContextClosed
+	if err != nil {
+		return Result{}, err
+	}
+	if !truncations.IsEmpty() {
+		context.truncationsMu.Lock()
+		context.truncations.Merge(truncations)
+		context.truncationsMu.Unlock()
 	}
 
 	if runTimer.SumExhausted() {
 		return Result{}, waferrors.ErrTimeout
 	}
 
-	return context.run(persistentData, ephemeralData, runTimer)
+	context.mu.Lock()
+	defer context.mu.Unlock()
+
+	if context.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
+
+	context.evalsInFlight.Add(1)
+	defer context.evalsInFlight.Done()
+
+	var resultPinner runtime.Pinner
+	defer resultPinner.Unpin()
+	var result WAFObject
+	resultPinner.Pin(&result)
+	defer wafBindings.Lib.ObjectDestroy(&result, wafBindings.Lib.DefaultAllocator())
+
+	cContext := context.cContext
+	ret := wafBindings.Lib.ContextEval(cContext, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
+
+	return decodeWafResult(ctx, ret, &result, runTimer)
 }
 
-// merge merges two maps of slices into a single map of slices. The resulting map will contain all
-// keys from both a and b, with the corresponding value from a and b concatenated (in this order) in
-// a single slice. The implementation tries to minimize reallocations.
-func merge[K comparable, V any](a, b map[K][]V) (merged map[K][]V) {
-	count := len(a) + len(b)
-	if count == 0 {
+// Close disposes of the underlying context or subcontext.
+// It destroys the context, releases associated data, and decreases
+// the reference count of the [Handle] created for this [Context].
+func (context *Context) Close() {
+	if !context.closedHint.CompareAndSwap(false, true) {
 		return
 	}
 
-	keys := make(map[K]struct{}, count)
-	nothing := struct{}{}
-	totalCount := 0
-	for _, m := range [2]map[K][]V{a, b} {
-		for k, v := range m {
-			keys[k] = nothing
-			totalCount += len(v)
-		}
+	context.mu.Lock()
+	context.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run/NewSubcontext before waiting for in-flight evals
+
+	context.evalsInFlight.Wait()
+
+	if context.cContext != 0 {
+		wafBindings.Lib.ContextDestroy(context.cContext)
+		context.cContext = 0
 	}
 
-	merged = make(map[K][]V, count)
-	values := make([]V, 0, totalCount)
-
-	for k := range keys {
-		idxS := len(values) // Start index
-		values = append(values, a[k]...)
-		values = append(values, b[k]...)
-		idxE := len(values) // End index
-
-		merged[k] = values[idxS:idxE]
+	context.pinnersMu.Lock()
+	defer context.pinnersMu.Unlock()
+	for _, p := range context.pinners {
+		p.Unpin()
 	}
+	context.pinners = nil
 
-	return
+	context.handle.Close()
 }
 
-// encodeOneAddressType encodes the given addressData values and returns the corresponding WAF
-// object and its refs. If the addressData is empty, it returns nil for the WAF object and an empty
-// ref pool.
-// At this point, if the encoder does not timeout, the only error we can get is an error in case the
-// top level object is a nil map, but this  behaviour is expected since either persistent or
-// ephemeral addresses are allowed to be null one at a time. In this case, Encode will return nil,
-// which is what we need to send to ddwaf_run to signal that the address data is empty.
-func (context *Context) encodeOneAddressType(pinner pin.Pinner, addressData map[string]any, timer timer.Timer) (*bindings.WAFObject, error) {
-	if addressData == nil {
-		return nil, nil
+// Truncations returns the truncations that occurred while encoding address
+// data for WAF execution. The returned value is a snapshot; subsequent Run
+// calls may accumulate more truncations.
+func (context *Context) Truncations() Truncations {
+	context.truncationsMu.RLock()
+	defer context.truncationsMu.RUnlock()
+	return Truncations{
+		StringTooLong:     append([]int(nil), context.truncations.StringTooLong...),
+		ContainerTooLarge: append([]int(nil), context.truncations.ContainerTooLarge...),
+		ObjectTooDeep:     append([]int(nil), context.truncations.ObjectTooDeep...),
 	}
-
-	encoder, err := newEncoder(newEncoderConfig(pinner, timer))
-	if err != nil {
-		return nil, fmt.Errorf("could not create encoder: %w", err)
-	}
-
-	data, _ := encoder.Encode(addressData)
-	if len(encoder.truncations) > 0 {
-		context.mutex.Lock()
-		defer context.mutex.Unlock()
-
-		context.truncations = merge(context.truncations, encoder.truncations)
-	}
-
-	if timer.Exhausted() {
-		return nil, waferrors.ErrTimeout
-	}
-
-	return data, nil
-}
-
-// run executes the ddwaf_run call with the provided data on this context. The caller is responsible for locking the
-// context appropriately around this call.
-func (context *Context) run(persistentData, ephemeralData *bindings.WAFObject, runTimer timer.NodeTimer) (Result, error) {
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-
-	var result bindings.WAFObject
-	pinner.Pin(&result)
-	defer bindings.Lib.ObjectFree(&result)
-
-	// The value of the timeout cannot exceed 2^55
-	// cf. https://en.cppreference.com/w/cpp/chrono/duration
-	timeout := uint64(runTimer.SumRemaining().Microseconds()) & 0x008FFFFFFFFFFFFF
-	ret := bindings.Lib.Run(context.cContext, persistentData, ephemeralData, &result, timeout)
-
-	decodeTimer := runTimer.MustLeaf(DecodeTimeKey)
-	decodeTimer.Start()
-	defer decodeTimer.Stop()
-
-	res, duration, err := unwrapWafResult(ret, &result)
-	runTimer.AddTime(DurationTimeKey, duration)
-	return res, err
-}
-
-func unwrapWafResult(ret bindings.WAFReturnCode, result *bindings.WAFObject) (Result, time.Duration, error) {
-	if !result.IsMap() {
-		return Result{}, 0, fmt.Errorf("invalid result (expected map, got %s)", result.Type)
-	}
-
-	entries, err := result.Values()
-	if err != nil {
-		return Result{}, 0, err
-	}
-
-	var (
-		res      Result
-		duration time.Duration
-	)
-	for _, entry := range entries {
-		switch key := entry.MapKey(); key {
-		case "timeout":
-			timeout, decodeErr := entry.BoolValue()
-			if decodeErr != nil {
-				return Result{}, 0, fmt.Errorf("failed to decode timeout: %w", decodeErr)
-			}
-			if timeout {
-				err = waferrors.ErrTimeout
-			}
-		case "keep":
-			keep, err := entry.BoolValue()
-			if err != nil {
-				return Result{}, 0, fmt.Errorf("failed to decode keep: %w", err)
-			}
-			res.Keep = keep
-		case "duration":
-			dur, err := entry.UIntValue()
-			if err != nil {
-				return Result{}, 0, fmt.Errorf("failed to decode duration: %w", err)
-			}
-			duration = time.Duration(dur) * time.Nanosecond
-		case "events":
-			if !entry.IsArray() {
-				return Result{}, 0, fmt.Errorf("invalid events (expected array, got %s)", entry.Type)
-			}
-			if entry.NbEntries != 0 {
-				events, err := entry.ArrayValue()
-				if err != nil {
-					return Result{}, 0, fmt.Errorf("failed to decode events: %w", err)
-				}
-				res.Events = events
-			}
-		case "actions":
-			if !entry.IsMap() {
-				return Result{}, 0, fmt.Errorf("invalid actions (expected map, got %s)", entry.Type)
-			}
-			if entry.NbEntries != 0 {
-				actions, err := entry.MapValue()
-				if err != nil {
-					return Result{}, 0, fmt.Errorf("failed to decode actions: %w", err)
-				}
-				res.Actions = actions
-			}
-		case "attributes":
-			if !entry.IsMap() {
-				return Result{}, 0, fmt.Errorf("invalid attributes (expected map, got %s)", entry.Type)
-			}
-			if entry.NbEntries != 0 {
-				derivatives, err := entry.MapValue()
-				if err != nil {
-					return Result{}, 0, fmt.Errorf("failed to decode attributes: %w", err)
-				}
-				res.Derivatives = derivatives
-			}
-		}
-	}
-
-	return res, duration, goRunError(ret, err)
-}
-
-// Close disposes of the underlying `ddwaf_context` and releases the associated
-// internal data. It also decreases the reference count of the [Handle] which
-// created this [Context], possibly releasing it completely (if this was the
-// last [Context] created from it, and it is no longer in use by its creator).
-func (context *Context) Close() {
-	context.mutex.Lock()
-	defer context.mutex.Unlock()
-
-	bindings.Lib.ContextDestroy(context.cContext)
-	defer context.handle.Close() // Reduce the reference counter of the Handle.
-	context.cContext = 0         // Makes it easy to spot use-after-free/double-free issues
-
-	context.pinner.Unpin() // The pinned data is no longer needed, explicitly release
-}
-
-// Truncations returns the truncations that occurred while encoding address data for WAF execution.
-// The key is the truncation reason: either because the object was too deep, the arrays where to large or the strings were too long.
-// The value is a slice of integers, each integer being the original size of the object that was truncated.
-// In case of the [ObjectTooDeep] reason, the original size can only be approximated because of recursive objects.
-func (context *Context) Truncations() map[TruncationReason][]int {
-	context.mutex.Lock()
-	defer context.mutex.Unlock()
-
-	return maps.Clone(context.truncations)
 }

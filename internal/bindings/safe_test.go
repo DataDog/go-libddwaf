@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"testing"
 
-	wafErrors "github.com/DataDog/go-libddwaf/v4/waferrors"
+	wafErrors "github.com/DataDog/go-libddwaf/v5/waferrors"
 
 	"github.com/stretchr/testify/require"
 )
@@ -21,7 +21,6 @@ func TestTryCall(t *testing.T) {
 
 	t.Run("panic", func(t *testing.T) {
 		t.Run("error", func(t *testing.T) {
-			// panic called with an error
 			_, err := tryCall(func() error {
 				panic(myPanicErr)
 			})
@@ -32,7 +31,6 @@ func TestTryCall(t *testing.T) {
 		})
 
 		t.Run("string", func(t *testing.T) {
-			// panic called with a string
 			str := "woops"
 			_, err := tryCall(func() error {
 				panic(str)
@@ -44,7 +42,6 @@ func TestTryCall(t *testing.T) {
 		})
 
 		t.Run("int", func(t *testing.T) {
-			// panic called with an int to cover the default fallback in tryCall
 			var i int64 = 42
 			_, err := tryCall(func() error {
 				panic(i)

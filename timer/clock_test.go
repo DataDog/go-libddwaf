@@ -2,9 +2,28 @@ package timer
 
 import (
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
+
+func TestClockConcurrentNow(t *testing.T) {
+	c := &clock{}
+	var wg sync.WaitGroup
+	barrier := make(chan struct{})
+	for range 100 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-barrier
+			for range 1000 {
+				_ = c.now()
+			}
+		}()
+	}
+	close(barrier)
+	wg.Wait()
+}
 
 func BenchmarkMostUsedFunctions(b *testing.B) {
 	b.Run("timer.Start()", func(b *testing.B) {
