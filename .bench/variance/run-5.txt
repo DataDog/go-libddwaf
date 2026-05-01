@@ -1,0 +1,62 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/DataDog/go-libddwaf/v5
+cpu: Apple M4 Max
+BenchmarkWAF/RequestResponse-16             	   16273	     73495 ns/op	    6725 B/op	     153 allocs/op
+BenchmarkWAF/Run/SmallRuleset/NoAttack-16   	  178980	      6602 ns/op	    4123 B/op	      95 allocs/op
+BenchmarkWAF/Run/SmallRuleset/Attack-16     	  130444	      9123 ns/op	    6957 B/op	     167 allocs/op
+BenchmarkWAF/Run/RecommendedRuleset/NoAttack-16         	   19156	     62207 ns/op	    4891 B/op	     113 allocs/op
+BenchmarkWAF/Run/RecommendedRuleset/Attack-16           	   19107	     62549 ns/op	   11200 B/op	     293 allocs/op
+BenchmarkWAF/ContextLifecycle-16                        	 1209334	       992.7 ns/op	     552 B/op	       7 allocs/op
+BenchmarkWAF/DataComplexity/Minimal-16                  	   91714	     12542 ns/op	    2498 B/op	      39 allocs/op
+BenchmarkWAF/DataComplexity/Realistic-16                	   19369	     62383 ns/op	    4891 B/op	     113 allocs/op
+BenchmarkWAF/DataComplexity/Heavy-16                    	    1198	   1013847 ns/op	   20914 B/op	     509 allocs/op
+BenchmarkWAF/Parallel-16                                	  131414	      9223 ns/op	    4908 B/op	     113 allocs/op
+BenchmarkWAF/Subcontext-16                              	   42736	     27931 ns/op	    2586 B/op	      40 allocs/op
+BenchmarkNewContextOnly-16                              	  679840	      1767 ns/op	     544 B/op	       6 allocs/op
+BenchmarkContextCloseOnly-16                            	 1000000	      1044 ns/op	      17 B/op	       1 allocs/op
+--- FAIL: BenchmarkRunOnly
+    benchmark_test.go:408: waf timeout
+BenchmarkSubcontextRunOnly-16                           	   56449	     21113 ns/op	    1710 B/op	      28 allocs/op
+BenchmarkColdStart-16                                   	    6594	    176395 ns/op	    3031 B/op	       9 allocs/op
+BenchmarkNewContextParallel-16                          	 2715534	       425.6 ns/op	     553 B/op	       7 allocs/op
+BenchmarkSiblingSubcontextParallelism-16                	  534808	      2204 ns/op	    1806 B/op	      31 allocs/op
+BenchmarkSiblingSubcontextSerialized-16                 	  570616	      2019 ns/op	    1821 B/op	      31 allocs/op
+BenchmarkContextRun-16                                  	  572560	      1994 ns/op	    1819 B/op	      31 allocs/op
+BenchmarkSubcontextRun-16                               	  577438	      2003 ns/op	    1818 B/op	      31 allocs/op
+BenchmarkEncoder/1024-16                                	  132798	      8178 ns/op	    9254 B/op	     132 allocs/op
+BenchmarkEncoder/4096-16                                	  188880	      7941 ns/op	    9732 B/op	     132 allocs/op
+BenchmarkEncoder/8192-16                                	  191895	      6741 ns/op	    9366 B/op	     132 allocs/op
+BenchmarkEncoder/16384-16                               	  200509	      6641 ns/op	    7518 B/op	     132 allocs/op
+FAIL
+exit status 1
+FAIL	github.com/DataDog/go-libddwaf/v5	121.284s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/bindings	0.416s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/invariant	0.222s
+?   	github.com/DataDog/go-libddwaf/v5/internal/lib	[no test files]
+?   	github.com/DataDog/go-libddwaf/v5/internal/log	[no test files]
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/pin	0.219s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/ruleset	0.307s
+?   	github.com/DataDog/go-libddwaf/v5/internal/support	[no test files]
+?   	github.com/DataDog/go-libddwaf/v5/internal/unsafeutil	[no test files]
+goos: darwin
+goarch: arm64
+pkg: github.com/DataDog/go-libddwaf/v5/timer
+cpu: Apple M4 Max
+BenchmarkMostUsedFunctions/timer.Start()-16         	23154363	        54.89 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMostUsedFunctions/timer.Spent()-16         	810172618	         1.436 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMostUsedFunctions/timer.Remaining()-16     	495897820	         2.343 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMostUsedFunctions/timer.Exhausted()-16     	517359756	         2.351 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNow/time.Now()-16                          	36975553	        33.43 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNow/clock.now()-16                         	27403986	        42.87 ns/op	       0 B/op	       0 allocs/op
+BenchmarkContext-16                                 	  186618	      6399 ns/op	    7256 B/op	     103 allocs/op
+BenchmarkRun-16                                     	  801236	      1465 ns/op	    1448 B/op	      15 allocs/op
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/timer	14.356s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/waferrors	0.263s
+FAIL
