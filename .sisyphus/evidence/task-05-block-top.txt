@@ -1,0 +1,27 @@
+File: go-libddwaf.test
+Type: delay
+Time: 2026-05-01 14:08:50 CEST
+Showing nodes accounting for 273.83s, 99.52% of 275.17s total
+Dropped 43 nodes (cum <= 1.38s)
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%    273.83s 99.52%  testing.(*B).runN
+   167.42s 60.84% 60.84%    167.42s 60.84%  runtime.chanrecv1
+         0     0% 60.84%    167.42s 60.84%  testing.(*B).Run
+         0     0% 60.84%    108.04s 39.26%  github.com/DataDog/go-libddwaf/v5.TestMain
+         0     0% 60.84%    108.04s 39.26%  main.main
+         0     0% 60.84%    108.04s 39.26%  runtime.main
+         0     0% 60.84%    108.04s 39.26%  testing.(*M).Run
+         0     0% 60.84%    108.04s 39.26%  testing.runBenchmarks
+         0     0% 60.84%    108.04s 39.26%  testing.runBenchmarks.func1
+         0     0% 60.84%    107.99s 39.25%  testing.(*B).run
+         0     0% 60.84%    107.99s 39.25%  testing.(*benchState).processBench
+         0     0% 60.84%    107.68s 39.13%  testing.(*B).doBench
+   106.41s 38.67% 99.52%    106.41s 38.67%  sync.(*WaitGroup).Wait
+         0     0% 99.52%    106.41s 38.67%  testing.(*B).RunParallel
+         0     0% 99.52%    106.41s 38.67%  testing.(*B).doBench.gowrap1
+         0     0% 99.52%    106.41s 38.67%  testing.(*B).launch
+         0     0% 99.52%     59.74s 21.71%  testing.(*B).run1
+         0     0% 99.52%     59.38s 21.58%  testing.(*B).run1.func1
+         0     0% 99.52%     59.38s 21.58%  github.com/DataDog/go-libddwaf/v5.BenchmarkWAF
+         0     0% 99.52%     58.60s 21.29%  github.com/DataDog/go-libddwaf/v5.BenchmarkWAF.func5
+         0     0% 99.52%     47.82s 17.38%  github.com/DataDog/go-libddwaf/v5.BenchmarkNewContextParallel
