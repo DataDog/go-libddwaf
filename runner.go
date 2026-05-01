@@ -9,10 +9,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"time"
 
 	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v5/internal/pin"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
@@ -36,7 +36,7 @@ func newRunTimer(parent timer.NodeTimer, key timer.Key) (timer.NodeTimer, error)
 // encodeAddressData encodes address data into WAF objects. Returns the encoded
 // WAF object and any truncation info. The caller is responsible for merging
 // truncations into its own truncation set.
-func encodeAddressData(pinner pin.Pinner, addressData map[string]any, t timer.Timer) (*WAFObject, Truncations, error) {
+func encodeAddressData(pinner *runtime.Pinner, addressData map[string]any, t timer.Timer) (*WAFObject, Truncations, error) {
 	if addressData == nil {
 		return nil, Truncations{}, nil
 	}

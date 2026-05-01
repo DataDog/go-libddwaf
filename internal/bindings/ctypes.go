@@ -11,7 +11,8 @@ import (
 	"math"
 	"structs"
 
-	"github.com/DataDog/go-libddwaf/v5/internal/pin"
+	"runtime"
+
 	"github.com/DataDog/go-libddwaf/v5/internal/unsafeutil"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
@@ -338,7 +339,7 @@ func (w *WAFObject) SetFloat(f float64) {
 //	    uint8_t size;    // offset 1
 //	    char data[14];   // offset 2
 //	};
-func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
+func (w *WAFObject) SetString(pinner *runtime.Pinner, str string) {
 	clear(w.data[:])
 
 	header := unsafeutil.NativeStringUnwrap(str)
@@ -372,7 +373,7 @@ func (w *WAFObject) SetString(pinner pin.Pinner, str string) {
 //	    uint32_t size;   // offset 4
 //	    char *ptr;       // offset 8
 //	};
-func (w *WAFObject) SetLiteralString(pinner pin.Pinner, str string) {
+func (w *WAFObject) SetLiteralString(pinner *runtime.Pinner, str string) {
 	clear(w.data[:])
 
 	header := unsafeutil.NativeStringUnwrap(str)
@@ -399,7 +400,7 @@ func (w *WAFObject) SetLiteralString(pinner pin.Pinner, str string) {
 //	    // 2 bytes padding
 //	    ddwaf_object *ptr;    // offset 8
 //	};
-func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint16) []WAFObject {
+func (w *WAFObject) SetArray(pinner *runtime.Pinner, capacity uint16) []WAFObject {
 	clear(w.data[:])
 	w.setType(WAFArrayType)
 
@@ -421,7 +422,7 @@ func (w *WAFObject) SetArray(pinner pin.Pinner, capacity uint16) []WAFObject {
 // SetArrayData sets the receiving [WAFObject] to the provided array items.
 //
 // C layout for array (type=0x20): see SetArray
-func (w *WAFObject) SetArrayData(pinner pin.Pinner, data []WAFObject) error {
+func (w *WAFObject) SetArrayData(pinner *runtime.Pinner, data []WAFObject) error {
 	clear(w.data[:])
 	w.setType(WAFArrayType)
 
@@ -465,7 +466,7 @@ func (w *WAFObject) SetArraySize(size uint16) {
 //	    // 2 bytes padding
 //	    ddwaf_object_kv *ptr;   // offset 8
 //	};
-func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint16) []WAFObjectKV {
+func (w *WAFObject) SetMap(pinner *runtime.Pinner, capacity uint16) []WAFObjectKV {
 	clear(w.data[:])
 	w.setType(WAFMapType)
 
@@ -487,7 +488,7 @@ func (w *WAFObject) SetMap(pinner pin.Pinner, capacity uint16) []WAFObjectKV {
 // SetMapData sets the receiving [WAFObject] to the provided map items.
 //
 // C layout for map (type=0x40): see SetMap
-func (w *WAFObject) SetMapData(pinner pin.Pinner, data []WAFObjectKV) error {
+func (w *WAFObject) SetMapData(pinner *runtime.Pinner, data []WAFObjectKV) error {
 	clear(w.data[:])
 	w.setType(WAFMapType)
 

@@ -12,11 +12,11 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"runtime"
 	"strings"
 
 	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
-	"github.com/DataDog/go-libddwaf/v5/internal/pin"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
@@ -29,7 +29,7 @@ const maxPointerIndirections = 8
 // timing, and size limits for strings, containers, and object depth.
 type EncoderConfig struct {
 	// Pinner is used to pin the data referenced by the encoded wafObjects.
-	Pinner Pinner
+	Pinner *runtime.Pinner
 	// Timer makes sure the encoder doesn't spend too much time doing its job.
 	Timer timer.Timer
 	// MaxContainerSize is the maximum number of elements in a container (list, map, struct) that will be encoded.
@@ -127,7 +127,7 @@ func newEncoder(config EncoderConfig) (*encoder, error) {
 	return &encoder{enc: &Encoder{Config: config}}, nil
 }
 
-func newEncoderConfig(pinner pin.Pinner, opts ...EncoderOption) EncoderConfig {
+func newEncoderConfig(pinner *runtime.Pinner, opts ...EncoderOption) EncoderConfig {
 	config := EncoderConfig{
 		Pinner:           pinner,
 		MaxContainerSize: wafBindings.MaxContainerSize,

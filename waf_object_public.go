@@ -7,7 +7,6 @@ package libddwaf
 
 import (
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v5/internal/pin"
 )
 
 // WAFObject is a 16-byte value type matching the C ddwaf_object union.
@@ -37,9 +36,4 @@ const (
 	WAFMapType           = bindings.WAFMapType
 )
 
-// Pinner is a re-export of [pin.Pinner] so that external [Encodable]
-// implementers don't need to import an internal package.
-//
-// Pinning is required for any string, container, or map setter to keep
-// Go memory alive across C calls. [*runtime.Pinner] satisfies this interface.
-type Pinner = pin.Pinner
+
