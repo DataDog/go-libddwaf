@@ -141,7 +141,7 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 
 	success = true
 	return &Subcontext{
-		Timer:  subTimer,
+		Timer:  timer.WrapOwnedNodeTimer(subTimer),
 		parent: context,
 		cSub:   cSubcontext,
 	}, nil
@@ -170,6 +170,13 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 		return Result{}, waferrors.ErrContextClosed
 	}
 
+	context.mu.Lock()
+	defer context.mu.Unlock()
+
+	if context.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
+
 	if context.Timer.SumExhausted() {
 		return Result{}, waferrors.ErrTimeout
 	}
@@ -178,14 +185,8 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	if err != nil {
 		return Result{}, err
 	}
+	defer timer.PutNodeTimer(runTimer)
 	defer func() { res.TimerStats = runTimer.Stats() }()
-
-	context.mu.Lock()
-	defer context.mu.Unlock()
-
-	if context.closedHint.Load() {
-		return Result{}, waferrors.ErrContextClosed
-	}
 
 	context.evalsInFlight.Add(1)
 	defer context.evalsInFlight.Done()
@@ -239,6 +240,8 @@ func (context *Context) Close() {
 	context.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run/NewSubcontext before waiting for in-flight evals
 
 	context.evalsInFlight.Wait()
+	context.mu.Lock()
+	defer context.mu.Unlock()
 
 	if context.cContext != 0 {
 		wafBindings.Lib.ContextDestroy(context.cContext)
@@ -246,6 +249,8 @@ func (context *Context) Close() {
 	}
 
 	context.pinner.Close()
+	timer.PutNodeTimer(context.Timer)
+	context.Timer = nil
 
 	context.handle.Close()
 }

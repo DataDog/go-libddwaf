@@ -21,6 +21,29 @@ type nodeTimer struct {
 
 var _ NodeTimer = (*nodeTimer)(nil)
 
+type ownedNodeTimer struct {
+	state atomic.Pointer[ownedNodeTimerState]
+}
+
+type ownedNodeTimerState struct {
+	live     *nodeTimer
+	snapshot *nodeTimerSnapshot
+}
+
+type nodeTimerSnapshot struct {
+	start         time.Time
+	spent         time.Duration
+	remaining     time.Duration
+	exhausted     bool
+	sumSpent      time.Duration
+	sumRemaining  time.Duration
+	sumExhausted  bool
+	stats         map[Key]time.Duration
+	componentKeys []Key
+}
+
+var _ NodeTimer = (*ownedNodeTimer)(nil)
+
 var nodeTimerPool = sync.Pool{
 	New: func() any {
 		return &nodeTimer{}
@@ -65,6 +88,11 @@ func PutNodeTimer(t NodeTimer) {
 		return
 	}
 
+	if owned, ok := t.(*ownedNodeTimer); ok {
+		owned.release()
+		return
+	}
+
 	node, ok := t.(*nodeTimer)
 	if !ok {
 		return
@@ -72,6 +100,282 @@ func PutNodeTimer(t NodeTimer) {
 
 	node.reset()
 	nodeTimerPool.Put(node)
+}
+
+// WrapOwnedNodeTimer protects externally reachable node timers so aliases remain
+// safe after the underlying pooled timer is returned.
+func WrapOwnedNodeTimer(t NodeTimer) NodeTimer {
+	if t == nil {
+		return nil
+	}
+	if owned, ok := t.(*ownedNodeTimer); ok {
+		return owned
+	}
+	node, ok := t.(*nodeTimer)
+	if !ok {
+		return t
+	}
+	wrapper := &ownedNodeTimer{}
+	wrapper.state.Store(&ownedNodeTimerState{live: node})
+	return wrapper
+}
+
+func (timer *ownedNodeTimer) release() {
+	for {
+		state := timer.loadState()
+		if state == nil || state.live == nil {
+			return
+		}
+
+		snapshot := snapshotNodeTimer(state.live)
+		if timer.state.CompareAndSwap(state, &ownedNodeTimerState{snapshot: snapshot}) {
+			PutNodeTimer(state.live)
+			return
+		}
+	}
+}
+
+func snapshotNodeTimer(timer *nodeTimer) *nodeTimerSnapshot {
+	componentKeys := timer.ComponentKeys()
+	stats := make(map[Key]time.Duration, len(componentKeys))
+	timer.StatsInto(stats)
+	return &nodeTimerSnapshot{
+		start:         timer.startValue,
+		spent:         timer.Spent(),
+		remaining:     timer.Remaining(),
+		exhausted:     timer.Exhausted(),
+		sumSpent:      timer.SumSpent(),
+		sumRemaining:  timer.SumRemaining(),
+		sumExhausted:  timer.SumExhausted(),
+		stats:         stats,
+		componentKeys: componentKeys,
+	}
+}
+
+func (timer *ownedNodeTimer) loadState() *ownedNodeTimerState {
+	return timer.state.Load()
+}
+
+func (timer *ownedNodeTimer) liveNode() *nodeTimer {
+	state := timer.loadState()
+	if state == nil {
+		return nil
+	}
+	return state.live
+}
+
+func (timer *ownedNodeTimer) snapshot() *nodeTimerSnapshot {
+	state := timer.loadState()
+	if state == nil {
+		return nil
+	}
+	return state.snapshot
+}
+
+func (timer *ownedNodeTimer) Start() time.Time {
+	if live := timer.liveNode(); live != nil {
+		return live.Start()
+	}
+	if snapshot := timer.snapshot(); snapshot != nil {
+		return snapshot.start
+	}
+	return time.Time{}
+}
+
+func (timer *ownedNodeTimer) Stop() time.Duration {
+	if live := timer.liveNode(); live != nil {
+		return live.Stop()
+	}
+	if snapshot := timer.snapshot(); snapshot != nil {
+		return snapshot.spent
+	}
+	return 0
+}
+
+func (timer *ownedNodeTimer) Spent() time.Duration {
+	if live := timer.liveNode(); live != nil {
+		return live.Spent()
+	}
+	if snapshot := timer.snapshot(); snapshot != nil {
+		return snapshot.spent
+	}
+	return 0
+}
+
+func (timer *ownedNodeTimer) Remaining() time.Duration {
+	if live := timer.liveNode(); live != nil {
+		return live.Remaining()
+	}
+	if snapshot := timer.snapshot(); snapshot != nil {
+		return snapshot.remaining
+	}
+	return 0
+}
+
+func (timer *ownedNodeTimer) Exhausted() bool {
+	if live := timer.liveNode(); live != nil {
+		return live.Exhausted()
+	}
+	if snapshot := timer.snapshot(); snapshot != nil {
+		return snapshot.exhausted
+	}
+	return false
+}
+
+func (timer *ownedNodeTimer) Timed(timedFunc func(timer Timer)) time.Duration {
+	if live := timer.liveNode(); live != nil {
+		return live.Timed(timedFunc)
+	}
+	start := timer.Start()
+	timedFunc(timer)
+	_ = start
+	return timer.Stop()
+}
+
+func (timer *ownedNodeTimer) NewNode(name Key, options ...Option) (NodeTimer, error) {
+	live := timer.liveNode()
+	if live == nil {
+		return nil, errors.New("NewNode: timer is closed")
+	}
+	config := newConfig(options...)
+	if len(config.components) == 0 {
+		return nil, errors.New("NewNode: node timer must have at least one component, otherwise use NewLeaf()")
+	}
+	if _, ok := live.lookup[name]; !ok {
+		return nil, fmt.Errorf("NewNode: component %s not found", name)
+	}
+	return newPooledNodeTimer(config, live.clock, timer, name), nil
+}
+
+func (timer *ownedNodeTimer) NewLeaf(name Key, options ...Option) (Timer, error) {
+	live := timer.liveNode()
+	if live == nil {
+		return nil, errors.New("NewLeaf: timer is closed")
+	}
+	config := newConfig(options...)
+	if len(config.components) != 0 {
+		return nil, errors.New("NewLeaf: leaf timer cannot have components, otherwise use NewNode()")
+	}
+	if _, ok := live.lookup[name]; !ok {
+		return nil, fmt.Errorf("NewLeaf: component %s not found", name)
+	}
+	leaf := getBaseTimer()
+	leaf.clock = live.clock
+	leaf.config = config
+	leaf.componentName = name
+	leaf.parent = timer
+	return leaf, nil
+}
+
+func (timer *ownedNodeTimer) MustLeaf(name Key, options ...Option) Timer {
+	if len(options) == 0 {
+		live := timer.liveNode()
+		if live == nil {
+			panic("MustLeaf: timer is closed")
+		}
+		if _, ok := live.lookup[name]; !ok {
+			panic(fmt.Sprintf("MustLeaf: component %s not found", name))
+		}
+		leaf := getBaseTimer()
+		leaf.clock = live.clock
+		leaf.config = defaultLeafConfig
+		leaf.componentName = name
+		leaf.parent = timer
+		return leaf
+	}
+	leaf, err := timer.NewLeaf(name, options...)
+	if err != nil {
+		panic(err)
+	}
+	return leaf
+}
+
+func (timer *ownedNodeTimer) AddTime(name Key, duration time.Duration) {
+	if live := timer.liveNode(); live != nil {
+		live.AddTime(name, duration)
+	}
+}
+
+func (timer *ownedNodeTimer) Stats() map[Key]time.Duration {
+	if live := timer.liveNode(); live != nil {
+		return live.Stats()
+	}
+	snapshot := timer.snapshot()
+	if snapshot == nil {
+		return nil
+	}
+	stats := make(map[Key]time.Duration, len(snapshot.stats))
+	for name, duration := range snapshot.stats {
+		stats[name] = duration
+	}
+	return stats
+}
+
+func (timer *ownedNodeTimer) StatsInto(dst map[Key]time.Duration) {
+	if live := timer.liveNode(); live != nil {
+		live.StatsInto(dst)
+		return
+	}
+	if snapshot := timer.snapshot(); snapshot != nil {
+		for name, duration := range snapshot.stats {
+			dst[name] = duration
+		}
+	}
+}
+
+func (timer *ownedNodeTimer) ComponentKeys() []Key {
+	if live := timer.liveNode(); live != nil {
+		return live.ComponentKeys()
+	}
+	if snapshot := timer.snapshot(); snapshot != nil {
+		return append([]Key(nil), snapshot.componentKeys...)
+	}
+	return nil
+}
+
+func (timer *ownedNodeTimer) SumSpent() time.Duration {
+	if live := timer.liveNode(); live != nil {
+		return live.SumSpent()
+	}
+	if snapshot := timer.snapshot(); snapshot != nil {
+		return snapshot.sumSpent
+	}
+	return 0
+}
+
+func (timer *ownedNodeTimer) SumRemaining() time.Duration {
+	if live := timer.liveNode(); live != nil {
+		return live.SumRemaining()
+	}
+	if snapshot := timer.snapshot(); snapshot != nil {
+		return snapshot.sumRemaining
+	}
+	return 0
+}
+
+func (timer *ownedNodeTimer) SumExhausted() bool {
+	if live := timer.liveNode(); live != nil {
+		return live.SumExhausted()
+	}
+	if snapshot := timer.snapshot(); snapshot != nil {
+		return snapshot.sumExhausted
+	}
+	return false
+}
+
+func (timer *ownedNodeTimer) childStarted() {}
+
+func (timer *ownedNodeTimer) childStopped(componentName Key, duration time.Duration) {
+	if live := timer.liveNode(); live != nil {
+		live.childStopped(componentName, duration)
+	}
+}
+
+func (timer *ownedNodeTimer) now() time.Time {
+	if live := timer.liveNode(); live != nil {
+		return live.now()
+	}
+	return time.Time{}
 }
 
 func newPooledNodeTimer(config config, clock *clock, parent NodeTimer, componentName Key) *nodeTimer {

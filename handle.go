@@ -103,7 +103,7 @@ func (handle *Handle) NewContext(ctx context.Context, timerOptions ...timer.Opti
 
 	return &Context{
 		handle:   handle,
-		Timer:    rootTimer,
+		Timer:    timer.WrapOwnedNodeTimer(rootTimer),
 		cContext: cContext,
 	}, nil
 }
