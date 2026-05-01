@@ -93,6 +93,10 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	wafEncodeTimer.Start()
 	data, truncations, err := encodeAddressData(&s.pinner, addressData.Data, wafEncodeTimer)
 	wafEncodeTimer.Stop()
+	if pooled, ok := wafEncodeTimer.(interface{ ReleaseToPool() }); ok {
+		// Safe after Stop(): childStopped only does an atomic add into the parent's component lookup and retains no leaf reference.
+		pooled.ReleaseToPool()
+	}
 	if err != nil {
 		return Result{}, err
 	}
