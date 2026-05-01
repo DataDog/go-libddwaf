@@ -68,10 +68,6 @@ func goRunError(rc bindings.WAFReturnCode) error {
 	}
 }
 
-func keyMatches(key *WAFObject, expected string) (bool, error) {
-	return key.StringMatches(expected)
-}
-
 // Named returns keep the post-processing / deferred-assignment pattern compact at the callsite.
 func unwrapWafResult(ret bindings.WAFReturnCode, result *WAFObject) (res Result, duration time.Duration, err error) {
 	if !result.IsMap() {
