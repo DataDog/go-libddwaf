@@ -127,7 +127,7 @@ func BenchmarkContextRun(b *testing.B) {
 	}}
 
 	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		_, _ = ctx.Run(context.Background(), data)
 	}
 }
@@ -158,7 +158,7 @@ func BenchmarkSubcontextRun(b *testing.B) {
 	}}
 
 	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		_, _ = subCtx.Run(context.Background(), data)
 	}
 }

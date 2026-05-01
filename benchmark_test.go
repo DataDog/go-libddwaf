@@ -454,7 +454,7 @@ func BenchmarkColdStart(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		runtime.GC()
 		ctx, err := handle.NewContext(stdcontext.Background(), timer.WithBudget(time.Second))
 		if err != nil {
