@@ -39,3 +39,8 @@ T02 will define the acceptable variance threshold here.
 - Note: emulated amd64 on arm64 host — throughput numbers will be slower than native CI; use for relative comparisons only
 - Known failure: `BenchmarkRunOnly` hit a WAF internal timeout (`benchmark_test.go:408: waf timeout`); this is an emulation artifact from slow QEMU execution, not a code regression. All other benchmarks completed (298 results, main package ran for 944s).
 - Exit code: 1 (due to above failure); all other packages passed
+
+## Regression Gate (from T02 variance characterization)
+
+threshold = max(2%, 3σ) = 25.85%
+Computed from 30 runs on darwin/arm64 (M4 Max).

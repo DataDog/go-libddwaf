@@ -1,0 +1,21 @@
+# github.com/DataDog/go-libddwaf/v5/timer [github.com/DataDog/go-libddwaf/v5/timer.test]
+timer/clock_test.go:36:2: undefined: putTimeCache
+timer/clock_test.go:40:3: undefined: putTimeCache
+timer/pool_internal_test.go:39:14: cannot use parent (variable of struct type testNodeTimer) as NodeTimer value in assignment: testNodeTimer does not implement NodeTimer (missing method now)
+FAIL	github.com/DataDog/go-libddwaf/v5 [build failed]
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/bindings	0.222s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/invariant	0.162s
+?   	github.com/DataDog/go-libddwaf/v5/internal/lib	[no test files]
+?   	github.com/DataDog/go-libddwaf/v5/internal/log	[no test files]
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/pin	0.163s
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/internal/ruleset	0.176s
+?   	github.com/DataDog/go-libddwaf/v5/internal/support	[no test files]
+?   	github.com/DataDog/go-libddwaf/v5/internal/unsafeutil	[no test files]
+FAIL	github.com/DataDog/go-libddwaf/v5/timer [build failed]
+PASS
+ok  	github.com/DataDog/go-libddwaf/v5/waferrors	0.141s
+FAIL
