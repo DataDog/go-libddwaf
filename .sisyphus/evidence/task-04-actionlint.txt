@@ -1,3 +1,0 @@
-VALIDATOR=yaml.safe_load
-YAML parse: OK
-EXIT=0

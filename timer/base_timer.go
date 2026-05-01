@@ -7,7 +7,6 @@ package timer
 
 import (
 	"errors"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -21,9 +20,6 @@ type baseTimer struct {
 
 	clock *clock
 
-	// startOnce guards the one-time initialization in Start() so that
-	// concurrent callers don't race on startValue or budget resolution.
-	startOnce sync.Once
 	// start is the time when the timer was started
 	start atomic.Pointer[time.Time]
 	// startValue stores the start time once it has been published via start.
@@ -40,9 +36,6 @@ type baseTimer struct {
 	// budgetResolved is true once budget has been resolved from the parent.
 	budgetResolved atomic.Bool
 
-	// stopOnce guards the one-time teardown in Stop() so that concurrent
-	// callers don't double-count childStopped or race on spent.
-	stopOnce sync.Once
 	// spent is the time spent on the timer, set after calling stop
 	spent atomic.Int64
 	// stopped is true if the timer has been stopped
@@ -50,58 +43,6 @@ type baseTimer struct {
 }
 
 var _ Timer = (*baseTimer)(nil)
-
-type baseTimerSyncPool struct {
-	pool sync.Pool
-}
-
-func (p *baseTimerSyncPool) Get() any {
-	return p.pool.Get()
-}
-
-func (p *baseTimerSyncPool) Put(x any) {
-	timer := x.(*baseTimer)
-	timer.reset()
-	p.pool.Put(timer)
-}
-
-var baseTimerPool = baseTimerSyncPool{
-	pool: sync.Pool{
-		New: func() any {
-			return &baseTimer{}
-		},
-	},
-}
-
-func getBaseTimer() *baseTimer {
-	return baseTimerPool.Get().(*baseTimer)
-}
-
-func putBaseTimer(timer *baseTimer) {
-	baseTimerPool.Put(timer)
-}
-
-func (timer *baseTimer) ReleaseToPool() {
-	putBaseTimer(timer)
-}
-
-func (timer *baseTimer) reset() {
-	if timer.parent == nil {
-		putTimeCache(timer.clock)
-	}
-	timer.config = config{}
-	timer.clock = nil
-	timer.startOnce = sync.Once{}
-	timer.start.Store(nil)
-	timer.startValue = time.Time{}
-	timer.parent = nil
-	timer.componentName = ""
-	timer.budget.Store(0)
-	timer.budgetResolved.Store(false)
-	timer.stopOnce = sync.Once{}
-	timer.spent.Store(0)
-	timer.stopped.Store(false)
-}
 
 // NewTimer creates a new Timer with the given options. You have to specify either the option WithBudget or WithUnlimitedBudget.
 func NewTimer(options ...Option) (Timer, error) {
@@ -114,22 +55,25 @@ func NewTimer(options ...Option) (Timer, error) {
 		return nil, errors.New("NewTimer: timer that have components must use NewTreeTimer()")
 	}
 
-	timer := getBaseTimer()
-	timer.config = config
-	timer.clock = newTimeCache()
-	return timer, nil
+	return &baseTimer{
+		config: config,
+		clock:  newTimeCache(),
+	}, nil
 }
 
 func (timer *baseTimer) Start() time.Time {
-	timer.startOnce.Do(func() {
-		if timer.budgetValue() == DynamicBudget && timer.parent != nil {
-			timer.budget.Store(int64(timer.config.dynamicBudget(timer.parent)))
-			timer.budgetResolved.Store(true)
-		}
+	// already started before
+	if start := timer.start.Load(); start != nil {
+		return *start
+	}
 
-		timer.startValue = timer.now()
-		timer.start.Store(&timer.startValue)
-	})
+	if timer.budgetValue() == DynamicBudget && timer.parent != nil {
+		timer.budget.Store(int64(timer.config.dynamicBudget(timer.parent)))
+		timer.budgetResolved.Store(true)
+	}
+
+	timer.startValue = timer.now()
+	timer.start.Store(&timer.startValue)
 
 	return *timer.start.Load()
 }
@@ -189,16 +133,19 @@ func (timer *baseTimer) budgetValue() time.Duration {
 }
 
 func (timer *baseTimer) Stop() time.Duration {
-	timer.stopOnce.Do(func() {
-		spent := timer.Spent()
-		timer.spent.Store(int64(spent))
-		timer.stopped.Store(true)
-		if timer.parent != nil {
-			timer.parent.childStopped(timer.componentName, spent)
-		}
-	})
+	// If the current timer has already stopped, return the current spent time
+	if timer.stopped.Load() {
+		return time.Duration(timer.spent.Load())
+	}
 
-	return time.Duration(timer.spent.Load())
+	spent := timer.Spent()
+	timer.spent.Store(int64(spent))
+	timer.stopped.Store(true)
+	if timer.parent != nil {
+		timer.parent.childStopped(timer.componentName, spent)
+	}
+
+	return spent
 }
 
 func (timer *baseTimer) Timed(timedFunc func(timer Timer)) (spent time.Duration) {

@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -28,35 +27,6 @@ const (
 	// DecodeTimeKey is the key used to track the time spent decoding the address data reported in [Result.TimerStats].
 	DecodeTimeKey timer.Key = "decode"
 )
-
-type pooledContexts struct{ sync.Pool }
-
-func (pool *pooledContexts) Get() any {
-	return pool.Pool.Get().(*Context)
-}
-
-func (pool *pooledContexts) Put(x any) {
-	_ = x.(*Context)
-	ctx := &Context{}
-	ctx.reset()
-	pool.Pool.Put(ctx)
-}
-
-var contextPool = pooledContexts{Pool: sync.Pool{
-	New: func() any {
-		return &Context{}
-	},
-}}
-
-func resetTruncationSlice(values []int) []int {
-	if values != nil {
-		clear(values[:cap(values)])
-	}
-	if cap(values) > 32 {
-		return nil
-	}
-	return values[:0]
-}
 
 // Context is a WAF execution context. It allows running the WAF incrementally when calling it
 // multiple times to run its rules every time new addresses become available. Each request must have
@@ -98,22 +68,6 @@ type Context struct {
 	pinner pin.ConcurrentPinner
 }
 
-func (context *Context) reset() {
-	context.Timer = nil
-	context.handle = nil
-	context.closedHint.Store(false)
-	context.evalsInFlight = sync.WaitGroup{}
-	context.mu = sync.Mutex{}
-	context.cContext = 0
-	context.truncationsMu = sync.RWMutex{}
-	context.truncations = Truncations{
-		StringTooLong:     resetTruncationSlice(context.truncations.StringTooLong),
-		ContainerTooLarge: resetTruncationSlice(context.truncations.ContainerTooLarge),
-		ObjectTooDeep:     resetTruncationSlice(context.truncations.ObjectTooDeep),
-	}
-	context.pinner = pin.ConcurrentPinner{}
-}
-
 // NewSubcontext creates a subcontext derived from this context.
 // The provided ctx only scopes the construction call itself and is not retained
 // after NewSubcontext returns; per-run deadlines and cancellation must be supplied
@@ -136,9 +90,6 @@ func (context *Context) reset() {
 func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) {
 	if err := validateConstructionContext("Context.NewSubcontext", ctx); err != nil {
 		return nil, err
-	}
-	if context.closedHint.Load() {
-		return nil, waferrors.ErrContextClosed
 	}
 
 	if !context.handle.retain() {
@@ -167,33 +118,16 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	}
 
 	parentKeys := context.Timer.ComponentKeys()
-	var staging [5]timer.Key
-	var components []timer.Key
-	if len(parentKeys)+3 <= cap(staging) {
-		components = staging[:0]
-		components = append(components, parentKeys...)
-		for _, key := range [...]timer.Key{EncodeTimeKey, DurationTimeKey, DecodeTimeKey} {
-			if !slices.Contains(components, key) {
-				if len(components) >= cap(staging) {
-					components = nil
-					break
-				}
-				components = append(components, key)
-			}
-		}
+	seen := make(map[timer.Key]struct{}, len(parentKeys)+3)
+	components := make([]timer.Key, 0, len(parentKeys)+3)
+	for _, k := range parentKeys {
+		seen[k] = struct{}{}
+		components = append(components, k)
 	}
-	if components == nil {
-		seen := make(map[timer.Key]struct{}, len(parentKeys)+3)
-		components = make([]timer.Key, 0, len(parentKeys)+3)
-		components = append(components, parentKeys...)
-		for _, key := range parentKeys {
+	for _, key := range []timer.Key{EncodeTimeKey, DurationTimeKey, DecodeTimeKey} {
+		if _, ok := seen[key]; !ok {
+			components = append(components, key)
 			seen[key] = struct{}{}
-		}
-		for _, key := range []timer.Key{EncodeTimeKey, DurationTimeKey, DecodeTimeKey} {
-			if _, ok := seen[key]; !ok {
-				seen[key] = struct{}{}
-				components = append(components, key)
-			}
 		}
 	}
 	subTimer, err := timer.NewTreeTimer(
@@ -206,12 +140,11 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	}
 
 	success = true
-	subCtx := subcontextPool.Get().(*Subcontext)
-	subCtx.closedHint.Store(false)
-	subCtx.Timer = timer.WrapOwnedNodeTimer(subTimer)
-	subCtx.parent = context
-	subCtx.cSub = cSubcontext
-	return subCtx, nil
+	return &Subcontext{
+		Timer:  subTimer,
+		parent: context,
+		cSub:   cSubcontext,
+	}, nil
 }
 
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
@@ -237,13 +170,6 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 		return Result{}, waferrors.ErrContextClosed
 	}
 
-	context.mu.Lock()
-	defer context.mu.Unlock()
-
-	if context.closedHint.Load() {
-		return Result{}, waferrors.ErrContextClosed
-	}
-
 	if context.Timer.SumExhausted() {
 		return Result{}, waferrors.ErrTimeout
 	}
@@ -252,8 +178,14 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	if err != nil {
 		return Result{}, err
 	}
-	defer timer.PutNodeTimer(runTimer)
 	defer func() { res.TimerStats = runTimer.Stats() }()
+
+	context.mu.Lock()
+	defer context.mu.Unlock()
+
+	if context.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
 
 	context.evalsInFlight.Add(1)
 	defer context.evalsInFlight.Done()
@@ -265,10 +197,6 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	wafEncodeTimer.Start()
 	data, truncations, err := encodeAddressData(&context.pinner, addressData.Data, wafEncodeTimer)
 	wafEncodeTimer.Stop()
-	if pooled, ok := wafEncodeTimer.(interface{ ReleaseToPool() }); ok {
-		// Safe after Stop(): childStopped only does an atomic add into the parent's component lookup and retains no leaf reference.
-		pooled.ReleaseToPool()
-	}
 	if err != nil {
 		return Result{}, err
 	}
@@ -304,27 +232,18 @@ func (context *Context) Close() {
 	}
 
 	context.mu.Lock()
-	_ = context.cContext
-	context.mu.Unlock()
+	context.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run/NewSubcontext before waiting for in-flight evals
 
 	context.evalsInFlight.Wait()
-	context.mu.Lock()
-	handle := context.handle
-	cContext := context.cContext
-	timerNode := context.Timer
-	context.cContext = 0
-	context.Timer = nil
-	context.mu.Unlock()
 
-	if cContext != 0 {
-		wafBindings.Lib.ContextDestroy(cContext)
+	if context.cContext != 0 {
+		wafBindings.Lib.ContextDestroy(context.cContext)
+		context.cContext = 0
 	}
 
 	context.pinner.Close()
-	timer.PutNodeTimer(timerNode)
 
-	handle.Close()
-	contextPool.Put(context)
+	context.handle.Close()
 }
 
 // Truncations returns the truncations that occurred while encoding address

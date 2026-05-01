@@ -111,13 +111,13 @@ func CastNative[N Native, T Native](ptr *N) *T {
 
 // NativeToUintptr is a helper used by populate WafObject values
 // with Go values
-func NativeToUintptr[T Native](x T) uintptr {
+func NativeToUintptr[T any](x T) uintptr {
 	return *(*uintptr)(unsafe.Pointer(&x))
 }
 
-// UintptrToNative is a helper used retrieve Go values from an uintptr encoded
+// UintToNative is a helper used retrieve Go values from an uintptr encoded
 // value from a WafObject
-func UintptrToNative[T Native](x uintptr) T {
+func UintptrToNative[T any](x uintptr) T {
 	return *(*T)(unsafe.Pointer(&x))
 }
 
