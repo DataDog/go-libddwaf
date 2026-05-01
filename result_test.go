@@ -3,6 +3,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
+//go:build (amd64 || arm64) && (linux || darwin) && !go1.27 && !datadog.no_waf && (cgo || appsec)
+
 package libddwaf
 
 import (
@@ -47,7 +49,9 @@ func evaluateRawWAFResult(t *testing.T, rules any, data map[string]any) (binding
 	require.NoError(t, err)
 	t.Cleanup(func() { wafCtx.Close() })
 
-	encoder, err := newEncoder(newEncoderConfig(&wafCtx.pinner, WithUnlimitedLimits()))
+	var pinner runtime.Pinner
+	t.Cleanup(func() { pinner.Unpin() })
+	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
 	require.NoError(t, err)
 
 	encoded, err := encoder.Encode(data)

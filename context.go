@@ -14,7 +14,6 @@ import (
 	"sync/atomic"
 
 	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v5/internal/pin"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
@@ -62,10 +61,10 @@ type Context struct {
 
 	truncations Truncations
 
-	// pinner is used to retain Go data that is being passed to the WAF as part of
-	// [RunAddressData.Data] until the [Context.Close] method results in the context being
-	// destroyed.
-	pinner pin.ConcurrentPinner
+	// pinners retains Go data passed to the WAF as part of [RunAddressData.Data].
+	// Each Run call gets its own [runtime.Pinner]; all are unpinned on [Context.Close].
+	pinners   []*runtime.Pinner
+	pinnersMu sync.Mutex
 }
 
 // NewSubcontext creates a subcontext derived from this context.
@@ -180,22 +179,24 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	}
 	defer func() { res.TimerStats = runTimer.Stats() }()
 
-	context.mu.Lock()
-	defer context.mu.Unlock()
-
-	if context.closedHint.Load() {
-		return Result{}, waferrors.ErrContextClosed
-	}
-
-	context.evalsInFlight.Add(1)
-	defer context.evalsInFlight.Done()
-
 	runTimer.Start()
 	defer runTimer.Stop()
 
+	pinner := new(runtime.Pinner)
+
+	defer func() {
+		context.pinnersMu.Lock()
+		defer context.pinnersMu.Unlock()
+		if context.closedHint.Load() {
+			pinner.Unpin()
+			return
+		}
+		context.pinners = append(context.pinners, pinner)
+	}()
+
 	wafEncodeTimer := runTimer.MustLeaf(EncodeTimeKey)
 	wafEncodeTimer.Start()
-	data, truncations, err := encodeAddressData(&context.pinner, addressData.Data, wafEncodeTimer)
+	data, truncations, err := encodeAddressData(pinner, addressData.Data, wafEncodeTimer)
 	wafEncodeTimer.Stop()
 	if err != nil {
 		return Result{}, err
@@ -210,15 +211,24 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 		return Result{}, waferrors.ErrTimeout
 	}
 
-	timeout := effectiveTimeoutMicros(ctx, runTimer)
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
+	context.mu.Lock()
+	defer context.mu.Unlock()
+
+	if context.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
+
+	context.evalsInFlight.Add(1)
+	defer context.evalsInFlight.Done()
+
+	var resultPinner runtime.Pinner
+	defer resultPinner.Unpin()
 	var result WAFObject
-	pinner.Pin(&result)
+	resultPinner.Pin(&result)
 	defer wafBindings.Lib.ObjectDestroy(&result, wafBindings.Lib.DefaultAllocator())
 
 	cContext := context.cContext
-	ret := wafBindings.Lib.ContextEval(cContext, data, 0, &result, timeout)
+	ret := wafBindings.Lib.ContextEval(cContext, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
 
 	return decodeWafResult(ctx, ret, &result, runTimer)
 }
@@ -241,7 +251,12 @@ func (context *Context) Close() {
 		context.cContext = 0
 	}
 
-	context.pinner.Close()
+	context.pinnersMu.Lock()
+	defer context.pinnersMu.Unlock()
+	for _, p := range context.pinners {
+		p.Unpin()
+	}
+	context.pinners = nil
 
 	context.handle.Close()
 }

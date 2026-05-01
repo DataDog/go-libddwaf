@@ -390,8 +390,7 @@ func BenchmarkRunOnly(b *testing.B) {
 	data := benchBenignRequest()
 
 	ctx, err := handle.NewContext(stdcontext.Background(),
-		timer.WithBudget(time.Second),
-		timer.WithComponents(benchWAFTimerKey))
+		timer.WithUnlimitedBudget())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -401,8 +400,7 @@ func BenchmarkRunOnly(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		_, err = ctx.Run(stdcontext.Background(), RunAddressData{
-			Data:     data,
-			TimerKey: benchWAFTimerKey,
+			Data: data,
 		})
 		if err != nil {
 			b.Fatal(err)
