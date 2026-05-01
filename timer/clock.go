@@ -10,16 +10,34 @@ import (
 	"time"
 )
 
+var clockPool = sync.Pool{
+	New: func() any {
+		return &clock{}
+	},
+}
+
 // clock is a simple cache for time.Now() to hopefully avoid some expensive calls to REALTIME part of time.Now()
 type clock struct {
 	mu          sync.Mutex
 	lastRequest time.Time
 }
 
+func (ct *clock) reset() {
+	ct.lastRequest = time.Now()
+}
+
 func newTimeCache() *clock {
-	return &clock{
-		lastRequest: time.Now(),
+	ct := clockPool.Get().(*clock)
+	ct.reset()
+	return ct
+}
+
+func putTimeCache(ct *clock) {
+	if ct == nil {
+		return
 	}
+
+	clockPool.Put(ct)
 }
 
 func (ct *clock) now() time.Time {

@@ -8,6 +8,8 @@ package timer
 import (
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -19,6 +21,69 @@ type nodeTimer struct {
 
 var _ NodeTimer = (*nodeTimer)(nil)
 
+var nodeTimerPool = sync.Pool{
+	New: func() any {
+		return &nodeTimer{}
+	},
+}
+
+func (timer *nodeTimer) reset() {
+	if timer.parent == nil {
+		putTimeCache(timer.clock)
+	}
+	timer.config = config{}
+	timer.clock = nil
+	timer.startOnce = sync.Once{}
+	timer.start.Store(nil)
+	timer.startValue = time.Time{}
+	timer.parent = nil
+	timer.componentName = ""
+	timer.budget.Store(0)
+	timer.budgetResolved.Store(false)
+	timer.stopOnce = sync.Once{}
+	timer.spent.Store(0)
+	timer.stopped.Store(false)
+
+	lookupSize := len(timer.lookup)
+	if timer.lookup != nil {
+		clear(timer.lookup)
+		if lookupSize > 32 {
+			timer.lookup = make(map[Key]*atomic.Int64)
+		}
+	}
+	if cap(timer.storage) > 32 {
+		timer.storage = make([]atomic.Int64, 0, 32)
+	} else {
+		clear(timer.storage)
+		timer.storage = timer.storage[:0]
+	}
+}
+
+// PutNodeTimer returns a pooled node timer to the timer package pool.
+func PutNodeTimer(t NodeTimer) {
+	if t == nil {
+		return
+	}
+
+	node, ok := t.(*nodeTimer)
+	if !ok {
+		return
+	}
+
+	node.reset()
+	nodeTimerPool.Put(node)
+}
+
+func newPooledNodeTimer(config config, clock *clock, parent NodeTimer, componentName Key) *nodeTimer {
+	timer := nodeTimerPool.Get().(*nodeTimer)
+	timer.config = config
+	timer.clock = clock
+	timer.parent = parent
+	timer.componentName = componentName
+	timer.components = newComponents(config.components)
+	return timer
+}
+
 // NewTreeTimer creates a new Timer with the given options. You have to specify either the option WithBudget or WithUnlimitedBudget and at least one component using the WithComponents option.
 func NewTreeTimer(options ...Option) (NodeTimer, error) {
 	config := newConfig(options...)
@@ -26,13 +91,7 @@ func NewTreeTimer(options ...Option) (NodeTimer, error) {
 		return nil, errors.New("root timer cannot inherit parent budget, please provide a budget using timer.WithBudget() or timer.WithUnlimitedBudget()")
 	}
 
-	return &nodeTimer{
-		baseTimer: baseTimer{
-			config: config,
-			clock:  newTimeCache(),
-		},
-		components: newComponents(config.components),
-	}, nil
+	return newPooledNodeTimer(config, newTimeCache(), nil, ""), nil
 }
 
 func (timer *nodeTimer) NewNode(name Key, options ...Option) (NodeTimer, error) {
@@ -46,15 +105,7 @@ func (timer *nodeTimer) NewNode(name Key, options ...Option) (NodeTimer, error) 
 		return nil, fmt.Errorf("NewNode: component %s not found", name)
 	}
 
-	return &nodeTimer{
-		baseTimer: baseTimer{
-			config:        config,
-			clock:         timer.clock,
-			parent:        timer,
-			componentName: name,
-		},
-		components: newComponents(config.components),
-	}, nil
+	return newPooledNodeTimer(config, timer.clock, timer, name), nil
 }
 
 func (timer *nodeTimer) NewLeaf(name Key, options ...Option) (Timer, error) {
@@ -68,12 +119,12 @@ func (timer *nodeTimer) NewLeaf(name Key, options ...Option) (Timer, error) {
 		return nil, fmt.Errorf("NewLeaf: component %s not found", name)
 	}
 
-	return &baseTimer{
-		clock:         timer.clock,
-		config:        config,
-		componentName: name,
-		parent:        timer,
-	}, nil
+	leaf := getBaseTimer()
+	leaf.clock = timer.clock
+	leaf.config = config
+	leaf.componentName = name
+	leaf.parent = timer
+	return leaf, nil
 }
 
 var defaultLeafConfig = newConfig()
@@ -83,12 +134,12 @@ func (timer *nodeTimer) MustLeaf(name Key, options ...Option) Timer {
 		if _, ok := timer.lookup[name]; !ok {
 			panic(fmt.Sprintf("MustLeaf: component %s not found", name))
 		}
-		return &baseTimer{
-			clock:         timer.clock,
-			config:        defaultLeafConfig,
-			componentName: name,
-			parent:        timer,
-		}
+		leaf := getBaseTimer()
+		leaf.clock = timer.clock
+		leaf.config = defaultLeafConfig
+		leaf.componentName = name
+		leaf.parent = timer
+		return leaf
 	}
 	leaf, err := timer.NewLeaf(name, options...)
 	if err != nil {
