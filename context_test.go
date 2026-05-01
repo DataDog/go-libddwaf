@@ -389,14 +389,11 @@ func TestPoolInvariants_Context(t *testing.T) {
 	pooled.pinner.Close()
 	require.True(t, concurrentPinnerClosed(&pooled.pinner))
 
-	pooled.reset()
 	timer.PutNodeTimer(timerAlias)
-
 	contextPool.Put(pooled)
 
 	reused := contextPool.Get().(*Context)
 	t.Cleanup(func() {
-		reused.reset()
 		contextPool.Put(reused)
 	})
 

@@ -46,9 +46,14 @@ type Subcontext struct {
 type pooledSubcontexts struct{ sync.Pool }
 
 func (pool *pooledSubcontexts) Get() any {
-	subCtx := pool.Pool.Get().(*Subcontext)
+	return pool.Pool.Get().(*Subcontext)
+}
+
+func (pool *pooledSubcontexts) Put(x any) {
+	_ = x.(*Subcontext)
+	subCtx := &Subcontext{}
 	subCtx.reset()
-	return subCtx
+	pool.Pool.Put(subCtx)
 }
 
 var subcontextPool = pooledSubcontexts{Pool: sync.Pool{
@@ -104,6 +109,9 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	}
 
 	if s.closedHint.Load() {
+		return Result{}, waferrors.ErrContextClosed
+	}
+	if s.parent.closedHint.Load() {
 		return Result{}, waferrors.ErrContextClosed
 	}
 

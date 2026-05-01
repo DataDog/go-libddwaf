@@ -32,9 +32,14 @@ const (
 type pooledContexts struct{ sync.Pool }
 
 func (pool *pooledContexts) Get() any {
-	ctx := pool.Pool.Get().(*Context)
+	return pool.Pool.Get().(*Context)
+}
+
+func (pool *pooledContexts) Put(x any) {
+	_ = x.(*Context)
+	ctx := &Context{}
 	ctx.reset()
-	return ctx
+	pool.Pool.Put(ctx)
 }
 
 var contextPool = pooledContexts{Pool: sync.Pool{
@@ -132,6 +137,9 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	if err := validateConstructionContext("Context.NewSubcontext", ctx); err != nil {
 		return nil, err
 	}
+	if context.closedHint.Load() {
+		return nil, waferrors.ErrContextClosed
+	}
 
 	if !context.handle.retain() {
 		if context.closedHint.Load() {
@@ -199,6 +207,7 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 
 	success = true
 	subCtx := subcontextPool.Get().(*Subcontext)
+	subCtx.closedHint.Store(false)
 	subCtx.Timer = timer.WrapOwnedNodeTimer(subTimer)
 	subCtx.parent = context
 	subCtx.cSub = cSubcontext
