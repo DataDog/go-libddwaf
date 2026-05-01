@@ -68,6 +68,10 @@ func goRunError(rc bindings.WAFReturnCode) error {
 	}
 }
 
+func keyMatches(key *WAFObject, expected string) (bool, error) {
+	return key.StringMatches(expected)
+}
+
 // Named returns keep the post-processing / deferred-assignment pattern compact at the callsite.
 func unwrapWafResult(ret bindings.WAFReturnCode, result *WAFObject) (res Result, duration time.Duration, err error) {
 	if !result.IsMap() {
@@ -79,33 +83,69 @@ func unwrapWafResult(ret bindings.WAFReturnCode, result *WAFObject) (res Result,
 	}
 	var wafTimeout bool
 	for _, entry := range entries {
-		key, err := entry.Key.StringValue()
-		if err != nil {
-			return Result{}, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
-		}
-		switch key {
-		case "timeout", "keep", "duration":
-			if wafTimeout, duration, err = decodeTimeoutKeepDuration(entry, key, wafTimeout, duration, &res); err != nil {
-				return Result{}, 0, err
-			}
-		case "events":
-			if err := decodeEvents(entry, &res); err != nil {
-				return Result{}, 0, err
-			}
-		case "actions":
-			if err := decodeActions(entry, &res); err != nil {
-				return Result{}, 0, err
-			}
-		case "attributes":
-			if err := decodeAttributes(entry, &res); err != nil {
-				return Result{}, 0, err
-			}
+		if wafTimeout, duration, err = decodeKnownWafResultEntry(entry, wafTimeout, duration, &res); err != nil {
+			return Result{}, 0, err
 		}
 	}
 	if wafTimeout {
 		return res, duration, waferrors.ErrTimeout
 	}
 	return res, duration, goRunError(ret)
+}
+
+func decodeKnownWafResultEntry(entry WAFObjectKV, wafTimeout bool, duration time.Duration, res *Result) (bool, time.Duration, error) {
+	match, err := keyMatches(&entry.Key, "timeout")
+	if err != nil {
+		return false, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
+	}
+	if match {
+		return decodeTimeoutKeepDuration(entry, "timeout", wafTimeout, duration, res)
+	}
+
+	match, err = keyMatches(&entry.Key, "keep")
+	if err != nil {
+		return false, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
+	}
+	if match {
+		return decodeTimeoutKeepDuration(entry, "keep", wafTimeout, duration, res)
+	}
+
+	match, err = keyMatches(&entry.Key, "duration")
+	if err != nil {
+		return false, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
+	}
+	if match {
+		return decodeTimeoutKeepDuration(entry, "duration", wafTimeout, duration, res)
+	}
+
+	match, err = keyMatches(&entry.Key, "events")
+	if err != nil {
+		return false, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
+	}
+	if match {
+		return wafTimeout, duration, decodeEvents(entry, res)
+	}
+
+	match, err = keyMatches(&entry.Key, "actions")
+	if err != nil {
+		return false, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
+	}
+	if match {
+		return wafTimeout, duration, decodeActions(entry, res)
+	}
+
+	match, err = keyMatches(&entry.Key, "attributes")
+	if err != nil {
+		return false, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
+	}
+	if match {
+		return wafTimeout, duration, decodeAttributes(entry, res)
+	}
+
+	if _, err := entry.Key.StringValue(); err != nil {
+		return false, 0, fmt.Errorf("unwrapWafResult: %w: failed to decode WAF result key: %w", waferrors.ErrResultInvalidType, err)
+	}
+	return wafTimeout, duration, nil
 }
 
 func decodeActions(entry WAFObjectKV, res *Result) error {
