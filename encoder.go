@@ -249,6 +249,14 @@ func (encoder *encoder) Encode(data any) (*WAFObject, error) {
 		return &obj, err
 	}
 
+	if handled, err := encoder.tryEncodeTypedMapFastPath(data, &obj, encoder.enc.Config.maxObjectDepth()); handled {
+		if len(encoder.enc.Truncations.ObjectTooDeep) > 0 && !encoder.enc.Config.Timer.Exhausted() {
+			depth, _ := depthOf(encoder.enc.Config.Timer, reflect.ValueOf(data))
+			encoder.enc.Truncations.ObjectTooDeep = []int{depth}
+		}
+		return &obj, err
+	}
+
 	value := reflect.ValueOf(data)
 
 	err := encoder.encode(value, &obj, encoder.enc.Config.maxObjectDepth())
@@ -298,6 +306,25 @@ func (encoder *encoder) tryEncodeTypedSliceFastPath(data any, obj *WAFObject, de
 	}
 }
 
+func (encoder *encoder) tryEncodeTypedMapFastPath(data any, obj *WAFObject, depth int) (bool, error) {
+	switch v := data.(type) {
+	case map[string]string:
+		if v == nil {
+			obj.SetNil()
+			return true, nil
+		}
+		return true, encoder.encodeTypedStringMapFastPath(v, obj, depth)
+	case map[string][]string:
+		if v == nil {
+			obj.SetNil()
+			return true, nil
+		}
+		return true, encoder.encodeTypedStringSliceMapFastPath(v, obj, depth)
+	default:
+		return false, nil
+	}
+}
+
 func (encoder *encoder) beginTypedSliceFastPath(obj *WAFObject, length int, depth int) (*ArrayBuilder, error) {
 	if encoder.enc.Timeout() {
 		return nil, waferrors.ErrTimeout
@@ -307,6 +334,17 @@ func (encoder *encoder) beginTypedSliceFastPath(obj *WAFObject, length int, dept
 		return nil, waferrors.ErrMaxDepthExceeded
 	}
 	return encoder.enc.Array(obj, length), nil
+}
+
+func (encoder *encoder) beginTypedMapFastPath(obj *WAFObject, length int, depth int) (*MapBuilder, error) {
+	if encoder.enc.Timeout() {
+		return nil, waferrors.ErrTimeout
+	}
+	if depth <= 0 {
+		encoder.enc.Truncations.Record(ObjectTooDeep, -1)
+		return nil, waferrors.ErrMaxDepthExceeded
+	}
+	return encoder.enc.Map(obj, length), nil
 }
 
 func (encoder *encoder) encodeTypedAnySliceFastPath(values []any, obj *WAFObject, depth int) error {
@@ -431,6 +469,61 @@ func (encoder *encoder) encodeTypedBoolSliceFastPath(values []bool, obj *WAFObje
 		}
 
 		slot.SetBool(value)
+	}
+
+	return nil
+}
+
+func (encoder *encoder) encodeTypedStringMapFastPath(values map[string]string, obj *WAFObject, depth int) error {
+	mb, err := encoder.beginTypedMapFastPath(obj, len(values), depth)
+	if err != nil {
+		return err
+	}
+	defer mb.Close()
+
+	for key, value := range values {
+		if encoder.enc.Timeout() {
+			return nil
+		}
+
+		slot := mb.NextValue(key)
+		if slot == nil {
+			mb.Skip()
+			continue
+		}
+
+		encoder.enc.WriteString(slot, value)
+	}
+
+	return nil
+}
+
+func (encoder *encoder) encodeTypedStringSliceMapFastPath(values map[string][]string, obj *WAFObject, depth int) error {
+	mb, err := encoder.beginTypedMapFastPath(obj, len(values), depth)
+	if err != nil {
+		return err
+	}
+	defer mb.Close()
+
+	for key, value := range values {
+		if encoder.enc.Timeout() {
+			return nil
+		}
+
+		slot := mb.NextValue(key)
+		if slot == nil {
+			mb.Skip()
+			continue
+		}
+
+		if value == nil {
+			slot.SetNil()
+			continue
+		}
+
+		if err := encoder.encodeTypedStringSliceFastPath(value, slot, depth-1); err != nil {
+			slot.SetInvalid()
+		}
 	}
 
 	return nil
