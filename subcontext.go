@@ -43,10 +43,57 @@ type Subcontext struct {
 	pinner        pin.ConcurrentPinner
 }
 
+type pooledSubcontexts struct{ sync.Pool }
+
+func (pool *pooledSubcontexts) Get() any {
+	subCtx := pool.Pool.Get().(*Subcontext)
+	subCtx.reset()
+	return subCtx
+}
+
+var subcontextPool = pooledSubcontexts{Pool: sync.Pool{
+	New: func() any {
+		return &Subcontext{}
+	},
+}}
+
+func (s *Subcontext) reset() {
+	s.parent = nil
+	s.cSub = 0
+	s.closedHint.Store(false)
+	s.mu = sync.Mutex{}
+	s.truncationsMu = sync.RWMutex{}
+
+	if cap(s.truncations.StringTooLong) > 32 {
+		s.truncations.StringTooLong = nil
+	} else {
+		clear(s.truncations.StringTooLong)
+		s.truncations.StringTooLong = s.truncations.StringTooLong[:0]
+	}
+	if cap(s.truncations.ContainerTooLarge) > 32 {
+		s.truncations.ContainerTooLarge = nil
+	} else {
+		clear(s.truncations.ContainerTooLarge)
+		s.truncations.ContainerTooLarge = s.truncations.ContainerTooLarge[:0]
+	}
+	if cap(s.truncations.ObjectTooDeep) > 32 {
+		s.truncations.ObjectTooDeep = nil
+	} else {
+		clear(s.truncations.ObjectTooDeep)
+		s.truncations.ObjectTooDeep = s.truncations.ObjectTooDeep[:0]
+	}
+
+	s.pinner = pin.ConcurrentPinner{}
+	s.Timer = nil
+}
+
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
 func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res Result, err error) {
 	if ctx == nil {
 		return Result{}, fmt.Errorf("Subcontext.Run: %w", waferrors.ErrNilContext)
+	}
+	if s.parent == nil {
+		return Result{}, waferrors.ErrContextClosed
 	}
 
 	if addressData.isEmpty() {
@@ -125,27 +172,33 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 
 // Close disposes of the underlying subcontext.
 func (s *Subcontext) Close() {
+	if s.parent == nil {
+		return
+	}
 	if !s.closedHint.CompareAndSwap(false, true) {
 		return
 	}
+	parent := s.parent
 
 	s.mu.Lock()
-	s.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run before pinner close
+	_ = s.cSub
+	s.mu.Unlock()
 
-	s.parent.mu.Lock()
+	parent.mu.Lock()
 	// Skip SubcontextDestroy when the parent Context is already closed:
 	// ddwaf_context_destroy transitively destroys all associated subcontexts.
-	if !s.parent.closedHint.Load() && s.cSub != 0 {
+	if !parent.closedHint.Load() && s.cSub != 0 {
 		wafBindings.Lib.SubcontextDestroy(s.cSub)
 	}
-	s.parent.mu.Unlock()
+	parent.mu.Unlock()
 	s.cSub = 0
 
 	s.pinner.Close()
 	timer.PutNodeTimer(s.Timer)
 	s.Timer = nil
 
-	s.parent.handle.Close()
+	parent.handle.Close()
+	subcontextPool.Put(s)
 }
 
 // Truncations returns the truncations that occurred while encoding address data for WAF execution.

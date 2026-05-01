@@ -14,9 +14,81 @@ import (
 	"testing"
 	"time"
 
+	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPoolInvariants_Subcontext(t *testing.T) {
+	pooled := subcontextPool.Get().(*Subcontext)
+	pooledTimer, err := timer.NewTreeTimer(timer.WithBudget(time.Second))
+	require.NoError(t, err)
+	pooled.Timer = timer.WrapOwnedNodeTimer(pooledTimer)
+	pooled.parent = &Context{}
+	pooled.closedHint.Store(true)
+	pooled.cSub = wafBindings.WAFSubcontext(42)
+	pooled.truncations = Truncations{
+		StringTooLong:     make([]int, 8, 8),
+		ContainerTooLarge: make([]int, 16, 16),
+		ObjectTooDeep:     make([]int, 64, 64),
+	}
+	pooled.truncations.StringTooLong[0] = 1
+	pooled.truncations.ContainerTooLarge[0] = 2
+	pooled.truncations.ObjectTooDeep[0] = 3
+	pooled.pinner.Close()
+	timer.PutNodeTimer(pooled.Timer)
+
+	subcontextPool.Put(pooled)
+
+	reused := subcontextPool.Get().(*Subcontext)
+	t.Cleanup(func() {
+		subcontextPool.Put(reused)
+	})
+
+	require.Nil(t, reused.Timer)
+	require.Nil(t, reused.parent)
+	require.False(t, reused.closedHint.Load())
+	require.Zero(t, reused.cSub)
+	require.Empty(t, reused.truncations.StringTooLong)
+	require.Len(t, reused.truncations.StringTooLong, 0)
+	require.LessOrEqual(t, cap(reused.truncations.StringTooLong), 32)
+	require.Empty(t, reused.truncations.ContainerTooLarge)
+	require.Len(t, reused.truncations.ContainerTooLarge, 0)
+	require.LessOrEqual(t, cap(reused.truncations.ContainerTooLarge), 32)
+	require.Empty(t, reused.truncations.ObjectTooDeep)
+	require.Len(t, reused.truncations.ObjectTooDeep, 0)
+	require.LessOrEqual(t, cap(reused.truncations.ObjectTooDeep), 32)
+
+	var pinned int
+	reused.pinner.Pin(&pinned)
+	reused.pinner.Close()
+}
+
+func TestRun_SubcontextPoolReuse(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+	t.Cleanup(func() { ctx.Close() })
+
+	data := RunAddressData{Data: map[string]any{
+		"server.request.headers.no_cookies": map[string][]string{
+			"user-agent": {"Arachni/test"},
+		},
+	}}
+
+	for range 100 {
+		subCtx, err := ctx.NewSubcontext(context.Background())
+		require.NoError(t, err)
+
+		_, err = subCtx.Run(context.Background(), data)
+		require.NoError(t, err)
+
+		subCtx.Close()
+	}
+}
 
 func TestSiblingSubcontextParallelismTarget(t *testing.T) {
 	require.True(t, meetsSiblingSubcontextSpeedupTarget(1.2))
