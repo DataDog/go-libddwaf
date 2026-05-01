@@ -340,8 +340,12 @@ func TestTree(t *testing.T) {
 			nodes[i], err = nodes[i-1].NewNode("a", timer.WithComponents("a"))
 			require.NoError(t, err)
 			nodes[i].Start()
-			defer nodes[i].Stop()
 		}
+
+		for i := len(nodes) - 1; i > 0; i-- {
+			nodes[i].Stop()
+		}
+		rootTimer.Stop()
 
 		for i := 1; i < 100; i++ {
 			require.GreaterOrEqual(t, nodes[i-1].Spent(), nodes[i].Spent())
