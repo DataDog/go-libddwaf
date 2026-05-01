@@ -71,8 +71,6 @@ func effectiveTimeoutMicros(ctx context.Context, runTimer timer.NodeTimer) uint6
 	if timeoutDuration < 0 {
 		timeoutDuration = 0
 	}
-	// Mask to 51 bits: libddwaf uses the upper bits of the timeout value
-	// internally, so we must clear them to avoid misinterpretation.
 	return uint64(timeoutDuration.Microseconds()) & 0x007FFFFFFFFFFFFF
 }
 
@@ -81,13 +79,7 @@ func effectiveTimeoutMicros(ctx context.Context, runTimer timer.NodeTimer) uint6
 func decodeWafResult(ctx context.Context, ret wafBindings.WAFReturnCode, result *WAFObject, runTimer timer.NodeTimer) (Result, error) {
 	decodeTimer := runTimer.MustLeaf(DecodeTimeKey)
 	decodeTimer.Start()
-	defer func() {
-		decodeTimer.Stop()
-		if pooled, ok := decodeTimer.(interface{ ReleaseToPool() }); ok {
-			// Safe after Stop(): childStopped only does an atomic add into the parent's component lookup and retains no leaf reference.
-			pooled.ReleaseToPool()
-		}
-	}()
+	defer decodeTimer.Stop()
 
 	res, duration, err := unwrapWafResult(ret, result)
 	runTimer.AddTime(DurationTimeKey, duration)

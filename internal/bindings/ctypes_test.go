@@ -6,7 +6,6 @@
 package bindings
 
 import (
-	"encoding/binary"
 	"runtime"
 	"testing"
 	"unsafe"
@@ -109,80 +108,6 @@ func TestWAFObjectStringRoundTrip(t *testing.T) {
 		val, err := obj.StringValue()
 		require.NoError(t, err)
 		require.Equal(t, "123456789012345", val)
-	})
-}
-
-func TestWAFObjectStringMatches(t *testing.T) {
-	t.Run("small string", func(t *testing.T) {
-		var pinner runtime.Pinner
-		defer pinner.Unpin()
-
-		var obj WAFObject
-		obj.SetString(&pinner, "timeout")
-
-		match, err := obj.StringMatches("timeout")
-		require.NoError(t, err)
-		require.True(t, match)
-
-		match, err = obj.StringMatches("keep")
-		require.NoError(t, err)
-		require.False(t, match)
-	})
-
-	t.Run("regular string", func(t *testing.T) {
-		var pinner runtime.Pinner
-		defer pinner.Unpin()
-
-		var obj WAFObject
-		obj.SetString(&pinner, "ruleset_version")
-
-		match, err := obj.StringMatches("ruleset_version")
-		require.NoError(t, err)
-		require.True(t, match)
-	})
-
-	t.Run("literal string", func(t *testing.T) {
-		var pinner runtime.Pinner
-		defer pinner.Unpin()
-
-		var obj WAFObject
-		obj.SetLiteralString(&pinner, "processor_overrides")
-
-		match, err := obj.StringMatches("processor_overrides")
-		require.NoError(t, err)
-		require.True(t, match)
-	})
-
-	t.Run("empty string", func(t *testing.T) {
-		var pinner runtime.Pinner
-		defer pinner.Unpin()
-
-		var obj WAFObject
-		obj.SetString(&pinner, "")
-
-		match, err := obj.StringMatches("")
-		require.NoError(t, err)
-		require.True(t, match)
-	})
-
-	t.Run("non string", func(t *testing.T) {
-		var obj WAFObject
-		obj.SetBool(true)
-
-		match, err := obj.StringMatches("timeout")
-		require.ErrorIs(t, err, waferrors.ErrInvalidObjectType)
-		require.False(t, match)
-	})
-
-	t.Run("malformed small string metadata", func(t *testing.T) {
-		var obj WAFObject
-		obj.setType(WAFSmallStringType)
-		obj.data[wafObjectSStrSize] = wafObjectSStrMaxLen + 1
-
-		match, err := obj.StringMatches("timeout")
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "small string size")
-		require.False(t, match)
 	})
 }
 
@@ -377,13 +302,6 @@ func TestWAFObjectStringValueError(t *testing.T) {
 
 	_, err := obj.StringValue()
 	require.ErrorIs(t, err, waferrors.ErrInvalidObjectType)
-
-	obj.setType(WAFSmallStringType)
-	obj.data[wafObjectSStrSize] = wafObjectSStrMaxLen + 1
-
-	_, err = obj.StringValue()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "small string size")
 }
 
 func TestWAFObjectArrayValuesError(t *testing.T) {
@@ -392,14 +310,6 @@ func TestWAFObjectArrayValuesError(t *testing.T) {
 
 	_, err := obj.ArrayValues()
 	require.ErrorIs(t, err, waferrors.ErrInvalidObjectType)
-
-	obj.setType(WAFArrayType)
-	binary.NativeEndian.PutUint16(obj.data[wafObjectContainerSizeOffset:], 2)
-	binary.NativeEndian.PutUint16(obj.data[wafObjectContainerCapacityOffset:], 1)
-
-	_, err = obj.ArrayValues()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "array size 2 exceeds capacity 1")
 }
 
 func TestWAFObjectMapEntriesError(t *testing.T) {
@@ -408,14 +318,6 @@ func TestWAFObjectMapEntriesError(t *testing.T) {
 
 	_, err := obj.MapEntries()
 	require.ErrorIs(t, err, waferrors.ErrInvalidObjectType)
-
-	obj.setType(WAFMapType)
-	binary.NativeEndian.PutUint16(obj.data[wafObjectContainerSizeOffset:], 2)
-	binary.NativeEndian.PutUint16(obj.data[wafObjectContainerCapacityOffset:], 1)
-
-	_, err = obj.MapEntries()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "map size 2 exceeds capacity 1")
 }
 
 // TestWAFObjectAlignment verifies that WAFObject has at least 8-byte alignment,

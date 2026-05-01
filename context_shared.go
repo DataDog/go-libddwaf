@@ -27,3 +27,13 @@ type RunAddressData struct {
 func (d RunAddressData) isEmpty() bool {
 	return len(d.Data) == 0
 }
+
+// merge combines two maps of slices into one. All returned slice values
+// share a single backing array for efficiency. Callers MUST NOT append
+// to individual slices in the returned map, as this would corrupt
+// adjacent entries in the shared backing array.
+//
+// It contains all keys from both a and b, with the corresponding values
+// from a and b concatenated in that order. The named return keeps the
+// empty-input fast path concise while still allowing the accumulator to be
+// built without extra copies.

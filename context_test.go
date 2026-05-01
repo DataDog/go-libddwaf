@@ -6,26 +6,15 @@
 package libddwaf
 
 import (
-	"context"
-	"reflect"
 	"runtime"
-	"sync/atomic"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v5/internal/pin"
-	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func concurrentPinnerClosed(p *pin.ConcurrentPinner) bool {
-	field := reflect.ValueOf(p).Elem().FieldByName("closed")
-	return (*atomic.Bool)(unsafe.Pointer(field.UnsafeAddr())).Load()
-}
 
 type wafResultMapBuilder struct {
 	pinner runtime.Pinner
@@ -369,70 +358,4 @@ func TestUnwrapWafResult(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, res.Keep)
 	})
-}
-
-func TestPoolInvariants_Context(t *testing.T) {
-	pooled := contextPool.Get().(*Context)
-	pooledTimer, err := timer.NewTreeTimer(timer.WithBudget(time.Second), timer.WithComponents("waf"))
-	require.NoError(t, err)
-	pooled.Timer = timer.WrapOwnedNodeTimer(pooledTimer)
-	timerAlias := pooled.Timer
-	pooled.handle = &Handle{}
-	pooled.closedHint.Store(true)
-	pooled.cContext = bindings.WAFContext(42)
-	pooled.truncations.StringTooLong = make([]int, 3, 33)
-	copy(pooled.truncations.StringTooLong, []int{11, 22, 33})
-	pooled.truncations.ContainerTooLarge = make([]int, 2, 16)
-	copy(pooled.truncations.ContainerTooLarge, []int{44, 55})
-	pooled.truncations.ObjectTooDeep = make([]int, 2, 40)
-	copy(pooled.truncations.ObjectTooDeep, []int{66, 77})
-	pooled.pinner.Close()
-	require.True(t, concurrentPinnerClosed(&pooled.pinner))
-
-	timer.PutNodeTimer(timerAlias)
-	contextPool.Put(pooled)
-
-	reused := contextPool.Get().(*Context)
-	t.Cleanup(func() {
-		contextPool.Put(reused)
-	})
-
-	require.Nil(t, reused.Timer)
-	require.Nil(t, reused.handle)
-	require.False(t, reused.closedHint.Load())
-	reused.evalsInFlight.Add(1)
-	reused.evalsInFlight.Done()
-	reused.mu.Lock()
-	reused.mu.Unlock()
-	require.Zero(t, reused.cContext)
-	reused.truncationsMu.Lock()
-	reused.truncationsMu.Unlock()
-	require.Nil(t, reused.truncations.StringTooLong)
-	require.Len(t, reused.truncations.ContainerTooLarge, 0)
-	require.LessOrEqual(t, cap(reused.truncations.ContainerTooLarge), 32)
-	if reused.truncations.ContainerTooLarge != nil {
-		require.Equal(t, make([]int, cap(reused.truncations.ContainerTooLarge)), reused.truncations.ContainerTooLarge[:cap(reused.truncations.ContainerTooLarge)])
-	}
-	require.Nil(t, reused.truncations.ObjectTooDeep)
-	require.False(t, concurrentPinnerClosed(&reused.pinner))
-}
-
-func TestRun_ContextPoolReuse(t *testing.T) {
-	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
-	require.NoError(t, err)
-	t.Cleanup(func() { waf.Close() })
-
-	for range 100 {
-		ctx, err := waf.NewContext(context.Background(), timer.WithBudget(time.Hour), timer.WithComponents("waf"))
-		require.NoError(t, err)
-
-		_, err = ctx.Run(context.Background(), RunAddressData{
-			Data:     map[string]any{"my.input": "Arachni"},
-			TimerKey: "waf",
-		})
-		require.NoError(t, err)
-		require.False(t, ctx.closedHint.Load())
-		require.Empty(t, ctx.Truncations().StringTooLong)
-		ctx.Close()
-	}
 }

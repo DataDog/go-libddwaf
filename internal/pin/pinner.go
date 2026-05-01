@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
-	_ "unsafe"
 )
 
 // A Pinner is a set of Go objects each pinned to a fixed location in memory.
@@ -35,95 +34,31 @@ type Pinner interface {
 
 var _ Pinner = (*runtime.Pinner)(nil)
 
-const (
-	minShardCount = 4
-	maxShardCount = 64
-)
-
-var (
-	shardCount = selectShardCount(runtime.NumCPU())
-	shardMask  = shardCount - 1
-)
-
-type shard struct {
-	mu     sync.Mutex
-	pinner runtime.Pinner
-}
-
 // ConcurrentPinner is a [Pinner] that is safe for concurrent use by multiple
 // goroutines.
 type ConcurrentPinner struct {
-	shards [maxShardCount]shard
+	pinner runtime.Pinner
+	mu     sync.Mutex
 	closed atomic.Bool
 }
-
-var shardFallbackCounter atomic.Uint64
-
-func selectShardCount(cpuCount int) int {
-	if cpuCount < minShardCount {
-		return minShardCount
-	}
-	if cpuCount > maxShardCount {
-		cpuCount = maxShardCount
-	}
-
-	count := minShardCount
-	for count < cpuCount {
-		count <<= 1
-	}
-	if count > maxShardCount {
-		return maxShardCount
-	}
-	return count
-}
-
-func cheapShardIndex() int {
-	if idx := procPinShardIndex(); idx >= 0 {
-		return idx
-	}
-	return fallbackShardIndex()
-}
-
-func procPinShardIndex() int {
-	idx := runtimeProcPin()
-	runtimeProcUnpin()
-	return idx & shardMask
-}
-
-func fallbackShardIndex() int {
-	return int(shardFallbackCounter.Add(1)-1) & shardMask
-}
-
-//go:linkname runtimeProcPin sync.runtime_procPin
-func runtimeProcPin() int
-
-//go:linkname runtimeProcUnpin sync.runtime_procUnpin
-func runtimeProcUnpin()
 
 func (p *ConcurrentPinner) Pin(v any) {
 	if p.closed.Load() {
 		return
 	}
 
-	s := &p.shards[cheapShardIndex()]
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.closed.Load() {
 		return
 	}
-	s.pinner.Pin(v)
+	p.pinner.Pin(v)
 }
 
 func (p *ConcurrentPinner) Unpin() {
-	for i := range shardCount {
-		p.shards[i].mu.Lock()
-	}
-	for i := range shardCount {
-		p.shards[i].pinner.Unpin()
-	}
-	for i := range shardCount {
-		p.shards[i].mu.Unlock()
-	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pinner.Unpin()
 }
 
 func (p *ConcurrentPinner) Close() {
