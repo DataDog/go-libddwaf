@@ -57,44 +57,167 @@ func decodeDiagnostics(obj *WAFObject) (Diagnostics, error) {
 
 	var diags Diagnostics
 	for _, entry := range entries {
-		key, err := entry.Key.StringValue()
+		var handled bool
+		handled, err = decodeKnownDiagnosticEntry(entry, &diags)
 		if err != nil {
+			return Diagnostics{}, err
+		}
+		if handled {
+			continue
+		}
+		if _, err := entry.Key.StringValue(); err != nil {
 			return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
-		}
-
-		switch key {
-		case "actions":
-			diags.Actions, err = decodeFeature(&entry.Val)
-		case "custom_rules":
-			diags.CustomRules, err = decodeFeature(&entry.Val)
-		case "exclusions":
-			diags.Exclusions, err = decodeFeature(&entry.Val)
-		case "rules":
-			diags.Rules, err = decodeFeature(&entry.Val)
-		case "rules_data":
-			diags.RulesData, err = decodeFeature(&entry.Val)
-		case "exclusion_data":
-			diags.ExclusionData, err = decodeFeature(&entry.Val)
-		case "rules_override":
-			diags.RulesOverrides, err = decodeFeature(&entry.Val)
-		case "processors":
-			diags.Processors, err = decodeFeature(&entry.Val)
-		case "processor_overrides":
-			diags.ProcessorOverrides, err = decodeFeature(&entry.Val)
-		case "scanners":
-			diags.Scanners, err = decodeFeature(&entry.Val)
-		case "ruleset_version":
-			diags.Version, err = entry.Val.StringValue()
-		default:
-			// Unknown diagnostic keys are intentionally ignored so newer libddwaf
-			// versions don't break this decoder.
-		}
-		if err != nil {
-			return Diagnostics{}, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", key, err)
 		}
 	}
 
 	return diags, nil
+}
+
+func decodeKnownDiagnosticEntry(entry WAFObjectKV, diags *Diagnostics) (bool, error) {
+	match, err := keyMatches(&entry.Key, "actions")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		feature, err := decodeFeature(&entry.Val)
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "actions", err)
+		}
+		diags.Actions = feature
+		return true, nil
+	}
+
+	match, err = keyMatches(&entry.Key, "custom_rules")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		feature, err := decodeFeature(&entry.Val)
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "custom_rules", err)
+		}
+		diags.CustomRules = feature
+		return true, nil
+	}
+
+	match, err = keyMatches(&entry.Key, "exclusions")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		feature, err := decodeFeature(&entry.Val)
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "exclusions", err)
+		}
+		diags.Exclusions = feature
+		return true, nil
+	}
+
+	match, err = keyMatches(&entry.Key, "rules")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		feature, err := decodeFeature(&entry.Val)
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "rules", err)
+		}
+		diags.Rules = feature
+		return true, nil
+	}
+
+	match, err = keyMatches(&entry.Key, "rules_data")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		feature, err := decodeFeature(&entry.Val)
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "rules_data", err)
+		}
+		diags.RulesData = feature
+		return true, nil
+	}
+
+	match, err = keyMatches(&entry.Key, "exclusion_data")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		feature, err := decodeFeature(&entry.Val)
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "exclusion_data", err)
+		}
+		diags.ExclusionData = feature
+		return true, nil
+	}
+
+	match, err = keyMatches(&entry.Key, "rules_override")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		feature, err := decodeFeature(&entry.Val)
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "rules_override", err)
+		}
+		diags.RulesOverrides = feature
+		return true, nil
+	}
+
+	match, err = keyMatches(&entry.Key, "processors")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		feature, err := decodeFeature(&entry.Val)
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "processors", err)
+		}
+		diags.Processors = feature
+		return true, nil
+	}
+
+	match, err = keyMatches(&entry.Key, "processor_overrides")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		feature, err := decodeFeature(&entry.Val)
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "processor_overrides", err)
+		}
+		diags.ProcessorOverrides = feature
+		return true, nil
+	}
+
+	match, err = keyMatches(&entry.Key, "scanners")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		feature, err := decodeFeature(&entry.Val)
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "scanners", err)
+		}
+		diags.Scanners = feature
+		return true, nil
+	}
+
+	match, err = keyMatches(&entry.Key, "ruleset_version")
+	if err != nil {
+		return false, fmt.Errorf("decodeDiagnostics: failed to decode diagnostics key: %w", err)
+	}
+	if match {
+		version, err := entry.Val.StringValue()
+		if err != nil {
+			return false, fmt.Errorf("decodeDiagnostics: failed to decode feature %q: %w", "ruleset_version", err)
+		}
+		diags.Version = version
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func decodeFeature(obj *WAFObject) (*Feature, error) {

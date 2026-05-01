@@ -556,7 +556,10 @@ func (w *WAFObject) StringValue() (string, error) {
 	t := w.Type()
 	switch t {
 	case WAFSmallStringType:
-		size := int(w.data[wafObjectSStrSize])
+		size, err := w.smallStringSize()
+		if err != nil {
+			return "", err
+		}
 		if size == 0 {
 			return "", nil
 		}
@@ -577,6 +580,52 @@ func (w *WAFObject) StringValue() (string, error) {
 	}
 }
 
+// StringMatches returns whether this WAFObject's string contents exactly match expected without materializing a Go string.
+func (w *WAFObject) StringMatches(expected string) (bool, error) {
+	t := w.Type()
+	switch t {
+	case WAFSmallStringType:
+		size, err := w.smallStringSize()
+		if err != nil {
+			return false, err
+		}
+		return matchExpectedString(w.data[wafObjectSStrData:wafObjectSStrData+size], expected), nil
+
+	case WAFStringType, WAFLiteralStringType:
+		size := binary.NativeEndian.Uint32(w.data[wafObjectStringSizeOffset:])
+		if size == 0 {
+			return expected == "", nil
+		}
+		if binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]) == 0 {
+			return false, fmt.Errorf("nil pointer in string object with size %d", size)
+		}
+		return matchExpectedString(unsafeutil.Slice(unsafeutil.ReadPtr[byte](&w.data[wafObjectPtrOffset]), uint64(size)), expected), nil
+
+	default:
+		return false, fmt.Errorf("%w: value is not a string but %s", waferrors.ErrInvalidObjectType, t.String())
+	}
+}
+
+func (w *WAFObject) smallStringSize() (int, error) {
+	size := int(w.data[wafObjectSStrSize])
+	if size > wafObjectSStrMaxLen {
+		return 0, fmt.Errorf("small string size %d exceeds inline capacity %d", size, wafObjectSStrMaxLen)
+	}
+	return size, nil
+}
+
+func matchExpectedString(actual []byte, expected string) bool {
+	if len(actual) != len(expected) {
+		return false
+	}
+	for i := range actual {
+		if actual[i] != expected[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // ArraySize returns the number of elements in an array.
 func (w *WAFObject) ArraySize() (uint16, error) {
 	if !w.IsArray() {
@@ -592,6 +641,10 @@ func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 	}
 
 	size := binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:])
+	capacity := binary.NativeEndian.Uint16(w.data[wafObjectContainerCapacityOffset:])
+	if size > capacity {
+		return nil, fmt.Errorf("array size %d exceeds capacity %d", size, capacity)
+	}
 	if size == 0 {
 		return nil, nil
 	}
@@ -617,6 +670,10 @@ func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
 	}
 
 	size := binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:])
+	capacity := binary.NativeEndian.Uint16(w.data[wafObjectContainerCapacityOffset:])
+	if size > capacity {
+		return nil, fmt.Errorf("map size %d exceeds capacity %d", size, capacity)
+	}
 	if size == 0 {
 		return nil, nil
 	}
