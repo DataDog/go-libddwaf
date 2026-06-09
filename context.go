@@ -259,13 +259,11 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 // created for this [Context].
 //
 // Close cascades to subcontexts: any still-open [Subcontext] derived from this
-// Context via [Context.NewSubcontext] is destroyed as part of Close. (The
-// underlying ddwaf_context_destroy does not itself cascade, so go-libddwaf
+// Context via [Context.NewSubcontext] is fully torn down as part of Close — its
+// underlying ddwaf_subcontext is destroyed and its pinned input data released.
+// (The underlying ddwaf_context_destroy does not itself cascade, so go-libddwaf
 // destroys each live subcontext explicitly before destroying the context.)
-// Calling [Subcontext.Close] afterwards remains safe and becomes a no-op for
-// the underlying resource. Note that a subcontext's pinned input data is only
-// released by [Subcontext.Close], so callers should still close their
-// subcontexts to free that memory promptly.
+// Calling [Subcontext.Close] afterwards remains safe and becomes a no-op.
 //
 // Close blocks until all in-flight Run and NewSubcontext operations complete,
 // and is safe to call more than once.
@@ -287,12 +285,8 @@ func (context *Context) Close() {
 	// exactly once and always before the context.
 	context.mu.Lock()
 	for sub := range context.subcontexts {
-		if sub.cSub != 0 {
-			wafBindings.Lib.SubcontextDestroy(sub.cSub)
-			sub.cSub = 0
-		}
+		sub.close(true)
 	}
-	context.subcontexts = nil
 
 	if context.cContext != 0 {
 		wafBindings.Lib.ContextDestroy(context.cContext)

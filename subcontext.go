@@ -87,7 +87,12 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 		}
 		s.pinnersMu.Lock()
 		defer s.pinnersMu.Unlock()
-		if s.closedHint.Load() {
+		// Unpin immediately if either this subcontext or its parent context is
+		// closing: in both cases the underlying ddwaf resource is (being)
+		// destroyed and nothing will reference this data, and the closing path
+		// will not observe a pinner appended after it. This mirrors how
+		// Context.Run handles its own pinner against context.closedHint.
+		if s.closedHint.Load() || s.parent.closedHint.Load() {
 			pinner.Unpin()
 			return
 		}
@@ -141,27 +146,45 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 
 // Close disposes of the underlying subcontext.
 func (s *Subcontext) Close() {
+	s.close(false)
+}
+
+// close tears down the subcontext. parentLocked must be true only when the
+// caller already holds s.parent.mu (i.e. Context.Close cascading): the C
+// subcontext destroy and the subcontexts-map mutation require parent.mu, and
+// sync.Mutex is not reentrant, so we must not re-acquire it on that path.
+// Holding parent.mu across SubcontextDestroy keeps it ordered before the
+// parent's ContextDestroy and serializes access to the subcontexts map.
+func (s *Subcontext) close(parentLocked bool) {
 	if !s.closedHint.CompareAndSwap(false, true) {
 		return
 	}
 
-	s.mu.Lock()
-	s.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run before pinner close
-
-	s.parent.mu.Lock()
-	// Destroy our own ddwaf_subcontext if it is still alive. ddwaf_context_destroy
-	// does NOT cascade to derived subcontexts, so the parent Context.Close also
-	// destroys live subcontexts. Both paths hold parent.mu and gate on cSub != 0,
-	// so the subcontext is destroyed exactly once. If the parent already ran its
-	// destroy loop, cSub is 0 here and we skip (the parent destroyed it before
-	// ddwaf_context_destroy); otherwise we destroy it now while the context is
-	// still alive.
+	if !parentLocked {
+		// Barrier: wait for an in-flight Run on this subcontext (which holds
+		// s.mu and may still reach SubcontextEval with s.cSub) to finish before
+		// we destroy cSub. We then take parent.mu so the SubcontextDestroy is
+		// ordered before the parent's ContextDestroy and the subcontexts-map
+		// mutation is serialized.
+		//
+		// Both are skipped on the parentLocked path (Context.Close cascading):
+		// acquiring s.mu while the caller holds parent.mu would invert Run's
+		// s.mu -> parent.mu lock order and deadlock, and it is unnecessary
+		// because Context.Close has already set the parent's closedHint and
+		// drained evalsInFlight, so any in-flight Run bails at the
+		// parent.closedHint check before using s.cSub.
+		s.mu.Lock()
+		s.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run before pinner close
+		s.parent.mu.Lock()
+	}
 	if s.cSub != 0 {
 		wafBindings.Lib.SubcontextDestroy(s.cSub)
 		s.cSub = 0
 	}
-	delete(s.parent.subcontexts, s)
-	s.parent.mu.Unlock()
+	if !parentLocked {
+		delete(s.parent.subcontexts, s)
+		s.parent.mu.Unlock()
+	}
 
 	// Pinner cleanup and handle release do not need parent.mu; keeping it
 	// held here would block Run/NewSubcontext on the parent while unpinning.
