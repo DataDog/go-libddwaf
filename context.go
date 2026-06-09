@@ -254,9 +254,21 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	return decodeWafResult(ctx, ret, &result, runTimer)
 }
 
-// Close disposes of the underlying context or subcontext.
-// It destroys the context, releases associated data, and decreases
-// the reference count of the [Handle] created for this [Context].
+// Close disposes of the context: it destroys the underlying ddwaf_context,
+// releases associated data, and decreases the reference count of the [Handle]
+// created for this [Context].
+//
+// Close cascades to subcontexts: any still-open [Subcontext] derived from this
+// Context via [Context.NewSubcontext] is destroyed as part of Close. (The
+// underlying ddwaf_context_destroy does not itself cascade, so go-libddwaf
+// destroys each live subcontext explicitly before destroying the context.)
+// Calling [Subcontext.Close] afterwards remains safe and becomes a no-op for
+// the underlying resource. Note that a subcontext's pinned input data is only
+// released by [Subcontext.Close], so callers should still close their
+// subcontexts to free that memory promptly.
+//
+// Close blocks until all in-flight Run and NewSubcontext operations complete,
+// and is safe to call more than once.
 func (context *Context) Close() {
 	if !context.closedHint.CompareAndSwap(false, true) {
 		return
