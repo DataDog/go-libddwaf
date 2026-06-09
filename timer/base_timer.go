@@ -7,6 +7,7 @@ package timer
 
 import (
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -24,6 +25,9 @@ type baseTimer struct {
 	start atomic.Pointer[time.Time]
 	// startValue stores the start time once it has been published via start.
 	startValue time.Time
+	// startOnce guards the non-atomic writes in Start (startValue, budget
+	// resolution) against concurrent Start calls.
+	startOnce sync.Once
 
 	// parent is the parent timer. It is used to progate the stop of the timer to the parent timer and get the remaining time in case the budget has to be inherited.
 	parent NodeTimer
@@ -67,13 +71,15 @@ func (timer *baseTimer) Start() time.Time {
 		return *start
 	}
 
-	if timer.budgetValue() == DynamicBudget && timer.parent != nil {
-		timer.budget.Store(int64(timer.config.dynamicBudget(timer.parent)))
-		timer.budgetResolved.Store(true)
-	}
+	timer.startOnce.Do(func() {
+		if timer.budgetValue() == DynamicBudget && timer.parent != nil {
+			timer.budget.Store(int64(timer.config.dynamicBudget(timer.parent)))
+			timer.budgetResolved.Store(true)
+		}
 
-	timer.startValue = timer.now()
-	timer.start.Store(&timer.startValue)
+		timer.startValue = timer.now()
+		timer.start.Store(&timer.startValue)
+	})
 
 	return *timer.start.Load()
 }
@@ -140,7 +146,12 @@ func (timer *baseTimer) Stop() time.Duration {
 
 	spent := timer.Spent()
 	timer.spent.Store(int64(spent))
-	timer.stopped.Store(true)
+	// CAS ensures exactly one caller propagates the stop to the parent;
+	// concurrent Stop calls would otherwise double-count the spent time
+	// into the parent's component accumulator.
+	if !timer.stopped.CompareAndSwap(false, true) {
+		return time.Duration(timer.spent.Load())
+	}
 	if timer.parent != nil {
 		timer.parent.childStopped(timer.componentName, spent)
 	}
