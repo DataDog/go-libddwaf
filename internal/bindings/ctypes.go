@@ -355,6 +355,13 @@ func (w *WAFObject) SetString(pinner *runtime.Pinner, str string) {
 		return
 	}
 
+	// The C size field is uint32; clamp instead of letting the cast wrap
+	// around for pathological (>4GiB) strings. WAFObject is public API, so
+	// callers may reach this without the Encoder's truncation guard.
+	if uint64(length) > math.MaxUint32 {
+		length = math.MaxUint32
+	}
+
 	// Regular string: pin the data pointer
 	w.setType(WAFStringType)
 	binary.NativeEndian.PutUint32(w.data[wafObjectStringSizeOffset:], uint32(length))
@@ -378,6 +385,11 @@ func (w *WAFObject) SetLiteralString(pinner *runtime.Pinner, str string) {
 
 	header := unsafeutil.NativeStringUnwrap(str)
 	length := header.Len
+
+	// See SetString for why the length is clamped to the uint32 size field.
+	if uint64(length) > math.MaxUint32 {
+		length = math.MaxUint32
+	}
 
 	w.setType(WAFLiteralStringType)
 	binary.NativeEndian.PutUint32(w.data[wafObjectStringSizeOffset:], uint32(length))
