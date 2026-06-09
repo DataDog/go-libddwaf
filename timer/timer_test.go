@@ -490,3 +490,46 @@ func BenchmarkRun(b *testing.B) {
 		runTimer.Stop()
 	}
 }
+
+// TestBaseTimerConcurrentStopNoDoubleCount verifies that concurrent Stop()
+// calls on the same leaf propagate to the parent exactly once. A check-then-act
+// race previously let multiple callers each invoke childStopped, double-counting
+// the spent time into the parent's component accumulator.
+func TestBaseTimerConcurrentStopNoDoubleCount(t *testing.T) {
+	root, err := timer.NewTreeTimer(timer.WithBudget(time.Hour), timer.WithComponents("test"))
+	require.NoError(t, err)
+
+	leaf, err := root.NewLeaf("test")
+	require.NoError(t, err)
+
+	leaf.Start()
+	time.Sleep(time.Millisecond)
+
+	const n = 64
+	var wg sync.WaitGroup
+	results := make([]time.Duration, n)
+	barrier := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-barrier
+			results[i] = leaf.Stop()
+		}(i)
+	}
+	close(barrier)
+	wg.Wait()
+
+	var maxResult time.Duration
+	for _, r := range results {
+		require.Positive(t, r)
+		if r > maxResult {
+			maxResult = r
+		}
+	}
+
+	// childStopped ran exactly once, so the parent's accumulated spent equals a
+	// single leaf stop. With the old double-counting bug it would be a multiple
+	// of the per-stop value and exceed any individual result.
+	require.LessOrEqual(t, root.SumSpent(), maxResult)
+}
