@@ -127,6 +127,11 @@ func decodeFeature(obj *WAFObject) (*Feature, error) {
 		case "warnings":
 			feature.Warnings, err = decodeErrors(&entry.Val)
 		default:
+			// Feature maps have a closed schema, so an unknown field means
+			// libddwaf changed in a way this decoder does not understand yet;
+			// fail loudly rather than silently dropping data. This is
+			// deliberately stricter than decodeDiagnostics, which ignores
+			// unknown top-level keys for forward compatibility.
 			return nil, fmt.Errorf("decodeFeature: %w: unknown field %q", waferrors.ErrUnsupportedValue, key)
 		}
 

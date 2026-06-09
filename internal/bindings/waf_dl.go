@@ -88,7 +88,10 @@ func (waf *WAFLib) Close() error {
 
 // Version returned string is a static string so we do not need to free it
 func (waf *WAFLib) Version() string {
-	return unsafeutil.Gostring((*byte)(unsafe.Pointer(waf.syscall(waf.getVersion))))
+	// The uintptr returned by syscall points to C-managed static memory the Go
+	// GC does not track, so converting it back to unsafe.Pointer is safe despite
+	// violating vet's unsafeptr rule (standard purego pattern).
+	return unsafeutil.Gostring((*byte)(unsafe.Pointer(waf.syscall(waf.getVersion)))) //nolint:govet
 }
 
 // loadDefaultAllocator returns the default allocator used by the library.
@@ -215,8 +218,10 @@ func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 		return nil
 	}
 
-	// These C strings are static strings so we do not need to free them
-	arrayPtr := unsafe.Pointer(arrayVoidC)
+	// These C strings are static strings so we do not need to free them.
+	// arrayVoidC points to C-managed memory the Go GC does not track, so the
+	// uintptr round-trip is safe despite vet's unsafeptr rule (purego pattern).
+	arrayPtr := unsafe.Pointer(arrayVoidC) //nolint:govet
 	addresses := make([]string, int(nbAddresses))
 	for i := range int(nbAddresses) {
 		charPtr := *(**byte)(unsafe.Add(arrayPtr, uintptr(i)*unsafe.Sizeof(uintptr(0))))
