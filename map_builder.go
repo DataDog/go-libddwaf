@@ -5,6 +5,8 @@
 
 package libddwaf
 
+import "github.com/DataDog/go-libddwaf/v5/internal/invariant"
+
 // MapBuilder accumulates WAFObjectKV entries and commits them to a parent
 // WAFObject on Close. It is not safe for concurrent use.
 type MapBuilder struct {
@@ -33,6 +35,9 @@ func (e *Encoder) Map(parent *WAFObject, capacityHint ...int) *MapBuilder {
 // is at MaxContainerSize capacity. The caller must populate the value or call
 // DropLast before calling NextValue again.
 func (b *MapBuilder) NextValue(key string) *WAFObject {
+	// Entries appended after Close would be silently lost: Close is
+	// idempotent and never re-commits to the parent.
+	invariant.Assert(!b.closed, "NextValue called on closed MapBuilder")
 	if len(b.entries) >= b.enc.Config.maxContainerSize() {
 		return nil
 	}

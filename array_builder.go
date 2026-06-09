@@ -5,6 +5,8 @@
 
 package libddwaf
 
+import "github.com/DataDog/go-libddwaf/v5/internal/invariant"
+
 // ArrayBuilder accumulates WAFObject entries and commits them to a parent
 // WAFObject on Close. It is not safe for concurrent use.
 type ArrayBuilder struct {
@@ -33,6 +35,9 @@ func (e *Encoder) Array(parent *WAFObject, capacityHint ...int) *ArrayBuilder {
 // MaxContainerSize capacity. The caller must populate the slot or call DropLast
 // before calling NextValue again.
 func (b *ArrayBuilder) NextValue() *WAFObject {
+	// Entries appended after Close would be silently lost: Close is
+	// idempotent and never re-commits to the parent.
+	invariant.Assert(!b.closed, "NextValue called on closed ArrayBuilder")
 	if len(b.entries) >= b.enc.Config.maxContainerSize() {
 		return nil
 	}
