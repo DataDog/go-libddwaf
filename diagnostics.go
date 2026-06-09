@@ -47,7 +47,7 @@ func (d *Diagnostics) EachFeature(cb func(string, *Feature)) {
 		{"custom_rules", d.CustomRules},
 		{"actions", d.Actions},
 		{"exclusions", d.Exclusions},
-		{"rules_overrides", d.RulesOverrides},
+		{"rules_override", d.RulesOverrides},
 		{"rules_data", d.RulesData},
 		{"exclusion_data", d.ExclusionData},
 		{"processors", d.Processors},
