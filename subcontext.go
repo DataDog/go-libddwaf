@@ -74,8 +74,17 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	defer runTimer.Stop()
 
 	pinner := new(runtime.Pinner)
+	// wafOwnsData becomes true once the encoded data is handed to the WAF,
+	// which retains references to it until the subcontext is destroyed. Until
+	// then (encode error, timeout, closed context) the pinned data was never
+	// seen by the WAF and can be released immediately.
+	wafOwnsData := false
 
 	defer func() {
+		if !wafOwnsData {
+			pinner.Unpin()
+			return
+		}
 		s.pinnersMu.Lock()
 		defer s.pinnersMu.Unlock()
 		if s.closedHint.Load() {
@@ -124,6 +133,7 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	resultPinner.Pin(&result)
 	defer wafBindings.Lib.ObjectDestroy(&result, wafBindings.Lib.DefaultAllocator())
 
+	wafOwnsData = true
 	ret := wafBindings.Lib.SubcontextEval(s.cSub, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
 
 	return decodeWafResult(ctx, ret, &result, runTimer)
@@ -139,18 +149,28 @@ func (s *Subcontext) Close() {
 	s.mu.Unlock() //nolint:staticcheck // SA2001: intentional barrier — synchronize with Run before pinner close
 
 	s.parent.mu.Lock()
-	defer s.parent.mu.Unlock()
-	if !s.parent.closedHint.Load() && s.cSub != 0 {
+	// Destroy our own ddwaf_subcontext if it is still alive. ddwaf_context_destroy
+	// does NOT cascade to derived subcontexts, so the parent Context.Close also
+	// destroys live subcontexts. Both paths hold parent.mu and gate on cSub != 0,
+	// so the subcontext is destroyed exactly once. If the parent already ran its
+	// destroy loop, cSub is 0 here and we skip (the parent destroyed it before
+	// ddwaf_context_destroy); otherwise we destroy it now while the context is
+	// still alive.
+	if s.cSub != 0 {
 		wafBindings.Lib.SubcontextDestroy(s.cSub)
+		s.cSub = 0
 	}
-	s.cSub = 0
+	delete(s.parent.subcontexts, s)
+	s.parent.mu.Unlock()
 
+	// Pinner cleanup and handle release do not need parent.mu; keeping it
+	// held here would block Run/NewSubcontext on the parent while unpinning.
 	s.pinnersMu.Lock()
-	defer s.pinnersMu.Unlock()
 	for _, p := range s.pinners {
 		p.Unpin()
 	}
 	s.pinners = nil
+	s.pinnersMu.Unlock()
 
 	s.parent.handle.Close()
 }

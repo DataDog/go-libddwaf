@@ -65,6 +65,12 @@ type Context struct {
 	// Each Run call gets its own [runtime.Pinner]; all are unpinned on [Context.Close].
 	pinners   []*runtime.Pinner
 	pinnersMu sync.Mutex
+
+	// subcontexts tracks live subcontexts derived from this context. ddwaf_context_destroy
+	// does NOT cascade to derived subcontexts, so Context.Close must destroy each
+	// live subcontext's ddwaf_subcontext before destroying the context itself.
+	// Guarded by mu.
+	subcontexts map[*Subcontext]struct{}
 }
 
 // NewSubcontext creates a subcontext derived from this context.
@@ -139,11 +145,16 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	}
 
 	success = true
-	return &Subcontext{
+	sub := &Subcontext{
 		Timer:  subTimer,
 		parent: context,
 		cSub:   cSubcontext,
-	}, nil
+	}
+	if context.subcontexts == nil {
+		context.subcontexts = make(map[*Subcontext]struct{})
+	}
+	context.subcontexts[sub] = struct{}{}
+	return sub, nil
 }
 
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
@@ -183,8 +194,17 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	defer runTimer.Stop()
 
 	pinner := new(runtime.Pinner)
+	// wafOwnsData becomes true once the encoded data is handed to the WAF,
+	// which retains references to it until the context is destroyed. Until
+	// then (encode error, timeout, closed context) the pinned data was never
+	// seen by the WAF and can be released immediately.
+	wafOwnsData := false
 
 	defer func() {
+		if !wafOwnsData {
+			pinner.Unpin()
+			return
+		}
 		context.pinnersMu.Lock()
 		defer context.pinnersMu.Unlock()
 		if context.closedHint.Load() {
@@ -228,6 +248,7 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	defer wafBindings.Lib.ObjectDestroy(&result, wafBindings.Lib.DefaultAllocator())
 
 	cContext := context.cContext
+	wafOwnsData = true
 	ret := wafBindings.Lib.ContextEval(cContext, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
 
 	return decodeWafResult(ctx, ret, &result, runTimer)
@@ -246,10 +267,26 @@ func (context *Context) Close() {
 
 	context.evalsInFlight.Wait()
 
+	// ddwaf_context_destroy does NOT cascade to derived subcontexts, so destroy
+	// each live subcontext's ddwaf_subcontext before the context. Holding mu
+	// across both the subcontext loop and ContextDestroy serializes with any
+	// concurrent Subcontext.Close (which destroys its own cSub under the same
+	// lock and gates on cSub != 0), guaranteeing each subcontext is destroyed
+	// exactly once and always before the context.
+	context.mu.Lock()
+	for sub := range context.subcontexts {
+		if sub.cSub != 0 {
+			wafBindings.Lib.SubcontextDestroy(sub.cSub)
+			sub.cSub = 0
+		}
+	}
+	context.subcontexts = nil
+
 	if context.cContext != 0 {
 		wafBindings.Lib.ContextDestroy(context.cContext)
 		context.cContext = 0
 	}
+	context.mu.Unlock()
 
 	context.pinnersMu.Lock()
 	defer context.pinnersMu.Unlock()
