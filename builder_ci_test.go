@@ -21,7 +21,7 @@ import (
 func TestArrayBuilder_NextValueAfterClose_PanicsUnderCI(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
-	enc := newArrayTestEncoder(t, &pinner, 4, 64)
+	enc := newTestEncoder(t, &pinner, 4, 64)
 	var parent WAFObject
 
 	b := enc.Array(&parent, 1)
@@ -38,7 +38,7 @@ func TestArrayBuilder_NextValueAfterClose_PanicsUnderCI(t *testing.T) {
 func TestMapBuilder_NextValueAfterClose_PanicsUnderCI(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
-	enc := newMapTestEncoder(t, &pinner, 4, 64)
+	enc := newTestEncoder(t, &pinner, 4, 64)
 	var parent WAFObject
 
 	b := enc.Map(&parent, 1)
