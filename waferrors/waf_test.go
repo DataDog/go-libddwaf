@@ -2,6 +2,8 @@ package waferrors_test
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
@@ -36,5 +38,56 @@ func TestGoRunErrorUnknownCode(t *testing.T) {
 	}
 	if waferrors.ToWafErrorCode(err) != 99 {
 		t.Errorf("ToWafErrorCode(RunError(99)) = %d, want 99", waferrors.ToWafErrorCode(err))
+	}
+}
+
+func TestRunErrorString(t *testing.T) {
+	for _, tc := range []struct {
+		err  waferrors.RunError
+		want string
+	}{
+		{waferrors.ErrInternal, "internal waf error"},
+		{waferrors.ErrInvalidObject, "invalid waf object"},
+		{waferrors.ErrInvalidArgument, "invalid waf argument"},
+		{waferrors.ErrTimeout, "waf timeout"},
+		{waferrors.ErrOutOfMemory, "out of memory"},
+		{waferrors.ErrEmptyRuleAddresses, "empty rule addresses"},
+		{waferrors.RunError(123), "unknown waf error 123"},
+	} {
+		if got := tc.err.Error(); got != tc.want {
+			t.Errorf("RunError(%d).Error() = %q, want %q", int(tc.err), got, tc.want)
+		}
+	}
+}
+
+func TestToWafErrorCode(t *testing.T) {
+	if code := waferrors.ToWafErrorCode(errors.New("not a run error")); code != 0 {
+		t.Errorf("ToWafErrorCode(non-RunError) = %d, want 0", code)
+	}
+	if code := waferrors.ToWafErrorCode(nil); code != 0 {
+		t.Errorf("ToWafErrorCode(nil) = %d, want 0", code)
+	}
+	if code := waferrors.ToWafErrorCode(waferrors.ErrTimeout); code != int(waferrors.ErrTimeout) {
+		t.Errorf("ToWafErrorCode(ErrTimeout) = %d, want %d", code, int(waferrors.ErrTimeout))
+	}
+
+	wrapped := fmt.Errorf("during run: %w", waferrors.ErrInternal)
+	if code := waferrors.ToWafErrorCode(wrapped); code != int(waferrors.ErrInternal) {
+		t.Errorf("ToWafErrorCode(wrapped) = %d, want %d", code, int(waferrors.ErrInternal))
+	}
+}
+
+func TestSupportErrorStrings(t *testing.T) {
+	if got := (waferrors.UnsupportedOSArchError{OS: "plan9", Arch: "sparc"}).Error(); got != "unsupported OS/Arch: plan9/sparc" {
+		t.Errorf("UnsupportedOSArchError.Error() = %q", got)
+	}
+	if got := (waferrors.ManuallyDisabledError{}).Error(); got != "the WAF has been manually disabled using the `datadog.no_waf` go build tag" {
+		t.Errorf("ManuallyDisabledError.Error() = %q", got)
+	}
+	if got := (waferrors.UnsupportedGoVersionError{}).Error(); !strings.HasPrefix(got, "unsupported Go version: ") {
+		t.Errorf("UnsupportedGoVersionError.Error() = %q, want prefix %q", got, "unsupported Go version: ")
+	}
+	if got := (waferrors.CgoDisabledError{}).Error(); !strings.Contains(got, "cgo is disabled") {
+		t.Errorf("CgoDisabledError.Error() = %q, want substring %q", got, "cgo is disabled")
 	}
 }

@@ -14,6 +14,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDiagnosticsTopLevelError(t *testing.T) {
+	t.Run("nil-when-no-errors", func(t *testing.T) {
+		require.NoError(t, (&Diagnostics{}).TopLevelError())
+
+		d := Diagnostics{
+			Rules:       &Feature{Loaded: []string{"rule-1"}},
+			CustomRules: &Feature{},
+		}
+		require.NoError(t, d.TopLevelError())
+	})
+
+	t.Run("rolls-up-feature-errors", func(t *testing.T) {
+		d := Diagnostics{
+			Rules:       &Feature{Error: "rules parse failed"},
+			Processors:  &Feature{Error: "processors invalid"},
+			CustomRules: &Feature{Loaded: []string{"ok"}},
+		}
+		err := d.TopLevelError()
+		require.Error(t, err)
+		require.ErrorContains(t, err, "rules")
+		require.ErrorContains(t, err, "rules parse failed")
+		require.ErrorContains(t, err, "processors")
+		require.ErrorContains(t, err, "processors invalid")
+	})
+}
+
 func TestDecodeDiagnosticsExclusionData(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()

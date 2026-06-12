@@ -10,10 +10,12 @@ package libddwaf
 import (
 	"context"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/stretchr/testify/require"
 )
@@ -35,6 +37,29 @@ func TestSiblingSubcontextParallelismTarget(t *testing.T) {
 // regressions (e.g. a global lock making parallel several times slower).
 func meetsSiblingSubcontextSpeedupTarget(ratio float64) bool {
 	return ratio >= 0.8
+}
+
+func TestSubcontextTruncations(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+	t.Cleanup(func() { ctx.Close() })
+
+	subCtx, err := ctx.NewSubcontext(context.Background())
+	require.NoError(t, err)
+	t.Cleanup(func() { subCtx.Close() })
+
+	require.True(t, subCtx.Truncations().IsEmpty())
+
+	oversized := strings.Repeat("a", int(bindings.MaxStringLength)*2)
+	_, _ = subCtx.Run(context.Background(), RunAddressData{Data: map[string]any{"my.input": oversized}})
+
+	tr := subCtx.Truncations()
+	require.NotEmpty(t, tr.StringTooLong)
+	require.Equal(t, len(oversized), tr.StringTooLong[0])
 }
 
 func TestSiblingSubcontextParallelismSpeedup(t *testing.T) {

@@ -38,6 +38,26 @@ func TestUnwrapWafResult_Equivalence(t *testing.T) {
 	}
 }
 
+func TestResultHasHelpers(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		var r Result
+		require.False(t, r.HasEvents())
+		require.False(t, r.HasDerivatives())
+		require.False(t, r.HasActions())
+	})
+
+	t.Run("populated", func(t *testing.T) {
+		r := Result{
+			Events:      []any{"event"},
+			Derivatives: map[string]any{"key": "value"},
+			Actions:     map[string]any{"block_request": map[string]any{}},
+		}
+		require.True(t, r.HasEvents())
+		require.True(t, r.HasDerivatives())
+		require.True(t, r.HasActions())
+	})
+}
+
 func evaluateRawWAFResult(t *testing.T, rules any, data map[string]any) (bindings.WAFReturnCode, *WAFObject) {
 	t.Helper()
 

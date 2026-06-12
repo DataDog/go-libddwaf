@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1557,4 +1558,68 @@ func TestDepthOf(t *testing.T) {
 		require.Greater(t, depth, 0)
 		require.ErrorIs(t, depthErr, waferrors.ErrTimeout)
 	})
+}
+
+func TestDecodeObject(t *testing.T) {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	t.Run("string", func(t *testing.T) {
+		var obj WAFObject
+		obj.SetString(&pinner, "datadog")
+		got, err := DecodeObject(&obj)
+		require.NoError(t, err)
+		require.Equal(t, "datadog", got)
+	})
+
+	t.Run("int", func(t *testing.T) {
+		var obj WAFObject
+		obj.SetInt(-42)
+		got, err := DecodeObject(&obj)
+		require.NoError(t, err)
+		require.Equal(t, int64(-42), got)
+	})
+
+	t.Run("nil", func(t *testing.T) {
+		var obj WAFObject
+		obj.SetNil()
+		got, err := DecodeObject(&obj)
+		require.NoError(t, err)
+		require.Nil(t, got)
+	})
+
+	t.Run("matches-AnyValue", func(t *testing.T) {
+		var obj WAFObject
+		obj.SetString(&pinner, "same")
+		decoded, decErr := DecodeObject(&obj)
+		anyVal, anyErr := obj.AnyValue()
+		require.Equal(t, anyErr, decErr)
+		require.Equal(t, anyVal, decoded)
+	})
+
+	t.Run("invalid-type-errors", func(t *testing.T) {
+		var obj WAFObject
+		obj.SetInvalid()
+		_, err := DecodeObject(&obj)
+		require.Error(t, err)
+	})
+}
+
+func TestContextTruncations(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	wafCtx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+	t.Cleanup(func() { wafCtx.Close() })
+
+	require.True(t, wafCtx.Truncations().IsEmpty())
+
+	oversized := strings.Repeat("a", int(bindings.MaxStringLength)*2)
+	_, _ = wafCtx.Run(context.Background(), RunAddressData{Data: map[string]any{"my.input": oversized}})
+
+	tr := wafCtx.Truncations()
+	require.NotEmpty(t, tr.StringTooLong)
+	require.Equal(t, len(oversized), tr.StringTooLong[0])
 }
