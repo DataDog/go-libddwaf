@@ -67,14 +67,14 @@ jobs:
           # the DataDog/appsec-rules repository.
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
       - name: Generate coverage report
-        if: matrix.runs-on == 'ubuntu-24.04' && matrix.go-version == 'stable' && !matrix.waf-log-level
+        if: matrix.runs-on == 'ubuntu-24.04' && matrix.go-version == 'stable'
         shell: bash
         run: go test -tags ci,appsec -coverprofile=coverage.out -args -waf-build-tags="appsec,linux,amd64" -waf-supported="true" ./...
         env:
           DD_APPSEC_WAF_TIMEOUT: 10m
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
       - name: Upload coverage to Datadog
-        if: matrix.runs-on == 'ubuntu-24.04' && matrix.go-version == 'stable' && !matrix.waf-log-level
+        if: matrix.runs-on == 'ubuntu-24.04' && matrix.go-version == 'stable'
         env:
           DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
         run: npx --yes @datadog/datadog-ci coverage upload --service go-libddwaf coverage.out
