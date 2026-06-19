@@ -34,20 +34,43 @@ type Pinner interface {
 var _ Pinner = (*runtime.Pinner)(nil)
 
 // ConcurrentPinner is a [Pinner] that is safe for concurrent use by multiple
-// goroutines.
+// goroutines. Once [ConcurrentPinner.Close] has been called, the pinner is in
+// a terminal state and any subsequent [ConcurrentPinner.Pin] call is a no-op.
+// A closed pinner cannot be reused.
 type ConcurrentPinner struct {
 	runtime.Pinner
 	sync.Mutex
+	closed bool
 }
 
+// Pin pins v unless the pinner has already been closed, in which case it is
+// a no-op. This terminal-state behavior prevents a race where [Pin] calls
+// arriving after a concurrent [Close] would leak onto the already-released
+// pinner and trigger the runtime.Pinner finalizer panic on the next GC.
 func (p *ConcurrentPinner) Pin(v any) {
 	p.Lock()
+	defer p.Unlock()
+	if p.closed {
+		return
+	}
 	p.Pinner.Pin(v)
-	p.Unlock()
 }
 
+// Unpin unpins every currently-pinned object. It does not put the pinner
+// into the terminal state; future Pin calls are still accepted. Use [Close]
+// when the pinner is being torn down for good.
 func (p *ConcurrentPinner) Unpin() {
 	p.Lock()
+	defer p.Unlock()
 	p.Pinner.Unpin()
-	p.Unlock()
+}
+
+// Close unpins every currently-pinned object and puts the pinner into a
+// terminal state where future [Pin] calls are no-ops. A closed pinner
+// cannot be reused. Calling Close multiple times is safe.
+func (p *ConcurrentPinner) Close() {
+	p.Lock()
+	defer p.Unlock()
+	p.closed = true
+	p.Pinner.Unpin()
 }

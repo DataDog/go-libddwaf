@@ -324,11 +324,17 @@ func (context *Context) Close() {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
-	bindings.Lib.ContextDestroy(context.cContext)
-	defer context.handle.Close() // Reduce the reference counter of the Handle.
-	context.cContext = 0         // Makes it easy to spot use-after-free/double-free issues
+	if context.cContext != 0 {
+		bindings.Lib.ContextDestroy(context.cContext)
+		defer context.handle.Close() // Reduce the reference counter of the Handle.
+		context.cContext = 0         // Makes it easy to spot use-after-free/double-free issues
+	}
 
-	context.pinner.Unpin() // The pinned data is no longer needed, explicitly release
+	// Close (not Unpin) so that any concurrent Run that is still mid-encode
+	// sees a terminal pinner and its remaining Pin calls become no-ops
+	// instead of leaking onto an already-released pinner. Run still catches
+	// the closed state via cContext == 0 above.
+	context.pinner.Close()
 }
 
 // Truncations returns the truncations that occurred while encoding address data for WAF execution.
