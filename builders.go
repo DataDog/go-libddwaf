@@ -5,7 +5,11 @@
 
 package libddwaf
 
-import "github.com/DataDog/go-libddwaf/v5/internal/invariant"
+import (
+	"math"
+
+	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
+)
 
 // ArrayBuilder accumulates WAFObject entries and commits them to a parent
 // WAFObject on Close. It is not safe for concurrent use.
@@ -64,10 +68,19 @@ func (b *ArrayBuilder) Close() {
 		return
 	}
 	b.closed = true
-	if b.skipped > 0 {
-		b.enc.Truncations.Record(ContainerTooLarge, len(b.entries)+b.skipped)
+	overflow := b.skipped
+	if len(b.entries) > math.MaxUint16 {
+		overflow += len(b.entries) - math.MaxUint16
+		b.entries = b.entries[:math.MaxUint16]
 	}
-	_ = b.parent.SetArrayData(b.enc.Config.Pinner, b.entries)
+	if overflow > 0 {
+		b.enc.Truncations.Record(ContainerTooLarge, len(b.entries)+overflow)
+	}
+	// Force cap == len: SetArrayData rejects cap > MaxUint16, and append growth
+	// can leave the backing array's capacity above the element count.
+	entries := b.entries[:len(b.entries):len(b.entries)]
+	err := b.parent.SetArrayData(b.enc.Config.Pinner, entries)
+	invariant.Assert(err == nil, "SetArrayData must not fail after capping to MaxUint16: %v", err)
 }
 
 // MapBuilder accumulates WAFObjectKV entries and commits them to a parent
@@ -130,8 +143,17 @@ func (b *MapBuilder) Close() {
 		return
 	}
 	b.closed = true
-	if b.skipped > 0 {
-		b.enc.Truncations.Record(ContainerTooLarge, len(b.entries)+b.skipped)
+	overflow := b.skipped
+	if len(b.entries) > math.MaxUint16 {
+		overflow += len(b.entries) - math.MaxUint16
+		b.entries = b.entries[:math.MaxUint16]
 	}
-	_ = b.parent.SetMapData(b.enc.Config.Pinner, b.entries)
+	if overflow > 0 {
+		b.enc.Truncations.Record(ContainerTooLarge, len(b.entries)+overflow)
+	}
+	// Force cap == len: SetMapData rejects cap > MaxUint16, and append growth
+	// can leave the backing array's capacity above the element count.
+	entries := b.entries[:len(b.entries):len(b.entries)]
+	err := b.parent.SetMapData(b.enc.Config.Pinner, entries)
+	invariant.Assert(err == nil, "SetMapData must not fail after capping to MaxUint16: %v", err)
 }

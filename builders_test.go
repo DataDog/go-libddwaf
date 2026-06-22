@@ -6,6 +6,7 @@
 package libddwaf
 
 import (
+	"math"
 	"runtime"
 	"testing"
 
@@ -351,4 +352,46 @@ func TestMapBuilder_KeyPreservedOnInvalidValue(t *testing.T) {
 func TestMapBuilder_ZeroValueSlotIsInvalid(t *testing.T) {
 	var obj WAFObject
 	require.True(t, obj.IsInvalid(), "zero-value WAFObject must be invalid")
+}
+
+func TestArrayBuilder_OverUint16IsCappedNotEmptied(t *testing.T) {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	enc := Encoder{Config: newEncoderConfig(&pinner, WithUnlimitedLimits())}
+	var parent WAFObject
+
+	b := enc.Array(&parent, 0)
+	for i := 0; i <= math.MaxUint16; i++ {
+		slot := b.NextValue()
+		require.NotNil(t, slot)
+		slot.SetInt(int64(i))
+	}
+	b.Close()
+
+	require.True(t, parent.IsArray())
+	size, err := parent.ArraySize()
+	require.NoError(t, err)
+	require.Equal(t, uint16(math.MaxUint16), size, "oversized array must be capped at MaxUint16, not silently emptied")
+	require.NotEmpty(t, enc.Truncations.ContainerTooLarge, "oversized array must record a ContainerTooLarge truncation")
+}
+
+func TestMapBuilder_OverUint16IsCappedNotEmptied(t *testing.T) {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	enc := Encoder{Config: newEncoderConfig(&pinner, WithUnlimitedLimits())}
+	var parent WAFObject
+
+	b := enc.Map(&parent, 0)
+	for i := 0; i <= math.MaxUint16; i++ {
+		slot := b.NextValue("k")
+		require.NotNil(t, slot)
+		slot.SetInt(int64(i))
+	}
+	b.Close()
+
+	require.True(t, parent.IsMap())
+	entries, err := parent.MapEntries()
+	require.NoError(t, err)
+	require.Len(t, entries, math.MaxUint16, "oversized map must be capped at MaxUint16, not silently emptied")
+	require.NotEmpty(t, enc.Truncations.ContainerTooLarge, "oversized map must record a ContainerTooLarge truncation")
 }

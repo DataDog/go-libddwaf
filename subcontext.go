@@ -64,6 +64,10 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 		return Result{}, waferrors.ErrTimeout
 	}
 
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+
 	runTimer, err := newRunTimer(s.Timer, addressData.TimerKey)
 	if err != nil {
 		return Result{}, err
@@ -121,6 +125,10 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 
 	if s.closedHint.Load() {
 		return Result{}, waferrors.ErrContextClosed
+	}
+
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
 	}
 
 	s.parent.mu.Lock()

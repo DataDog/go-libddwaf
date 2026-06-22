@@ -186,6 +186,10 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 		return Result{}, waferrors.ErrTimeout
 	}
 
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+
 	runTimer, err := newRunTimer(context.Timer, addressData.TimerKey)
 	if err != nil {
 		return Result{}, err
@@ -238,6 +242,10 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 
 	if context.closedHint.Load() {
 		return Result{}, waferrors.ErrContextClosed
+	}
+
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
 	}
 
 	context.evalsInFlight.Add(1)
