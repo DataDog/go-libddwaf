@@ -15,14 +15,12 @@ func TestClockConcurrentNow(t *testing.T) {
 	var wg sync.WaitGroup
 	barrier := make(chan struct{})
 	for range 100 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-barrier
 			for range 1000 {
 				_ = c.now()
 			}
-		}()
+		})
 	}
 	close(barrier)
 	wg.Wait()
@@ -39,8 +37,8 @@ func TestChildTimersShareClockPointer(t *testing.T) {
 		rootImpl := root.(*nodeTimer)
 		leafImpl := leaf.(*baseTimer)
 
-		require.Equal(t, reflect.Pointer, reflect.TypeOf(rootImpl.baseTimer.clock).Kind())
-		require.Equal(t, reflect.Pointer, reflect.TypeOf(leafImpl.clock).Kind())
+		require.Equal(t, reflect.Pointer, reflect.TypeFor[*clock]().Kind())
+		require.Equal(t, reflect.Pointer, reflect.TypeFor[*clock]().Kind())
 		require.Equal(t, reflect.ValueOf(rootImpl.baseTimer.clock).Pointer(), reflect.ValueOf(leafImpl.clock).Pointer())
 	})
 
@@ -51,8 +49,8 @@ func TestChildTimersShareClockPointer(t *testing.T) {
 		rootImpl := root.(*nodeTimer)
 		nodeImpl := node.(*nodeTimer)
 
-		require.Equal(t, reflect.Pointer, reflect.TypeOf(rootImpl.baseTimer.clock).Kind())
-		require.Equal(t, reflect.Pointer, reflect.TypeOf(nodeImpl.baseTimer.clock).Kind())
+		require.Equal(t, reflect.Pointer, reflect.TypeFor[*clock]().Kind())
+		require.Equal(t, reflect.Pointer, reflect.TypeFor[*clock]().Kind())
 		require.Equal(t, reflect.ValueOf(rootImpl.baseTimer.clock).Pointer(), reflect.ValueOf(nodeImpl.baseTimer.clock).Pointer())
 	})
 }
@@ -61,7 +59,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 	b.Run("timer.Start()", func(b *testing.B) {
 		var err error
 		timers := make([]Timer, b.N)
-		for i := 0; i < b.N; i++ {
+		for i := range timers {
 			timers[i], err = NewTreeTimer(WithBudget(time.Hour))
 			if err != nil {
 				b.Fatal(err)
@@ -69,7 +67,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for i := range timers {
 			runtime.KeepAlive(timers[i].Start())
 		}
 	})
@@ -81,7 +79,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			runtime.KeepAlive(timer.Spent())
 		}
 	})
@@ -93,7 +91,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			runtime.KeepAlive(timer.Remaining())
 		}
 	})
@@ -105,7 +103,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			runtime.KeepAlive(timer.Exhausted())
 		}
 	})
@@ -114,13 +112,13 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 // Benchmark time.Now() vs clock.now()
 func BenchmarkNow(b *testing.B) {
 	b.Run("time.Now()", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			runtime.KeepAlive(time.Now())
 		}
 	})
 	ct := &clock{lastRequest: time.Now()}
 	b.Run("clock.now()", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			runtime.KeepAlive(ct.now())
 		}
 	})

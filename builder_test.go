@@ -479,10 +479,8 @@ func TestBuilderConcurrentUsePanics(t *testing.T) {
 	barrier := make(chan struct{})
 	panicked := make(chan bool, 2)
 
-	for i := 0; i < 2; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 2 {
+		wg.Go(func() {
 			defer func() {
 				if r := recover(); r != nil {
 					panicked <- true
@@ -492,7 +490,7 @@ func TestBuilderConcurrentUsePanics(t *testing.T) {
 			builder.acquire()
 			time.Sleep(10 * time.Millisecond)
 			builder.release()
-		}()
+		})
 	}
 
 	close(barrier)

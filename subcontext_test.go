@@ -71,10 +71,7 @@ func TestSiblingSubcontextParallelismSpeedup(t *testing.T) {
 	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 	require.NoError(t, err)
 
-	n := runtime.NumCPU()
-	if n > 8 {
-		n = 8
-	}
+	n := min(runtime.NumCPU(), 8)
 	if n < 2 {
 		t.Skip("speedup test requires at least 2 CPUs")
 	}

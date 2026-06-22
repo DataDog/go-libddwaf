@@ -363,27 +363,23 @@ func TestBaseTimerConcurrentReadWrite(t *testing.T) {
 	var wg sync.WaitGroup
 	barrier := make(chan struct{})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		<-barrier
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			leaf.Start()
 			leaf.Stop()
 		}
-	}()
+	})
 
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			<-barrier
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				_ = leaf.Spent()
 				_ = leaf.Remaining()
 				_ = leaf.Exhausted()
 			}
-		}()
+		})
 	}
 
 	close(barrier)
@@ -509,7 +505,7 @@ func TestBaseTimerConcurrentStopNoDoubleCount(t *testing.T) {
 	var wg sync.WaitGroup
 	results := make([]time.Duration, n)
 	barrier := make(chan struct{})
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

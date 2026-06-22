@@ -21,10 +21,7 @@ type ArrayBuilder struct {
 // capacityHint pre-allocates the backing slice (capped at MaxContainerSize);
 // pass 0 when the eventual size is unknown.
 func (e *Encoder) Array(parent *WAFObject, capacityHint int) *ArrayBuilder {
-	initial := capacityHint
-	if initial < 0 {
-		initial = 0
-	}
+	initial := max(capacityHint, 0)
 	if limit := e.Config.maxContainerSize(); initial > limit {
 		initial = limit
 	}
@@ -87,10 +84,7 @@ type MapBuilder struct {
 // capacityHint pre-allocates the backing slice (capped at MaxContainerSize);
 // pass 0 when the eventual size is unknown.
 func (e *Encoder) Map(parent *WAFObject, capacityHint int) *MapBuilder {
-	initial := capacityHint
-	if initial < 0 {
-		initial = 0
-	}
+	initial := max(capacityHint, 0)
 	if limit := e.Config.maxContainerSize(); initial > limit {
 		initial = limit
 	}

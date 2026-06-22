@@ -64,13 +64,11 @@ func TestContextRunCloseRace(t *testing.T) {
 		}(worker)
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		<-start
 		time.Sleep(time.Millisecond)
 		ctx.Close()
-	}()
+	})
 
 	close(start)
 	wg.Wait()
@@ -124,7 +122,7 @@ func TestNoGoroutineLeaks(t *testing.T) {
 	}}
 
 	// Warmup + stabilize goroutine count
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		subCtx, err := ctx.NewSubcontext(context.Background())
@@ -140,7 +138,7 @@ func TestNoGoroutineLeaks(t *testing.T) {
 	n0 := runtime.NumGoroutine()
 
 	const iterations = 100
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
 		require.NoError(t, err)
 		_, _ = ctx.Run(context.Background(), data)

@@ -29,10 +29,7 @@ func BenchmarkSiblingSubcontextParallelism(b *testing.B) {
 	}
 	b.Cleanup(func() { ctx.Close() })
 
-	n := runtime.NumCPU()
-	if n > 8 {
-		n = 8
-	}
+	n := min(runtime.NumCPU(), 8)
 
 	subCtxs := make([]*Subcontext, n)
 	for i := range n {
@@ -77,10 +74,7 @@ func BenchmarkSiblingSubcontextSerialized(b *testing.B) {
 	}
 	b.Cleanup(func() { ctx.Close() })
 
-	n := runtime.NumCPU()
-	if n > 8 {
-		n = 8
-	}
+	n := min(runtime.NumCPU(), 8)
 
 	subCtxs := make([]*Subcontext, n)
 	for i := range n {

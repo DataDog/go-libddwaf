@@ -1597,7 +1597,7 @@ func concurrentRunner(t testing.TB, numGoroutines int, iter func(goroutineIdx in
 	barrier := make(chan struct{})
 	errCh := make(chan error, numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
