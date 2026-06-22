@@ -1,6 +1,8 @@
 version: "2"
 run:
   go: "1.23"
+  build-tags:
+    - ci
 linters:
   default: none
   enable:
@@ -36,9 +38,16 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 formatters:
+  enable:
+    - gofmt
+    - goimports
   exclusions:
     generated: lax
     paths:
       - third_party$
       - builtin$
       - examples$
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/DataDog/go-libddwaf/v5

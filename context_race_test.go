@@ -16,9 +16,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
-	"github.com/stretchr/testify/require"
 )
 
 func TestContextRunCloseRace(t *testing.T) {

@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DataDog/go-libddwaf/v5/timer"
 )
 
 func TestEncoderWriteString_NoTruncation(t *testing.T) {

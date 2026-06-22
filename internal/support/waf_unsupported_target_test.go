@@ -11,9 +11,10 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/DataDog/go-libddwaf/v5"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
-	"github.com/stretchr/testify/require"
 )
 
 func TestUnsupportedPlatform(t *testing.T) {

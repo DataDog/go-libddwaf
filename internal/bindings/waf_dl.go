@@ -14,10 +14,11 @@ import (
 	"runtime"
 	"unsafe"
 
+	"github.com/ebitengine/purego"
+
 	"github.com/DataDog/go-libddwaf/v5/internal/lib"
 	"github.com/DataDog/go-libddwaf/v5/internal/log"
 	"github.com/DataDog/go-libddwaf/v5/internal/unsafeutil"
-	"github.com/ebitengine/purego"
 )
 
 // WAFLib is the type wrapper for all C calls to the waf

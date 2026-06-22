@@ -15,9 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/timer"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSiblingSubcontextParallelismTarget(t *testing.T) {

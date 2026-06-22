@@ -14,8 +14,9 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/DataDog/go-libddwaf/v5/internal/lib"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DataDog/go-libddwaf/v5/internal/lib"
 )
 
 func TestVerifyHeader(t *testing.T) {

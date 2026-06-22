@@ -10,8 +10,9 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 // TestWAFObjectStringRoundTrip verifies that encoding and decoding strings through

@@ -13,8 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 func TestHandleRefcountStress(t *testing.T) {

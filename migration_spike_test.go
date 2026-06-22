@@ -4,9 +4,10 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 func TestMigrationSpike(t *testing.T) {

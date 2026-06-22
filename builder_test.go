@@ -19,10 +19,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
-	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
+	"github.com/DataDog/go-libddwaf/v5/timer"
 )
 
 func requireConfigPaths(t *testing.T, b *Builder, filter string, expected []string) {
