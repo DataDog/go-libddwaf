@@ -569,6 +569,9 @@ func (w *WAFObject) StringValue() (string, error) {
 	switch t {
 	case WAFSmallStringType:
 		size := int(w.data[wafObjectSStrSize])
+		if size > wafObjectSStrMaxLen {
+			return "", fmt.Errorf("%w: small string size %d exceeds max %d", waferrors.ErrInvalidObjectType, size, wafObjectSStrMaxLen)
+		}
 		if size == 0 {
 			return "", nil
 		}

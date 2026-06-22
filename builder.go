@@ -107,12 +107,12 @@ func (b *Builder) RemoveDefaultRecommendedRuleset() bool {
 // AddOrUpdateConfig adds or updates a configuration fragment to this [Builder].
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, error) {
-	b.acquire()
-	defer b.release()
-
 	if b == nil || b.handle == 0 {
 		return Diagnostics{}, errBuilderClosed
 	}
+
+	b.acquire()
+	defer b.release()
 
 	if path == "" {
 		return Diagnostics{}, errors.New("path cannot be blank")
@@ -162,24 +162,24 @@ func (b *Builder) addOrUpdateConfig(path string, cfg *WAFObject) (Diagnostics, e
 // RemoveConfig removes the configuration associated with the given path from
 // this [Builder]. Returns true if the removal was successful.
 func (b *Builder) RemoveConfig(path string) bool {
-	b.acquire()
-	defer b.release()
-
 	if b == nil || b.handle == 0 {
 		return false
 	}
+
+	b.acquire()
+	defer b.release()
 
 	return bindings.Lib.BuilderRemoveConfig(b.handle, path)
 }
 
 // ConfigPaths returns the list of currently loaded configuration paths.
 func (b *Builder) ConfigPaths(filter string) ([]string, error) {
-	b.acquire()
-	defer b.release()
-
 	if b == nil || b.handle == 0 {
 		return nil, errBuilderClosed
 	}
+
+	b.acquire()
+	defer b.release()
 
 	return bindings.Lib.BuilderGetConfigPaths(b.handle, filter)
 }
@@ -189,12 +189,12 @@ func (b *Builder) ConfigPaths(filter string) ([]string, error) {
 // build the handle. The caller is responsible for calling [Handle.Close] when
 // the handle is no longer needed.
 func (b *Builder) Build() (*Handle, error) {
-	b.acquire()
-	defer b.release()
-
 	if b == nil || b.handle == 0 {
 		return nil, waferrors.ErrBuilderInitFailed
 	}
+
+	b.acquire()
+	defer b.release()
 
 	hdl := bindings.Lib.BuilderBuildInstance(b.handle)
 	if hdl == 0 {
