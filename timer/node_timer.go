@@ -29,7 +29,6 @@ func NewTreeTimer(options ...Option) (NodeTimer, error) {
 	return &nodeTimer{
 		baseTimer: baseTimer{
 			config: config,
-			clock:  newTimeCache(),
 		},
 		components: newComponents(config.components),
 	}, nil
@@ -49,7 +48,6 @@ func (timer *nodeTimer) NewNode(name Key, options ...Option) (NodeTimer, error) 
 	return &nodeTimer{
 		baseTimer: baseTimer{
 			config:        config,
-			clock:         timer.clock,
 			parent:        timer,
 			componentName: name,
 		},
@@ -69,7 +67,6 @@ func (timer *nodeTimer) NewLeaf(name Key, options ...Option) (Timer, error) {
 	}
 
 	return &baseTimer{
-		clock:         timer.clock,
 		config:        config,
 		componentName: name,
 		parent:        timer,
@@ -84,7 +81,6 @@ func (timer *nodeTimer) MustLeaf(name Key, options ...Option) Timer {
 			panic(fmt.Sprintf("MustLeaf: component %s not found", name))
 		}
 		return &baseTimer{
-			clock:         timer.clock,
 			config:        defaultLeafConfig,
 			componentName: name,
 			parent:        timer,

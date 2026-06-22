@@ -19,8 +19,6 @@ type baseTimer struct {
 	// config is the configuration of the timer
 	config config
 
-	clock *clock
-
 	// start is the time when the timer was started
 	start atomic.Pointer[time.Time]
 	// startValue stores the start time once it has been published via start.
@@ -61,7 +59,6 @@ func NewTimer(options ...Option) (Timer, error) {
 
 	return &baseTimer{
 		config: config,
-		clock:  newTimeCache(),
 	}, nil
 }
 
@@ -85,7 +82,7 @@ func (timer *baseTimer) Start() time.Time {
 }
 
 func (timer *baseTimer) now() time.Time {
-	return timer.clock.now()
+	return time.Now()
 }
 
 func (timer *baseTimer) Spent() time.Duration {
