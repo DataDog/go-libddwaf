@@ -23,17 +23,15 @@ type WAFObjectType = bindings.WAFObjectType
 
 // Type constants for WAFObject.
 const (
-	WAFInvalidType       = bindings.WAFInvalidType
-	WAFNilType           = bindings.WAFNilType
-	WAFBoolType          = bindings.WAFBoolType
-	WAFIntType           = bindings.WAFIntType
-	WAFUintType          = bindings.WAFUintType
-	WAFFloatType         = bindings.WAFFloatType
-	WAFStringType        = bindings.WAFStringType
-	WAFLiteralStringType = bindings.WAFLiteralStringType
-	WAFSmallStringType   = bindings.WAFSmallStringType
-	WAFArrayType         = bindings.WAFArrayType
-	WAFMapType           = bindings.WAFMapType
+	WAFInvalidType       WAFObjectType = bindings.WAFInvalidType
+	WAFNilType           WAFObjectType = bindings.WAFNilType
+	WAFBoolType          WAFObjectType = bindings.WAFBoolType
+	WAFIntType           WAFObjectType = bindings.WAFIntType
+	WAFUintType          WAFObjectType = bindings.WAFUintType
+	WAFFloatType         WAFObjectType = bindings.WAFFloatType
+	WAFStringType        WAFObjectType = bindings.WAFStringType
+	WAFLiteralStringType WAFObjectType = bindings.WAFLiteralStringType
+	WAFSmallStringType   WAFObjectType = bindings.WAFSmallStringType
+	WAFArrayType         WAFObjectType = bindings.WAFArrayType
+	WAFMapType           WAFObjectType = bindings.WAFMapType
 )
-
-

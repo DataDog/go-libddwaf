@@ -14,4 +14,4 @@ func assertImpl(cond bool, format string, args ...any) {
 	_ = args
 }
 
-func Active() bool { return false }
+const active = false

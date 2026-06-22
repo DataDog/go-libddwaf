@@ -15,8 +15,6 @@ import (
 
 type WAFLib struct{}
 
-var _ = (*WAFLib).loadDefaultAllocator
-
 func newWAFLib() (*WAFLib, error) {
 	return nil, errors.New("go-libddwaf is not supported on this platform")
 }
@@ -24,9 +22,6 @@ func newWAFLib() (*WAFLib, error) {
 func (*WAFLib) Close() error { return nil }
 
 func (*WAFLib) Version() string { return "" }
-
-// This is called once at load time; use DefaultAllocator() for the cached value.
-func (*WAFLib) loadDefaultAllocator() WAFAllocator { return 0 }
 
 func (*WAFLib) DefaultAllocator() WAFAllocator { return 0 }
 

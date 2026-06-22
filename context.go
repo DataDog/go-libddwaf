@@ -13,7 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
@@ -53,7 +53,7 @@ type Context struct {
 	closedHint    atomic.Bool
 	evalsInFlight sync.WaitGroup
 	mu            sync.Mutex
-	cContext      wafBindings.WAFContext
+	cContext      bindings.WAFContext
 
 	// truncationsMu protects reads and writes to truncations independently of
 	// the run mutex, so that Truncations() does not block on long Run() calls.
@@ -66,10 +66,12 @@ type Context struct {
 	pinners   []*runtime.Pinner
 	pinnersMu sync.Mutex
 
-	// subcontexts tracks live subcontexts derived from this context. ddwaf_context_destroy
-	// does NOT cascade to derived subcontexts, so Context.Close must destroy each
-	// live subcontext's ddwaf_subcontext before destroying the context itself.
-	// Guarded by mu.
+	// subcontexts tracks live subcontexts derived from this context. The libddwaf
+	// C API does not document ddwaf_context_destroy as cascading to subcontexts
+	// created via ddwaf_subcontext_init, and a subcontext references its parent
+	// context's state, so Context.Close destroys each live ddwaf_subcontext before
+	// the parent ddwaf_context to avoid leaks and use-after-free. This ordering is
+	// also enforced in Subcontext.close. Guarded by mu.
 	subcontexts map[*Subcontext]struct{}
 }
 
@@ -117,7 +119,7 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 		return nil, waferrors.ErrContextClosed
 	}
 
-	cSubcontext := wafBindings.Lib.SubcontextInit(context.cContext)
+	cSubcontext := bindings.Lib.SubcontextInit(context.cContext)
 	if cSubcontext == 0 {
 		return nil, errors.New("failed to create subcontext: ddwaf_subcontext_init returned null")
 	}
@@ -140,7 +142,7 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 		timer.WithBudget(context.Timer.SumRemaining()),
 	)
 	if err != nil {
-		wafBindings.Lib.SubcontextDestroy(cSubcontext)
+		bindings.Lib.SubcontextDestroy(cSubcontext)
 		return nil, fmt.Errorf("failed to create subcontext timer: %w", err)
 	}
 
@@ -245,11 +247,11 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	defer resultPinner.Unpin()
 	var result WAFObject
 	resultPinner.Pin(&result)
-	defer wafBindings.Lib.ObjectDestroy(&result, wafBindings.Lib.DefaultAllocator())
+	defer bindings.Lib.ObjectDestroy(&result, bindings.Lib.DefaultAllocator())
 
 	cContext := context.cContext
 	wafOwnsData = true
-	ret := wafBindings.Lib.ContextEval(cContext, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
+	ret := bindings.Lib.ContextEval(cContext, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
 
 	return decodeWafResult(ctx, ret, &result, runTimer)
 }
@@ -289,7 +291,7 @@ func (context *Context) Close() {
 	}
 
 	if context.cContext != 0 {
-		wafBindings.Lib.ContextDestroy(context.cContext)
+		bindings.Lib.ContextDestroy(context.cContext)
 		context.cContext = 0
 	}
 	context.mu.Unlock()

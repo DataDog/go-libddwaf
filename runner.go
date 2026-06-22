@@ -12,7 +12,7 @@ import (
 	"runtime"
 	"time"
 
-	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
@@ -95,7 +95,7 @@ func effectiveTimeoutMicros(ctx context.Context, runTimer timer.NodeTimer) uint6
 
 // decodeWafResult decodes the WAF C result into a Go Result, tracking decode
 // time and checking for timeout/context-cancellation.
-func decodeWafResult(ctx context.Context, ret wafBindings.WAFReturnCode, result *WAFObject, runTimer timer.NodeTimer) (Result, error) {
+func decodeWafResult(ctx context.Context, ret bindings.WAFReturnCode, result *WAFObject, runTimer timer.NodeTimer) (Result, error) {
 	decodeTimer := runTimer.MustLeaf(DecodeTimeKey)
 	decodeTimer.Start()
 	defer decodeTimer.Stop()

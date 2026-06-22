@@ -19,9 +19,6 @@ import (
 )
 
 func TestWAFObjectSize(t *testing.T) {
-	_, err := Load()
-	require.NoError(t, err)
-
 	require.Equal(t, 16, int(unsafe.Sizeof(bindings.WAFObject{})), "WAFObject must be 16 bytes")
 	require.Equal(t, 32, int(unsafe.Sizeof(bindings.WAFObjectKV{})), "WAFObjectKV must be 32 bytes")
 }

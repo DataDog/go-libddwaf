@@ -21,3 +21,8 @@ package invariant
 func Assert(cond bool, format string, args ...any) {
 	assertImpl(cond, format, args...)
 }
+
+// Active reports whether invariant checks are compiled in (the "ci" build tag).
+// It returns a build-specific constant, so guarding invariant-only bookkeeping
+// with Active() lets the compiler eliminate it in production builds.
+func Active() bool { return active }

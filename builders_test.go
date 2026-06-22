@@ -59,7 +59,7 @@ func TestArrayBuilder_Skip_IncrementsOverflow(t *testing.T) {
 	enc := newTestEncoder(t, &pinner, 4, 64)
 	var parent WAFObject
 
-	b := enc.Array(&parent)
+	b := enc.Array(&parent, 0)
 	require.Equal(t, 0, b.skipped)
 	b.Skip()
 	require.Equal(t, 1, b.skipped)
@@ -181,7 +181,7 @@ func TestArrayBuilder_DropLast_NoEntries_NoOp(t *testing.T) {
 	enc := newTestEncoder(t, &pinner, 4, 64)
 	var parent WAFObject
 
-	b := enc.Array(&parent)
+	b := enc.Array(&parent, 0)
 	require.NotPanics(t, func() { b.DropLast() })
 	require.Len(t, b.entries, 0)
 }
@@ -242,7 +242,7 @@ func TestMapBuilder_Skip_IncrementsOverflow(t *testing.T) {
 	enc := newTestEncoder(t, &pinner, 4, 64)
 	var parent WAFObject
 
-	b := enc.Map(&parent)
+	b := enc.Map(&parent, 0)
 	require.Equal(t, 0, b.skipped)
 	b.Skip()
 	require.Equal(t, 1, b.skipped)
@@ -273,7 +273,7 @@ func TestMapBuilder_DropLast_NoEntries_NoOp(t *testing.T) {
 	enc := newTestEncoder(t, &pinner, 4, 64)
 	var parent WAFObject
 
-	b := enc.Map(&parent)
+	b := enc.Map(&parent, 0)
 	require.NotPanics(t, func() { b.DropLast() })
 	require.Len(t, b.entries, 0)
 }

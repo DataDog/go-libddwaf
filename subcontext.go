@@ -12,7 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	wafBindings "github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/timer"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
@@ -36,7 +36,7 @@ type Subcontext struct {
 	parent        *Context
 	closedHint    atomic.Bool
 	mu            sync.Mutex
-	cSub          wafBindings.WAFSubcontext
+	cSub          bindings.WAFSubcontext
 	truncationsMu sync.RWMutex
 	truncations   Truncations
 	pinners       []*runtime.Pinner
@@ -136,10 +136,10 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	defer resultPinner.Unpin()
 	var result WAFObject
 	resultPinner.Pin(&result)
-	defer wafBindings.Lib.ObjectDestroy(&result, wafBindings.Lib.DefaultAllocator())
+	defer bindings.Lib.ObjectDestroy(&result, bindings.Lib.DefaultAllocator())
 
 	wafOwnsData = true
-	ret := wafBindings.Lib.SubcontextEval(s.cSub, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
+	ret := bindings.Lib.SubcontextEval(s.cSub, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
 
 	return decodeWafResult(ctx, ret, &result, runTimer)
 }
@@ -178,7 +178,7 @@ func (s *Subcontext) close(parentLocked bool) {
 		s.parent.mu.Lock()
 	}
 	if s.cSub != 0 {
-		wafBindings.Lib.SubcontextDestroy(s.cSub)
+		bindings.Lib.SubcontextDestroy(s.cSub)
 		s.cSub = 0
 	}
 	if !parentLocked {

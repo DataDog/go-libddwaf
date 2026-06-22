@@ -11,15 +11,26 @@ import (
 	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
 )
 
-func TestInvariantPanics(t *testing.T) {
-	invariant.Assert(false, "test %s", "message")
+func TestAssertMatchesActive(t *testing.T) {
+	didPanic := func() (panicked bool) {
+		defer func() { panicked = recover() != nil }()
+		invariant.Assert(false, "test %s", "message")
+		return
+	}()
+
+	if invariant.Active() && !didPanic {
+		t.Fatal("Assert(false, ...) must panic when invariant.Active() is true (ci build)")
+	}
+	if !invariant.Active() && didPanic {
+		t.Fatal("Assert(false, ...) must be a no-op when invariant.Active() is false (production build)")
+	}
 }
 
-func TestInvariantNoopInProd(t *testing.T) {
+func TestAssertTrueNeverPanics(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
-			t.Fatalf("Assert(false, ...) panicked in production build: %v", r)
+			t.Fatalf("Assert(true, ...) must never panic: %v", r)
 		}
 	}()
-	invariant.Assert(false, "should not panic")
+	invariant.Assert(true, "condition holds")
 }

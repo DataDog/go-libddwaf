@@ -10,7 +10,9 @@ import (
 	"time"
 )
 
-// clock is a simple cache for time.Now() to hopefully avoid some expensive calls to REALTIME part of time.Now()
+// clock is a thread-safe, monotonic non-decreasing time source shared by all
+// timers within a tree. now() never returns a time earlier than one it returned
+// previously, even under concurrent use.
 type clock struct {
 	mu          sync.Mutex
 	lastRequest time.Time
@@ -25,10 +27,6 @@ func newTimeCache() *clock {
 func (ct *clock) now() time.Time {
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
-
-	now := time.Now()
-	if now.After(ct.lastRequest) {
-		ct.lastRequest = now
-	}
+	ct.lastRequest = ct.lastRequest.Add(time.Since(ct.lastRequest))
 	return ct.lastRequest
 }

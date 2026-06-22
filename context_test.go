@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v5/waferrors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 type wafResultMapBuilder struct {
@@ -28,7 +29,7 @@ func (b *wafResultMapBuilder) init() {
 		return
 	}
 	b.enc = Encoder{Config: newEncoderConfig(&b.pinner, WithUnlimitedLimits())}
-	b.mb = b.enc.Map(&b.obj)
+	b.mb = b.enc.Map(&b.obj, 0)
 }
 
 func (b *wafResultMapBuilder) addBoolEntry(key string, val bool) {

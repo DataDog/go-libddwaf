@@ -18,14 +18,15 @@ type ArrayBuilder struct {
 }
 
 // Array returns a new ArrayBuilder that will commit its entries into parent.
-// An optional capacityHint pre-allocates the backing slice (capped at MaxContainerSize).
-func (e *Encoder) Array(parent *WAFObject, capacityHint ...int) *ArrayBuilder {
-	var initial int
-	if len(capacityHint) > 0 && capacityHint[0] > 0 {
-		initial = capacityHint[0]
-		if cap := e.Config.maxContainerSize(); initial > cap {
-			initial = cap
-		}
+// capacityHint pre-allocates the backing slice (capped at MaxContainerSize);
+// pass 0 when the eventual size is unknown.
+func (e *Encoder) Array(parent *WAFObject, capacityHint int) *ArrayBuilder {
+	initial := capacityHint
+	if initial < 0 {
+		initial = 0
+	}
+	if limit := e.Config.maxContainerSize(); initial > limit {
+		initial = limit
 	}
 	return &ArrayBuilder{enc: e, parent: parent, entries: make([]WAFObject, 0, initial)}
 }
@@ -83,14 +84,15 @@ type MapBuilder struct {
 }
 
 // Map returns a new MapBuilder that will commit its entries into parent.
-// An optional capacityHint pre-allocates the backing slice (capped at MaxContainerSize).
-func (e *Encoder) Map(parent *WAFObject, capacityHint ...int) *MapBuilder {
-	var initial int
-	if len(capacityHint) > 0 && capacityHint[0] > 0 {
-		initial = capacityHint[0]
-		if cap := e.Config.maxContainerSize(); initial > cap {
-			initial = cap
-		}
+// capacityHint pre-allocates the backing slice (capped at MaxContainerSize);
+// pass 0 when the eventual size is unknown.
+func (e *Encoder) Map(parent *WAFObject, capacityHint int) *MapBuilder {
+	initial := capacityHint
+	if initial < 0 {
+		initial = 0
+	}
+	if limit := e.Config.maxContainerSize(); initial > limit {
+		initial = limit
 	}
 	return &MapBuilder{enc: e, parent: parent, entries: make([]WAFObjectKV, 0, initial)}
 }

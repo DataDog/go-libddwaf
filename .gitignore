@@ -2,9 +2,6 @@
 *.exe
 *.exe~
 
-.bench
-.sisyphus/
-internal/pool/
 # Test binary, built with `go test -c`
 *.test
 

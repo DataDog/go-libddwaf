@@ -9,9 +9,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"structs"
-
 	"runtime"
+	"structs"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/unsafeutil"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
