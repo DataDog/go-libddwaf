@@ -10,9 +10,10 @@ package support_test
 import (
 	"testing"
 
-	"github.com/DataDog/go-libddwaf/v4"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DataDog/go-libddwaf/v5"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 func TestUnsupportedGoRuntime(t *testing.T) {

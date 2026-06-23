@@ -10,7 +10,7 @@ package ruleset
 import (
 	"errors"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 )
 
 func DefaultRuleset() (bindings.WAFObject, error) {

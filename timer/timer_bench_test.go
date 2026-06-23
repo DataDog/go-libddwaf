@@ -1,3 +1,8 @@
+// Unless explicitly stated otherwise all files in this repository are licensed
+// under the Apache License Version 2.0.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2022 Datadog, Inc.
+
 package timer
 
 import (
@@ -10,7 +15,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 	b.Run("timer.Start()", func(b *testing.B) {
 		var err error
 		timers := make([]Timer, b.N)
-		for i := 0; i < b.N; i++ {
+		for i := range timers {
 			timers[i], err = NewTreeTimer(WithBudget(time.Hour))
 			if err != nil {
 				b.Fatal(err)
@@ -18,7 +23,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for i := range timers {
 			runtime.KeepAlive(timers[i].Start())
 		}
 	})
@@ -30,7 +35,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			runtime.KeepAlive(timer.Spent())
 		}
 	})
@@ -42,7 +47,7 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			runtime.KeepAlive(timer.Remaining())
 		}
 	})
@@ -54,23 +59,8 @@ func BenchmarkMostUsedFunctions(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			runtime.KeepAlive(timer.Exhausted())
-		}
-	})
-}
-
-// Benchmark time.Now() vs clock.now()
-func BenchmarkNow(b *testing.B) {
-	b.Run("time.Now()", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			runtime.KeepAlive(time.Now())
-		}
-	})
-	ct := &clock{lastRequest: time.Now()}
-	b.Run("clock.now()", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			runtime.KeepAlive(ct.now())
 		}
 	})
 }

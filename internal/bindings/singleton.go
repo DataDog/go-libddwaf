@@ -9,7 +9,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/support"
+	"github.com/DataDog/go-libddwaf/v5/internal/support"
 )
 
 // Globally dlopen() libddwaf only once because several dlopens (eg. in tests)
@@ -21,32 +21,21 @@ var (
 	// libddwaf's dlopen error if any. This is only safe to read after calling
 	// [Load] or having acquired [gMu].
 	gWafLoadErr error
+	wafVersion  string
 	// Protects the global variables above.
 	gMu sync.Mutex
 
 	openWafOnce sync.Once
 )
 
-// Load loads libddwaf's dynamic library. The dynamic library is opened only
-// once by the first call to this function and internally stored globally.
-// No function is currently provided in this API to unload it.
-//
-// This function is automatically called by [NewBuilder], and most users need
-// not explicitly call it. It is however useful in order to explicitly check
-// for the status of the Lib library's initialization.
-//
-// The function returns true when libddwaf was successfully loaded, along with
-// an error value. An error might still be returned even though the Lib load was
-// successful: in such cases the error is indicative that some non-critical
-// features are not available; but the Lib may still be used.
+// Load loads libddwaf's dynamic library once and stores it globally.
+// It returns true when libddwaf was successfully loaded, along with an error.
 func Load() (bool, error) {
 	if ok, err := Usable(); !ok {
 		return false, err
 	}
 
 	openWafOnce.Do(func() {
-		// Acquire the global state mutex so we don't have a race condition with
-		// [Usable] here.
 		gMu.Lock()
 		defer gMu.Unlock()
 
@@ -54,13 +43,11 @@ func Load() (bool, error) {
 		if gWafLoadErr != nil {
 			return
 		}
-		wafVersion = Lib.GetVersion()
+		wafVersion = Lib.Version()
 	})
 
 	return Lib != nil, gWafLoadErr
 }
-
-var wafVersion string
 
 // Version returns the version returned by libddwaf.
 // It relies on the dynamic loading of the library, which can fail and return
@@ -85,9 +72,9 @@ func Usable() (bool, error) {
 	wafSupportErrors := errors.Join(support.WafSupportErrors()...)
 	wafManuallyDisabledErr := support.WafManuallyDisabledError()
 
-	// Acquire the global state mutex as we are not calling [Load] here, so we
-	// need to explicitly avoid a race condition with it.
 	gMu.Lock()
 	defer gMu.Unlock()
-	return (Lib != nil || gWafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil, errors.Join(gWafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
+
+	usable := (Lib != nil || gWafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil
+	return usable, errors.Join(gWafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
 }

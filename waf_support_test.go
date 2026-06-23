@@ -8,13 +8,15 @@
 package libddwaf
 
 import (
+	"errors"
 	"flag"
 	"testing"
 
-	"github.com/DataDog/go-libddwaf/v4/internal/log"
-	"github.com/DataDog/go-libddwaf/v4/internal/support"
-	"github.com/DataDog/go-libddwaf/v4/waferrors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DataDog/go-libddwaf/v5/internal/log"
+	"github.com/DataDog/go-libddwaf/v5/internal/support"
+	"github.com/DataDog/go-libddwaf/v5/waferrors"
 )
 
 var (
@@ -33,12 +35,15 @@ func TestSupport(t *testing.T) {
 	require.NotNil(t, wafSupportedFlag, "The `waf-supported` flag should be set")
 	require.Contains(t, []string{"true", "false", "maybe"}, *wafSupportedFlag, "The `waf-supported` flag should be set to true, false or maybe")
 	require.NotNil(t, wafBuildTags, "The `waf-build-tags` flag should be set")
+	if *wafBuildTags == "" {
+		t.Skip("waf-build-tags is provided by ci.sh")
+	}
 	require.NotEmpty(t, *wafBuildTags, "The `waf-build-tags` flag should not be empty")
 
-	errors := make([]error, len(support.WafSupportErrors()))
-	copy(errors, support.WafSupportErrors())
+	supportErrors := make([]error, len(support.WafSupportErrors()))
+	copy(supportErrors, support.WafSupportErrors())
 	if support.WafManuallyDisabledError() != nil {
-		errors = append(errors, support.WafManuallyDisabledError())
+		supportErrors = append(supportErrors, support.WafManuallyDisabledError())
 	}
 
 	ok, _ := Usable()
@@ -52,22 +57,28 @@ func TestSupport(t *testing.T) {
 	}
 
 	if ok {
-		require.Empty(t, errors, "No errors should be returned when the WAF is supported")
+		require.Empty(t, supportErrors, "No errors should be returned when the WAF is supported")
 		require.NotZero(t, log.CallbackFunctionPointer(), "The log callback function pointer should not be zero when the WAF is supported")
 	} else {
-		require.NotEmpty(t, errors, "Errors should be returned when the WAF is not supported")
+		require.NotEmpty(t, supportErrors, "Errors should be returned when the WAF is not supported")
 	}
 
-	for _, err := range errors {
-		switch err := err.(type) {
-		case waferrors.UnsupportedOSArchError:
-			require.Contains(t, *wafBuildTags, err.OS, "The OS is marked as supported but a support error appeared", err)
-			require.Contains(t, *wafBuildTags, err.Arch, "The architecture is marked as supported but a support error appeared", err)
-		case waferrors.UnsupportedGoVersionError:
+	for _, err := range supportErrors {
+		var (
+			osArchErr    waferrors.UnsupportedOSArchError
+			goVersionErr waferrors.UnsupportedGoVersionError
+			disabledErr  waferrors.ManuallyDisabledError
+			cgoErr       waferrors.CgoDisabledError
+		)
+		switch {
+		case errors.As(err, &osArchErr):
+			require.Contains(t, *wafBuildTags, osArchErr.OS, "The OS is marked as supported but a support error appeared", err)
+			require.Contains(t, *wafBuildTags, osArchErr.Arch, "The architecture is marked as supported but a support error appeared", err)
+		case errors.As(err, &goVersionErr):
 			// We can't check anything here because we forced the version to be wrong we a build tag added manually instead of just having an incompatible version
-		case waferrors.ManuallyDisabledError:
+		case errors.As(err, &disabledErr):
 			require.Contains(t, *wafBuildTags, "datadog.no_waf", "The WAF is marked as enabled but a support error appeared", err)
-		case waferrors.CgoDisabledError:
+		case errors.As(err, &cgoErr):
 			require.NotContainsf(t, *wafBuildTags, "cgo", "The build tags contains cgo but a support error appeared", err)
 		default:
 			require.Fail(t, "Unknown error type", err)

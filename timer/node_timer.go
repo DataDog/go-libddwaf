@@ -29,7 +29,6 @@ func NewTreeTimer(options ...Option) (NodeTimer, error) {
 	return &nodeTimer{
 		baseTimer: baseTimer{
 			config: config,
-			clock:  newTimeCache(),
 		},
 		components: newComponents(config.components),
 	}, nil
@@ -41,7 +40,7 @@ func (timer *nodeTimer) NewNode(name Key, options ...Option) (NodeTimer, error) 
 		return nil, errors.New("NewNode: node timer must have at least one component, otherwise use NewLeaf()")
 	}
 
-	_, ok := timer.components.lookup[name]
+	_, ok := timer.lookup[name]
 	if !ok {
 		return nil, fmt.Errorf("NewNode: component %s not found", name)
 	}
@@ -49,7 +48,6 @@ func (timer *nodeTimer) NewNode(name Key, options ...Option) (NodeTimer, error) 
 	return &nodeTimer{
 		baseTimer: baseTimer{
 			config:        config,
-			clock:         timer.clock,
 			parent:        timer,
 			componentName: name,
 		},
@@ -63,20 +61,31 @@ func (timer *nodeTimer) NewLeaf(name Key, options ...Option) (Timer, error) {
 		return nil, errors.New("NewLeaf: leaf timer cannot have components, otherwise use NewNode()")
 	}
 
-	_, ok := timer.components.lookup[name]
+	_, ok := timer.lookup[name]
 	if !ok {
 		return nil, fmt.Errorf("NewLeaf: component %s not found", name)
 	}
 
 	return &baseTimer{
-		clock:         timer.clock,
 		config:        config,
 		componentName: name,
 		parent:        timer,
 	}, nil
 }
 
+var defaultLeafConfig = newConfig()
+
 func (timer *nodeTimer) MustLeaf(name Key, options ...Option) Timer {
+	if len(options) == 0 {
+		if _, ok := timer.lookup[name]; !ok {
+			panic(fmt.Sprintf("MustLeaf: component %s not found", name))
+		}
+		return &baseTimer{
+			config:        defaultLeafConfig,
+			componentName: name,
+			parent:        timer,
+		}
+	}
 	leaf, err := timer.NewLeaf(name, options...)
 	if err != nil {
 		panic(err)
@@ -91,7 +100,7 @@ func (timer *nodeTimer) childStopped(componentName Key, duration time.Duration) 
 }
 
 func (timer *nodeTimer) AddTime(name Key, duration time.Duration) {
-	value, ok := timer.components.lookup[name]
+	value, ok := timer.lookup[name]
 	if !ok {
 		return
 	}
@@ -100,28 +109,40 @@ func (timer *nodeTimer) AddTime(name Key, duration time.Duration) {
 }
 
 func (timer *nodeTimer) Stats() map[Key]time.Duration {
-	stats := make(map[Key]time.Duration, len(timer.components.lookup))
-	for name, component := range timer.components.lookup {
-		stats[name] = time.Duration(component.Load())
-	}
-
+	stats := make(map[Key]time.Duration, len(timer.lookup))
+	timer.StatsInto(stats)
 	return stats
+}
+
+func (timer *nodeTimer) StatsInto(dst map[Key]time.Duration) {
+	for name, component := range timer.lookup {
+		dst[name] = time.Duration(component.Load())
+	}
+}
+
+func (timer *nodeTimer) ComponentKeys() []Key {
+	keys := make([]Key, 0, len(timer.lookup))
+	for k := range timer.lookup {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func (timer *nodeTimer) SumSpent() time.Duration {
 	var sum time.Duration
-	for _, component := range timer.components.lookup {
+	for _, component := range timer.lookup {
 		sum += time.Duration(component.Load())
 	}
 	return sum
 }
 
 func (timer *nodeTimer) SumRemaining() time.Duration {
-	if timer.config.budget == UnlimitedBudget {
+	budget := timer.sumBudget()
+	if budget == UnlimitedBudget {
 		return UnlimitedBudget
 	}
 
-	remaining := timer.config.budget - timer.SumSpent()
+	remaining := budget - timer.SumSpent()
 	if remaining < 0 {
 		return 0
 	}
@@ -130,9 +151,25 @@ func (timer *nodeTimer) SumRemaining() time.Duration {
 }
 
 func (timer *nodeTimer) SumExhausted() bool {
-	if timer.config.budget == UnlimitedBudget {
+	budget := timer.sumBudget()
+	if budget == UnlimitedBudget {
 		return false
 	}
 
-	return timer.SumSpent() > timer.config.budget
+	return timer.SumSpent() > budget
+}
+
+// sumBudget returns the budget used by SumRemaining/SumExhausted.
+// When Start() has resolved an inherited budget, that resolved value is used.
+// Otherwise the budget is computed on the fly from the parent so callers can
+// query a dynamically-budgeted node timer before it has been started.
+func (timer *nodeTimer) sumBudget() time.Duration {
+	budget := timer.budgetValue()
+	if budget == DynamicBudget && timer.parent != nil {
+		budget = timer.config.dynamicBudget(timer.parent)
+	}
+	if budget == DynamicBudget {
+		return UnlimitedBudget
+	}
+	return budget
 }

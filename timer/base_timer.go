@@ -7,6 +7,8 @@ package timer
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,10 +19,13 @@ type baseTimer struct {
 	// config is the configuration of the timer
 	config config
 
-	clock
-
 	// start is the time when the timer was started
-	start time.Time
+	start atomic.Pointer[time.Time]
+	// startValue stores the start time once it has been published via start.
+	startValue time.Time
+	// startOnce guards the non-atomic writes in Start (startValue, budget
+	// resolution) against concurrent Start calls.
+	startOnce sync.Once
 
 	// parent is the parent timer. It is used to progate the stop of the timer to the parent timer and get the remaining time in case the budget has to be inherited.
 	parent NodeTimer
@@ -28,10 +33,15 @@ type baseTimer struct {
 	// componentName is the name of the component of the timer. It is used to store the time spent in the component and to propagate the stop of the timer to the parent timer.
 	componentName Key
 
+	// budget stores the resolved inherited budget once Start() has computed it.
+	budget atomic.Int64
+	// budgetResolved is true once budget has been resolved from the parent.
+	budgetResolved atomic.Bool
+
 	// spent is the time spent on the timer, set after calling stop
-	spent time.Duration
+	spent atomic.Int64
 	// stopped is true if the timer has been stopped
-	stopped bool
+	stopped atomic.Bool
 }
 
 var _ Timer = (*baseTimer)(nil)
@@ -49,44 +59,54 @@ func NewTimer(options ...Option) (Timer, error) {
 
 	return &baseTimer{
 		config: config,
-		clock:  newTimeCache(),
 	}, nil
 }
 
 func (timer *baseTimer) Start() time.Time {
 	// already started before
-	if timer.start != (time.Time{}) {
-		return timer.start
+	if start := timer.start.Load(); start != nil {
+		return *start
 	}
 
-	if timer.config.budget == DynamicBudget && timer.parent != nil {
-		timer.config.budget = timer.config.dynamicBudget(timer.parent)
-	}
+	timer.startOnce.Do(func() {
+		if timer.budgetValue() == DynamicBudget && timer.parent != nil {
+			timer.budget.Store(int64(timer.config.dynamicBudget(timer.parent)))
+			timer.budgetResolved.Store(true)
+		}
 
-	timer.start = timer.now()
-	return timer.start
+		timer.startValue = timer.now()
+		timer.start.Store(&timer.startValue)
+	})
+
+	return *timer.start.Load()
+}
+
+func (timer *baseTimer) now() time.Time {
+	return time.Now()
 }
 
 func (timer *baseTimer) Spent() time.Duration {
+	// timer was already stopped
+	if timer.stopped.Load() {
+		return time.Duration(timer.spent.Load())
+	}
+
 	// timer was never started
-	if timer.start.IsZero() {
+	start := timer.start.Load()
+	if start == nil {
 		return 0
 	}
 
-	// timer was already stopped
-	if timer.stopped {
-		return timer.spent
-	}
-
-	return time.Since(timer.start)
+	return time.Since(*start)
 }
 
 func (timer *baseTimer) Remaining() time.Duration {
-	if timer.config.budget == UnlimitedBudget {
+	budget := timer.budgetValue()
+	if budget == UnlimitedBudget || budget == DynamicBudget {
 		return UnlimitedBudget
 	}
 
-	remaining := timer.config.budget - timer.Spent()
+	remaining := budget - timer.Spent()
 	if remaining < 0 {
 		return 0
 	}
@@ -95,26 +115,45 @@ func (timer *baseTimer) Remaining() time.Duration {
 }
 
 func (timer *baseTimer) Exhausted() bool {
-	if timer.config.budget == UnlimitedBudget {
+	budget := timer.budgetValue()
+	if budget == UnlimitedBudget || budget == DynamicBudget {
 		return false
 	}
 
-	return timer.Spent() > timer.config.budget
+	return timer.Spent() > budget
+}
+
+func (timer *baseTimer) budgetValue() time.Duration {
+	if timer.config.budget != DynamicBudget {
+		return timer.config.budget
+	}
+
+	if timer.budgetResolved.Load() {
+		return time.Duration(timer.budget.Load())
+	}
+
+	return DynamicBudget
 }
 
 func (timer *baseTimer) Stop() time.Duration {
 	// If the current timer has already stopped, return the current spent time
-	if timer.stopped {
-		return timer.spent
+	if timer.stopped.Load() {
+		return time.Duration(timer.spent.Load())
 	}
 
-	timer.spent = timer.Spent()
-	timer.stopped = true
+	spent := timer.Spent()
+	timer.spent.Store(int64(spent))
+	// CAS ensures exactly one caller propagates the stop to the parent;
+	// concurrent Stop calls would otherwise double-count the spent time
+	// into the parent's component accumulator.
+	if !timer.stopped.CompareAndSwap(false, true) {
+		return time.Duration(timer.spent.Load())
+	}
 	if timer.parent != nil {
-		timer.parent.childStopped(timer.componentName, timer.spent)
+		timer.parent.childStopped(timer.componentName, spent)
 	}
 
-	return timer.spent
+	return spent
 }
 
 func (timer *baseTimer) Timed(timedFunc func(timer Timer)) (spent time.Duration) {

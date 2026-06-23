@@ -19,6 +19,13 @@ const (
 	DynamicBudget = ^time.Duration(0)
 )
 
+var defaultDynamicBudgetSumRemaining = func(t NodeTimer) time.Duration { return t.SumRemaining() }
+
+var defaultInheritedSumBudgetOption = func(c *config) {
+	c.budget = DynamicBudget
+	c.dynamicBudget = defaultDynamicBudgetSumRemaining
+}
+
 // DynamicBudgetFunc is a function that is called on all children when a change to the parent happens
 type DynamicBudgetFunc func(timer NodeTimer) time.Duration
 
@@ -33,8 +40,7 @@ type config struct {
 
 func newConfig(options ...Option) config {
 	config := config{}
-	// Make sure the budget is inherited by default
-	WithInheritedSumBudget()(&config)
+	defaultInheritedSumBudgetOption(&config)
 	for _, option := range options {
 		option(&config)
 	}
