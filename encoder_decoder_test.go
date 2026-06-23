@@ -477,9 +477,14 @@ func TestEncoder_FastPathEquivalence_MapStringAny(t *testing.T) {
 func assertSliceFastPathEquivalent(t *testing.T, input any) {
 	t.Helper()
 
-	fastPathObj := encodeViaSliceFastPath(t, input)
-	reflectObj := encodeViaReflectValue(t, input)
-	publicObj := encodeViaPublicValue(t, input)
+	// Encoded WAFObjects hold raw GC-invisible pointers into pinned memory, so the
+	// pinner must outlive the AnyValue read-backs below (not unpin per helper).
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	fastPathObj := encodeViaSliceFastPath(t, &pinner, input)
+	reflectObj := encodeViaReflectValue(t, &pinner, input)
+	publicObj := encodeViaPublicValue(t, &pinner, input)
 
 	require.Equal(t, normalizedWAFType(reflectObj.Type()), normalizedWAFType(fastPathObj.Type()))
 	require.Equal(t, normalizedWAFType(reflectObj.Type()), normalizedWAFType(publicObj.Type()))
@@ -502,13 +507,10 @@ func normalizedWAFType(typ bindings.WAFObjectType) bindings.WAFObjectType {
 	return typ
 }
 
-func encodeViaPublicValue(t *testing.T, input any) *WAFObject {
+func encodeViaPublicValue(t *testing.T, pinner *runtime.Pinner, input any) *WAFObject {
 	t.Helper()
 
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-
-	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+	encoder, err := newEncoder(newEncoderConfig(pinner, WithUnlimitedLimits()))
 	require.NoError(t, err)
 
 	obj, err := encoder.Encode(input)
@@ -516,13 +518,10 @@ func encodeViaPublicValue(t *testing.T, input any) *WAFObject {
 	return obj
 }
 
-func encodeViaReflectValue(t *testing.T, input any) *WAFObject {
+func encodeViaReflectValue(t *testing.T, pinner *runtime.Pinner, input any) *WAFObject {
 	t.Helper()
 
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-
-	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+	encoder, err := newEncoder(newEncoderConfig(pinner, WithUnlimitedLimits()))
 	require.NoError(t, err)
 
 	var obj WAFObject
@@ -531,13 +530,10 @@ func encodeViaReflectValue(t *testing.T, input any) *WAFObject {
 	return &obj
 }
 
-func encodeViaSliceFastPath(t *testing.T, input any) *WAFObject {
+func encodeViaSliceFastPath(t *testing.T, pinner *runtime.Pinner, input any) *WAFObject {
 	t.Helper()
 
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-
-	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+	encoder, err := newEncoder(newEncoderConfig(pinner, WithUnlimitedLimits()))
 	require.NoError(t, err)
 
 	var obj WAFObject
@@ -550,21 +546,23 @@ func encodeViaSliceFastPath(t *testing.T, input any) *WAFObject {
 func assertMapFastPathEquivalent(t *testing.T, input any) {
 	t.Helper()
 
-	fastPathObj := encodeViaMapFastPath(t, input)
-	reflectObj := encodeViaReflectValue(t, input)
-	publicObj := encodeViaPublicValue(t, input)
+	// One pinner must outlive every normalizedObjectSnapshot read-back below
+	// (see assertSliceFastPathEquivalent).
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
+	fastPathObj := encodeViaMapFastPath(t, &pinner, input)
+	reflectObj := encodeViaReflectValue(t, &pinner, input)
+	publicObj := encodeViaPublicValue(t, &pinner, input)
 
 	require.Equal(t, normalizedObjectSnapshot(reflectObj), normalizedObjectSnapshot(fastPathObj))
 	require.Equal(t, normalizedObjectSnapshot(reflectObj), normalizedObjectSnapshot(publicObj))
 }
 
-func encodeViaMapFastPath(t *testing.T, input any) *WAFObject {
+func encodeViaMapFastPath(t *testing.T, pinner *runtime.Pinner, input any) *WAFObject {
 	t.Helper()
 
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-
-	encoder, err := newEncoder(newEncoderConfig(&pinner, WithUnlimitedLimits()))
+	encoder, err := newEncoder(newEncoderConfig(pinner, WithUnlimitedLimits()))
 	require.NoError(t, err)
 
 	var obj WAFObject
