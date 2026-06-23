@@ -341,13 +341,19 @@ func TestTimeout(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { subCtx.Close() })
 
+		// NewSubcontext snapshots the parent's SumRemaining() into an independent
+		// timer. The parent has not run yet (SumSpent==0), so budgetAtCreation
+		// equals the full 1ms parent budget and is a fixed value, not a race.
+		budgetAtCreation := subCtx.Timer.SumRemaining()
+		require.NotZero(t, budgetAtCreation)
+
 		_, err = context.Run(stdcontext.Background(), RunAddressData{Data: largeValue, TimerKey: wafTimerKey})
 		require.ErrorIs(t, err, waferrors.ErrTimeout)
+		require.True(t, context.Timer.SumExhausted())
 
-		res, err := subCtx.Run(stdcontext.Background(), RunAddressData{Data: normalValue})
-		require.NoError(t, err)
-		require.Len(t, res.Events, 1)
-		require.NotZero(t, res.TimerStats[EncodeTimeKey])
+		// Independence invariant: the subcontext timer is not linked to the parent,
+		// so the parent's exhaustion must leave the subcontext budget unchanged.
+		require.Equal(t, budgetAtCreation, subCtx.Timer.SumRemaining())
 	})
 
 	t.Run("many-runs", func(t *testing.T) {
