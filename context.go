@@ -270,10 +270,21 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 //
 // Close cascades to subcontexts: any still-open [Subcontext] derived from this
 // Context via [Context.NewSubcontext] is fully torn down as part of Close — its
-// underlying ddwaf_subcontext is destroyed and its pinned input data released.
+// underlying ddwaf_subcontext is destroyed, its pinned input data released, and
+// its per-scope timer durations and truncations folded into this Context.
 // (The underlying ddwaf_context_destroy does not itself cascade, so go-libddwaf
 // destroys each live subcontext explicitly before destroying the context.)
 // Calling [Subcontext.Close] afterwards remains safe and becomes a no-op.
+//
+// The parent [Context] reflects a subcontext's timer stats and truncations only
+// after that subcontext is closed — either explicitly via [Subcontext.Close] or
+// implicitly via this cascade. Callers reading the aggregate [Context.Timer] or
+// [Context.Truncations] must close their subcontexts first (or read after
+// [Context.Close]).
+// For this rollup, only subcontext runs that have fully returned before Close
+// are guaranteed to be reflected; a subcontext Run executing concurrently with
+// Context.Close may be omitted from the aggregate timer durations or
+// truncations.
 //
 // Close blocks until all in-flight Run and NewSubcontext operations complete,
 // and is safe to call more than once.
@@ -312,6 +323,12 @@ func (context *Context) Close() {
 	context.pinners = nil
 
 	context.handle.Close()
+}
+
+// Supports reports whether the WAF ruleset behind this context monitors addr,
+// via the handle's cached known-address set.
+func (context *Context) Supports(addr string) bool {
+	return context.handle.Supports(addr)
 }
 
 // Truncations returns the truncations that occurred while encoding address

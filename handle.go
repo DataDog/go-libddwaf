@@ -8,6 +8,7 @@ package libddwaf
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
@@ -48,6 +49,13 @@ type Handle struct {
 	refCounter atomic.Int32
 
 	cHandle bindings.WAFHandle
+
+	// addrOnce guards the one-time population of addrSet from Handle.Addresses().
+	// The C layer (KnownAddresses) is called at most once per handle lifetime.
+	addrOnce sync.Once
+	// addrSet is the lazily-built snapshot of known addresses for this handle.
+	// Populated under addrOnce.Do; nil until first Supports call on a live handle.
+	addrSet map[string]struct{}
 }
 
 // wrapHandle wraps the provided C handle into a [Handle]. The caller is
@@ -112,6 +120,32 @@ func (handle *Handle) NewContext(ctx context.Context, timerOptions ...timer.Opti
 // ruleset.
 func (handle *Handle) Addresses() []string {
 	return bindings.Lib.KnownAddresses(handle.cHandle)
+}
+
+// Supports reports whether addr is a member of this handle's known-address set
+// (the authoritative monitored-address set returned by [Handle.Addresses] /
+// KnownAddresses). This is NOT a diagnostics-derived set.
+//
+// The address set is built lazily on the first call and cached; the underlying
+// C layer (KnownAddresses) is called at most once per handle. The set is a
+// snapshot of the immutable handle, so subsequent calls are consistent.
+//
+// Returns false when the handle has been closed (cHandle == 0), or on
+// unsupported platforms where KnownAddresses returns nil.
+func (handle *Handle) Supports(addr string) bool {
+	if handle.cHandle == 0 {
+		return false
+	}
+	handle.addrOnce.Do(func() {
+		addrs := handle.Addresses()
+		set := make(map[string]struct{}, len(addrs))
+		for _, a := range addrs {
+			set[a] = struct{}{}
+		}
+		handle.addrSet = set
+	})
+	_, ok := handle.addrSet[addr]
+	return ok
 }
 
 // Actions returns the list of actions the WAF has been configured to monitor based on the input

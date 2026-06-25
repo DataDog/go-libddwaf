@@ -63,6 +63,108 @@ func TestSubcontextTruncations(t *testing.T) {
 	require.Equal(t, len(oversized), tr.StringTooLong[0])
 }
 
+func TestSubcontextCloseRollsUpIntoParent(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget), timer.WithComponents("waf"))
+	require.NoError(t, err)
+	t.Cleanup(func() { ctx.Close() })
+
+	subCtx, err := ctx.NewSubcontext(context.Background())
+	require.NoError(t, err)
+
+	oversized := strings.Repeat("a", int(bindings.MaxStringLength)*2)
+	_, _ = subCtx.Run(context.Background(), RunAddressData{Data: map[string]any{"my.input": oversized}, TimerKey: "waf"})
+	subCtx.Close()
+
+	require.Greater(t, ctx.Timer.Stats()["waf"], time.Duration(0))
+	require.False(t, ctx.Truncations().IsEmpty())
+}
+
+func TestContextCloseCascadeRollsUpSubcontext(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget), timer.WithComponents("waf"))
+	require.NoError(t, err)
+	t.Cleanup(func() { ctx.Close() })
+
+	subCtx, err := ctx.NewSubcontext(context.Background())
+	require.NoError(t, err)
+	// subCtx intentionally NOT closed before ctx — Context.Close cascade path under test.
+
+	oversized := strings.Repeat("a", int(bindings.MaxStringLength)*2)
+	_, _ = subCtx.Run(context.Background(), RunAddressData{Data: map[string]any{"my.input": oversized}, TimerKey: "waf"})
+
+	ctx.Close()
+
+	// Context.Timer and truncations remain readable after Close (pure Go fields).
+	require.Greater(t, ctx.Timer.Stats()["waf"], time.Duration(0))
+	require.False(t, ctx.Truncations().IsEmpty())
+}
+
+func TestSubcontextRollupPerScopeAttribution(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget), timer.WithComponents("waf", "rasp"))
+	require.NoError(t, err)
+	t.Cleanup(func() { ctx.Close() })
+
+	subCtx, err := ctx.NewSubcontext(context.Background())
+	require.NoError(t, err)
+
+	_, _ = subCtx.Run(context.Background(), RunAddressData{Data: map[string]any{"my.input": "benign"}, TimerKey: "waf"})
+	_, _ = subCtx.Run(context.Background(), RunAddressData{Data: map[string]any{"my.input": "benign"}, TimerKey: "rasp"})
+	subCtx.Close()
+
+	require.Greater(t, ctx.Timer.Stats()["waf"], time.Duration(0))
+	require.Greater(t, ctx.Timer.Stats()["rasp"], time.Duration(0))
+}
+
+func TestSubcontextEmptyTimerKeyDoesNotRollUp(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget), timer.WithComponents("waf"))
+	require.NoError(t, err)
+	t.Cleanup(func() { ctx.Close() })
+
+	subCtx, err := ctx.NewSubcontext(context.Background())
+	require.NoError(t, err)
+
+	// Empty TimerKey uses a standalone tree timer not attached to s.Timer, so
+	// s.Timer["waf"] stays zero and nothing rolls up into the parent.
+	_, _ = subCtx.Run(context.Background(), RunAddressData{Data: map[string]any{"my.input": "benign"}})
+	subCtx.Close()
+
+	require.Equal(t, time.Duration(0), ctx.Timer.Stats()["waf"])
+}
+
+func TestSubcontextRollupNoComponentParentNoOp(t *testing.T) {
+	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "my.input"}}, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { waf.Close() })
+
+	ctx, err := waf.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+	t.Cleanup(func() { ctx.Close() })
+
+	subCtx, err := ctx.NewSubcontext(context.Background())
+	require.NoError(t, err)
+
+	_, _ = subCtx.Run(context.Background(), RunAddressData{Data: map[string]any{"my.input": "benign"}, TimerKey: DurationTimeKey})
+	require.Greater(t, subCtx.Timer.Stats()[DurationTimeKey], time.Duration(0))
+	subCtx.Close()
+
+	require.Empty(t, ctx.Timer.Stats())
+}
+
 func TestSiblingSubcontextParallelismSpeedup(t *testing.T) {
 	waf, _, err := newDefaultHandle(t, newArachniTestRule(t, []ruleInput{{Address: "server.request.headers.no_cookies", KeyPath: []string{"user-agent"}}}, nil))
 	require.NoError(t, err)
