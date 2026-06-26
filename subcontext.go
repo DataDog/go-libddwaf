@@ -152,9 +152,29 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	return decodeWafResult(ctx, ret, &result, runTimer)
 }
 
-// Close disposes of the underlying subcontext.
+// Close disposes of the underlying subcontext and folds its per-scope timer
+// durations and truncations into the parent [Context]. After Close returns,
+// [Context.Timer] stats and [Context.Truncations] reflect the subcontext's
+// accumulated data.
+//
+// Only runs made with a non-empty [RunAddressData.TimerKey] are captured; runs
+// with an empty TimerKey use a standalone timer not attached to the subcontext's
+// scope tree, so their time is not rolled up.
+//
+// For this rollup, only runs that have fully returned before Close are
+// guaranteed to be reflected; a Run executing concurrently with Close may miss
+// having its timer durations or truncations captured.
+//
+// This rollup affects only the aggregate [Context.Timer] / [Context.Truncations]
+// view, not any [Result.TimerStats] already returned by a prior Run call.
 func (s *Subcontext) Close() {
 	s.close(false)
+}
+
+// Supports reports whether the WAF ruleset behind this subcontext monitors
+// addr, via the handle's cached known-address set.
+func (s *Subcontext) Supports(addr string) bool {
+	return s.parent.handle.Supports(addr)
 }
 
 // close tears down the subcontext. parentLocked must be true only when the
@@ -203,7 +223,45 @@ func (s *Subcontext) close(parentLocked bool) {
 	s.pinners = nil
 	s.pinnersMu.Unlock()
 
+	s.rollupInto(s.parent)
 	s.parent.handle.Close()
+}
+
+// rollupInto merges this subcontext's per-scope timer durations and truncations
+// into parent. Called from close(), it runs on both close paths (explicit
+// Subcontext.Close and Context.Close cascade).
+//
+// Lock discipline: MUST NOT acquire s.mu or parent.mu. On the cascade path
+// (parentLocked=true), parent.mu is already held by Context.Close; re-acquiring
+// it self-deadlocks. Only atomic parent.Timer.AddTime and the independent
+// parent.truncationsMu are used.
+func (s *Subcontext) rollupInto(parent *Context) {
+	// Per-scope timer rollup: AddTime is atomic and a silent no-op for keys
+	// the parent timer does not have (e.g. "encode"/"duration"/"decode" when
+	// the parent was created with no named components).
+	for key, dur := range s.Timer.Stats() {
+		parent.Timer.AddTime(key, dur)
+	}
+
+	// Truncation rollup: read under s.truncationsMu because on the cascade
+	// path (parentLocked=true, s.mu not held) a concurrent Subcontext.Run may
+	// have written s.truncations after the parent-closed check and before
+	// close(true) was called.
+	s.truncationsMu.RLock()
+	local := Truncations{
+		StringTooLong:     append([]int(nil), s.truncations.StringTooLong...),
+		ContainerTooLarge: append([]int(nil), s.truncations.ContainerTooLarge...),
+		ObjectTooDeep:     append([]int(nil), s.truncations.ObjectTooDeep...),
+	}
+	s.truncationsMu.RUnlock()
+
+	if local.IsEmpty() {
+		return
+	}
+
+	parent.truncationsMu.Lock()
+	parent.truncations.Merge(local)
+	parent.truncationsMu.Unlock()
 }
 
 // Truncations returns the truncations that occurred while encoding address data for WAF execution.

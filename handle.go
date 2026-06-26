@@ -8,6 +8,7 @@ package libddwaf
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
@@ -48,6 +49,13 @@ type Handle struct {
 	refCounter atomic.Int32
 
 	cHandle bindings.WAFHandle
+
+	// addrOnce guards the one-time population of addrSet from Handle.Addresses().
+	// The C layer (KnownAddresses) is called at most once per handle lifetime.
+	addrOnce sync.Once
+	// addrSet is the lazily-built snapshot of known addresses for this handle.
+	// Populated under addrOnce.Do; nil until first Supports call on a live handle.
+	addrSet map[string]struct{}
 }
 
 // wrapHandle wraps the provided C handle into a [Handle]. The caller is
@@ -112,6 +120,45 @@ func (handle *Handle) NewContext(ctx context.Context, timerOptions ...timer.Opti
 // ruleset.
 func (handle *Handle) Addresses() []string {
 	return bindings.Lib.KnownAddresses(handle.cHandle)
+}
+
+// Supports reports whether addr is a member of this handle's known-address set
+// (the authoritative monitored-address set returned by [Handle.Addresses] /
+// KnownAddresses). This is NOT a diagnostics-derived set.
+//
+// The address set is built lazily on the first call and cached; the underlying
+// C layer (KnownAddresses) is called at most once per handle. The set is a
+// snapshot of the immutable handle, so subsequent calls are consistent.
+//
+// Supports is safe to call concurrently with [Handle.Close]. It retains the
+// handle across the KnownAddresses call so a concurrent final Close cannot
+// destroy the C handle mid-call (use-after-free). If the handle is released
+// before the set is ever built, Supports returns false; a cached set remains
+// valid and read-only after construction.
+func (handle *Handle) Supports(addr string) bool {
+	// Fast path: a released handle monitors nothing. refCounter is atomic, so
+	// this read is race-free (unlike reading cHandle directly).
+	if handle.refCounter.Load() <= 0 {
+		return false
+	}
+	handle.addrOnce.Do(func() {
+		// Retain across the KnownAddresses call so a concurrent final Close
+		// cannot Destroy the C handle mid-call (use-after-free). If the handle
+		// was released between the fast-path check and here, retain fails and
+		// addrSet stays nil (-> Supports returns false).
+		if !handle.retain() {
+			return
+		}
+		defer handle.Close()
+		addrs := handle.Addresses()
+		set := make(map[string]struct{}, len(addrs))
+		for _, a := range addrs {
+			set[a] = struct{}{}
+		}
+		handle.addrSet = set
+	})
+	_, ok := handle.addrSet[addr]
+	return ok
 }
 
 // Actions returns the list of actions the WAF has been configured to monitor based on the input

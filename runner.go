@@ -32,6 +32,15 @@ type RunAddressData struct {
 	TimerKey timer.Key
 }
 
+// Runner is the common run surface of [*Context] and [*Subcontext]. It is
+// intentionally narrow: only Run belongs here, not Close, Truncations, or Supports.
+type Runner interface {
+	Run(ctx context.Context, addressData RunAddressData) (Result, error)
+}
+
+var _ Runner = (*Context)(nil)
+var _ Runner = (*Subcontext)(nil)
+
 func (d RunAddressData) isEmpty() bool {
 	return len(d.Data) == 0
 }
