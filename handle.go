@@ -130,13 +130,26 @@ func (handle *Handle) Addresses() []string {
 // C layer (KnownAddresses) is called at most once per handle. The set is a
 // snapshot of the immutable handle, so subsequent calls are consistent.
 //
-// Returns false when the handle has been closed (cHandle == 0), or on
-// unsupported platforms where KnownAddresses returns nil.
+// Supports is safe to call concurrently with [Handle.Close]. It retains the
+// handle across the KnownAddresses call so a concurrent final Close cannot
+// destroy the C handle mid-call (use-after-free). If the handle is released
+// before the set is ever built, Supports returns false; a cached set remains
+// valid and read-only after construction.
 func (handle *Handle) Supports(addr string) bool {
-	if handle.cHandle == 0 {
+	// Fast path: a released handle monitors nothing. refCounter is atomic, so
+	// this read is race-free (unlike reading cHandle directly).
+	if handle.refCounter.Load() <= 0 {
 		return false
 	}
 	handle.addrOnce.Do(func() {
+		// Retain across the KnownAddresses call so a concurrent final Close
+		// cannot Destroy the C handle mid-call (use-after-free). If the handle
+		// was released between the fast-path check and here, retain fails and
+		// addrSet stays nil (-> Supports returns false).
+		if !handle.retain() {
+			return
+		}
+		defer handle.Close()
 		addrs := handle.Addresses()
 		set := make(map[string]struct{}, len(addrs))
 		for _, a := range addrs {
