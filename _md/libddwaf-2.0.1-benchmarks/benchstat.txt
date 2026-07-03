@@ -1,0 +1,77 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/DataDog/go-libddwaf/v5
+cpu: Apple M4 Max
+                                       │     old      │                 new                 │
+                                       │    sec/op    │   sec/op     vs base                │
+WAF/RequestResponse-16                    65.06µ ± 1%   59.92µ ± 1%   -7.91% (p=0.000 n=10)
+WAF/Run/SmallRuleset/NoAttack-16          5.548µ ± 1%   5.605µ ± 2%        ~ (p=0.123 n=10)
+WAF/Run/SmallRuleset/Attack-16            8.208µ ± 1%   8.098µ ± 1%   -1.34% (p=0.001 n=10)
+WAF/Run/RecommendedRuleset/NoAttack-16    55.48µ ± 1%   49.41µ ± 2%  -10.93% (p=0.000 n=10)
+WAF/Run/RecommendedRuleset/Attack-16      56.50µ ± 1%   49.67µ ± 1%  -12.09% (p=0.000 n=10)
+WAF/ContextLifecycle-16                   847.4n ± 1%   849.6n ± 1%        ~ (p=0.280 n=10)
+WAF/DataComplexity/Minimal-16             11.72µ ± 1%   11.47µ ± 0%   -2.14% (p=0.000 n=10)
+WAF/DataComplexity/Realistic-16           55.73µ ± 1%   47.85µ ± 0%  -14.14% (p=0.000 n=10)
+WAF/DataComplexity/Heavy-16               903.9µ ± 0%   877.1µ ± 1%   -2.97% (p=0.000 n=10)
+WAF/Parallel-16                          10.446µ ± 6%   8.716µ ± 8%  -16.55% (p=0.000 n=10)
+WAF/Subcontext-16                         24.77µ ± 1%   22.79µ ± 3%   -8.01% (p=0.000 n=10)
+NewContextClose-16                        863.9n ± 2%   854.6n ± 3%        ~ (p=0.085 n=10)
+RunOnly-16                                49.22µ ± 1%   41.06µ ± 3%  -16.57% (p=0.000 n=10)
+SubcontextRunOnly-16                      19.95µ ± 5%   17.32µ ± 2%  -13.17% (p=0.000 n=10)
+ColdStart-16                              212.9µ ± 2%   202.9µ ± 3%   -4.68% (p=0.000 n=10)
+NewContextParallel-16                     414.4n ± 4%   401.9n ± 5%        ~ (p=0.105 n=10)
+SiblingSubcontextParallelism-16           2.503µ ± 1%   2.478µ ± 0%   -1.02% (p=0.000 n=10)
+SiblingSubcontextSerialized-16            2.449µ ± 3%   2.458µ ± 2%        ~ (p=0.812 n=10)
+ContextRun-16                             2.369µ ± 3%   2.392µ ± 2%        ~ (p=0.210 n=10)
+SubcontextRun-16                          2.389µ ± 3%   2.423µ ± 3%        ~ (p=0.063 n=10)
+geomean                                   11.88µ        11.19µ        -5.78%
+
+                                       │     old      │                  new                  │
+                                       │     B/op     │     B/op      vs base                 │
+WAF/RequestResponse-16                   6.325Ki ± 0%   6.325Ki ± 0%       ~ (p=1.000 n=10)
+WAF/Run/SmallRuleset/NoAttack-16         3.808Ki ± 0%   3.808Ki ± 0%       ~ (p=1.000 n=10) ¹
+WAF/Run/SmallRuleset/Attack-16           6.575Ki ± 0%   6.575Ki ± 0%       ~ (p=1.000 n=10) ¹
+WAF/Run/RecommendedRuleset/NoAttack-16   4.558Ki ± 0%   4.558Ki ± 0%       ~ (p=1.000 n=10) ¹
+WAF/Run/RecommendedRuleset/Attack-16     10.72Ki ± 0%   10.72Ki ± 0%       ~ (p=1.000 n=10) ¹
+WAF/ContextLifecycle-16                    520.0 ± 0%     520.0 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/DataComplexity/Minimal-16            2.408Ki ± 0%   2.408Ki ± 0%       ~ (p=1.000 n=10)
+WAF/DataComplexity/Realistic-16          4.558Ki ± 0%   4.558Ki ± 0%       ~ (p=1.000 n=10) ¹
+WAF/DataComplexity/Heavy-16              20.17Ki ± 0%   20.17Ki ± 0%       ~ (p=1.000 n=10)
+WAF/Parallel-16                          4.578Ki ± 0%   4.575Ki ± 0%  -0.05% (p=0.016 n=10)
+WAF/Subcontext-16                        2.697Ki ± 0%   2.697Ki ± 0%       ~ (p=1.000 n=10) ¹
+NewContextClose-16                         520.0 ± 0%     520.0 ± 0%       ~ (p=1.000 n=10) ¹
+RunOnly-16                               3.087Ki ± 0%   3.081Ki ± 0%  -0.21% (p=0.015 n=10)
+SubcontextRunOnly-16                     1.692Ki ± 0%   1.688Ki ± 0%       ~ (p=0.412 n=10)
+ColdStart-16                             2.932Ki ± 0%   2.930Ki ± 0%  -0.05% (p=0.020 n=10)
+NewContextParallel-16                      521.0 ± 0%     521.0 ± 0%       ~ (p=1.000 n=10)
+SiblingSubcontextParallelism-16          1.753Ki ± 0%   1.755Ki ± 0%  +0.08% (p=0.003 n=10)
+SiblingSubcontextSerialized-16           1.752Ki ± 0%   1.751Ki ± 0%       ~ (p=0.285 n=10)
+ContextRun-16                            1.755Ki ± 0%   1.754Ki ± 0%       ~ (p=0.450 n=10)
+SubcontextRun-16                         1.755Ki ± 0%   1.754Ki ± 0%       ~ (p=0.067 n=10)
+geomean                                  2.693Ki        2.692Ki       -0.03%
+¹ all samples are equal
+
+                                       │    old     │                 new                 │
+                                       │ allocs/op  │ allocs/op   vs base                 │
+WAF/RequestResponse-16                   141.0 ± 0%   141.0 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/Run/SmallRuleset/NoAttack-16         84.00 ± 0%   84.00 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/Run/SmallRuleset/Attack-16           156.0 ± 0%   156.0 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/Run/RecommendedRuleset/NoAttack-16   102.0 ± 0%   102.0 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/Run/RecommendedRuleset/Attack-16     282.0 ± 0%   282.0 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/ContextLifecycle-16                  6.000 ± 0%   6.000 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/DataComplexity/Minimal-16            40.00 ± 0%   40.00 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/DataComplexity/Realistic-16          102.0 ± 0%   102.0 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/DataComplexity/Heavy-16              496.0 ± 0%   496.0 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/Parallel-16                          102.0 ± 0%   102.0 ± 0%       ~ (p=1.000 n=10) ¹
+WAF/Subcontext-16                        42.00 ± 0%   42.00 ± 0%       ~ (p=1.000 n=10) ¹
+NewContextClose-16                       6.000 ± 0%   6.000 ± 0%       ~ (p=1.000 n=10) ¹
+RunOnly-16                               73.00 ± 0%   73.00 ± 0%       ~ (p=1.000 n=10) ¹
+SubcontextRunOnly-16                     29.00 ± 0%   29.00 ± 0%       ~ (p=1.000 n=10) ¹
+ColdStart-16                             8.000 ± 0%   8.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewContextParallel-16                    6.000 ± 0%   6.000 ± 0%       ~ (p=1.000 n=10) ¹
+SiblingSubcontextParallelism-16          32.00 ± 0%   32.00 ± 0%       ~ (p=1.000 n=10) ¹
+SiblingSubcontextSerialized-16           32.00 ± 0%   32.00 ± 0%       ~ (p=1.000 n=10) ¹
+ContextRun-16                            32.00 ± 0%   32.00 ± 0%       ~ (p=1.000 n=10) ¹
+SubcontextRun-16                         32.00 ± 0%   32.00 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                                  45.96        45.96       +0.00%
+¹ all samples are equal
