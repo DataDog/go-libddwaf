@@ -347,38 +347,19 @@ func BenchmarkWAF(b *testing.B) {
 	})
 }
 
-// BenchmarkNewContextOnly measures Handle.NewContext in isolation.
-// Close is excluded from the timed region via StopTimer/StartTimer.
-func BenchmarkNewContextOnly(b *testing.B) {
+// BenchmarkNewContextClose measures the full NewContext+Close lifecycle in one
+// timed b.Loop. It fuses the former BenchmarkNewContextOnly/BenchmarkContextCloseOnly,
+// whose per-iteration b.StopTimer()/b.StartTimer() toggles cost ~34x the work measured
+// and made -count runs at the default benchtime effectively unbounded.
+func BenchmarkNewContextClose(b *testing.B) {
 	handle := benchRecommendedHandle(b)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		ctx, err := handle.NewContext(stdcontext.Background(), timer.WithBudget(time.Second))
 		if err != nil {
 			b.Fatal(err)
 		}
-		b.StopTimer()
-		ctx.Close()
-		b.StartTimer()
-	}
-}
-
-// BenchmarkContextCloseOnly measures Context.Close in isolation.
-// NewContext is excluded from the timed region.
-func BenchmarkContextCloseOnly(b *testing.B) {
-	handle := benchRecommendedHandle(b)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
-		b.StopTimer()
-		ctx, err := handle.NewContext(stdcontext.Background(), timer.WithBudget(time.Second))
-		if err != nil {
-			b.Fatal(err)
-		}
-		b.StartTimer()
 		ctx.Close()
 	}
 }
