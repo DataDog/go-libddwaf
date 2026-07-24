@@ -64,7 +64,13 @@ func TestCgoExportedSymbolsAreVersioned(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			if d.Name() == "testdata" || strings.HasPrefix(d.Name(), ".") {
+			// Never skip the root: WalkDir(".") visits it with Name() == ".",
+			// which would otherwise match the "." prefix check below and skip
+			// the entire tree.
+			if path == "." {
+				return nil
+			}
+			if d.Name() == "testdata" || strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_") {
 				return filepath.SkipDir
 			}
 			return nil
