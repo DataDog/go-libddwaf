@@ -64,8 +64,7 @@ func TestCgoExportedSymbolsAreVersioned(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", ".omc", ".omo", ".opencode", ".sisyphus", "testdata":
+			if d.Name() == "testdata" || strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil
