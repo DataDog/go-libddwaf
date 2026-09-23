@@ -32,6 +32,11 @@ run() {
     test_tags="$2,$GOOS,$GOARCH"
     cgo=$($(contains "$2" cgo) && echo 1 || echo 0)
 
+    # Only the root package reads these settings. Custom test flags would be
+    # passed to every package's test binary and rejected by subpackages.
+    export GO_LIBDDWAF_TEST_WAF_SUPPORTED="$waf_enabled"
+    export GO_LIBDDWAF_TEST_WAF_BUILD_TAGS="$test_tags"
+
     # COVERAGE is set by the CI on a single matrix entry to avoid duplicate uploads.
     cover=""
     if [ "${COVERAGE:-}" = "true" ] && [ "$2" = "appsec" ]; then
@@ -39,7 +44,7 @@ run() {
     fi
 
     echo "Running matrix $test_tags where the WAF is enablement is ${waf_enabled}..."
-    env CGO_ENABLED="$cgo" go test $cover -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+    env CGO_ENABLED="$cgo" go test $cover -shuffle=on -tags="$tags" ./...
 
     if ! $waf_enabled; then
         return
@@ -47,11 +52,11 @@ run() {
 
     if [ "$cgo" = "1" ]; then
         echo "Running again with cgo options (cgocheck & race) enabled..."
-        env "GOEXPERIMENT=cgocheck2" CGO_ENABLED=1 go test -race -shuffle=on -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+        env "GOEXPERIMENT=cgocheck2" CGO_ENABLED=1 go test -race -shuffle=on -tags="$tags" ./...
     fi
 
     echo "Running again $nproc times in parralel"
-    env CGO_ENABLED="$cgo" go test -shuffle=on -parallel $((nproc / 4 + 1)) -count="$nproc" -tags="$tags" -args -waf-build-tags="$test_tags" -waf-supported="$waf_enabled" ./...
+    env CGO_ENABLED="$cgo" go test -shuffle=on -parallel $((nproc / 4 + 1)) -count="$nproc" -tags="$tags" ./...
 }
 
 run "$WAF_ENABLED" appsec                # WAF enabled (but not on windows)

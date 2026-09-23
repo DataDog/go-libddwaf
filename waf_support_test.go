@@ -10,6 +10,7 @@ package libddwaf
 import (
 	"errors"
 	"flag"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,8 +26,14 @@ var (
 )
 
 func init() {
-	wafSupportedFlag = flag.String("waf-supported", "false", "Set to true if the WAF is supported on the current target (true, false, maybe)")
-	wafBuildTags = flag.String("waf-build-tags", "", "Set to the build tags used to build the WAF")
+	// CI uses environment defaults so subpackages do not receive these flags.
+	// Explicit flags still override the defaults for manual root-package runs.
+	supported := os.Getenv("GO_LIBDDWAF_TEST_WAF_SUPPORTED")
+	if supported == "" {
+		supported = "false"
+	}
+	wafSupportedFlag = flag.String("waf-supported", supported, "Set to true if the WAF is supported on the current target (true, false, maybe)")
+	wafBuildTags = flag.String("waf-build-tags", os.Getenv("GO_LIBDDWAF_TEST_WAF_BUILD_TAGS"), "Set to the build tags used to build the WAF")
 }
 
 // TestSupport is used to make sure the WAF is actually enabled and disabled when it respectively should be
