@@ -105,7 +105,10 @@ func TestSum(t *testing.T) {
 	})
 
 	t.Run("multiple-components", func(t *testing.T) {
-		rootTimer, err := timer.NewTreeTimer(timer.WithBudget(4*time.Millisecond),
+		// The root budget must be much larger than the sum of the leaf sleeps.
+		// time.Sleep can take much longer than requested on slow CI runners, and
+		// a tight root budget makes SumExhausted flaky.
+		rootTimer, err := timer.NewTreeTimer(timer.WithBudget(time.Second),
 			timer.WithComponents("a"),
 			timer.WithComponents("b"),
 			timer.WithComponents("c"),
