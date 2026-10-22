@@ -71,14 +71,3 @@ fi
 
 run "$WAF_ENABLED" cgo                   # WAF enabled (but not on windows)
 run false datadog.no_waf,cgo             # WAF manually disabled and CGO enabled
-
-# Only the matrix entry that set COVERAGE=true produces coverage.out, so this uploads once.
-# datadog-ci reads either DATADOG_API_KEY or DD_API_KEY; both are absent on fork pull
-# requests, where the upload is skipped instead of failing the job.
-if [ "${COVERAGE:-}" = "true" ] && [ -f coverage.out ]; then
-    if [ -z "${DATADOG_API_KEY:-}" ] && [ -z "${DD_API_KEY:-}" ]; then
-        echo "No Datadog API key (DATADOG_API_KEY/DD_API_KEY) is set; skipping coverage upload"
-    else
-        DD_SERVICE=go-libddwaf npx --yes @datadog/datadog-ci coverage upload coverage.out
-    fi
-fi

@@ -32,7 +32,12 @@ jobs:
         id: ruleset
         run: |-
           go -C _tools/ruleset-updater run . -output="${{ github.workspace }}/internal/ruleset/recommended.json.gz"
-          echo "version=$(jq -r '.metadata.rules_version' <(gunzip --to-stdout ${GITHUB_WORKSPACE}/internal/ruleset/recommended.json.gz))" >> "${GITHUB_OUTPUT}"
+          version="$(jq -r '.metadata.rules_version' <(gunzip --to-stdout "${GITHUB_WORKSPACE}/internal/ruleset/recommended.json.gz"))"
+          if [[ ! "${version}" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::Unexpected rules_version format: ${version}"
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
       - name: Detect Mutation
@@ -75,12 +80,13 @@ jobs:
       - name: Create PR
         if: fromJson(steps.detect.outputs.mutation-happened)
         run: |-
-          git fetch origin "${{ steps.create-branch.outputs.branch }}"
+          git fetch origin "${BRANCH}"
           git reset --hard HEAD
-          git switch "${{ steps.create-branch.outputs.branch }}"
+          git switch "${BRANCH}"
           gh pr create --title "chore: update default ruleset to ${VERSION}" \
                         --body "Updated default ruleset to ${VERSION}." \
-                        --head="${{ steps.create-branch.outputs.branch }}"
+                        --head="${BRANCH}"
         env:
           GITHUB_TOKEN: ${{ steps.generate-token-pr.outputs.token }}
           VERSION: ${{ steps.ruleset.outputs.version }}
+          BRANCH: ${{ steps.create-branch.outputs.branch }}

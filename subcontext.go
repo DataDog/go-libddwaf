@@ -41,6 +41,9 @@ type Subcontext struct {
 	truncations   Truncations
 	pinners       []*runtime.Pinner
 	pinnersMu     sync.Mutex
+	// pinnersReleased is set by close, under pinnersMu, once the
+	// ddwaf_subcontext has been destroyed and the collected pinners unpinned.
+	pinnersReleased bool
 }
 
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
@@ -91,12 +94,12 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 		}
 		s.pinnersMu.Lock()
 		defer s.pinnersMu.Unlock()
-		// Unpin immediately if either this subcontext or its parent context is
-		// closing: in both cases the underlying ddwaf resource is (being)
-		// destroyed and nothing will reference this data, and the closing path
-		// will not observe a pinner appended after it. This mirrors how
-		// Context.Run handles its own pinner against context.closedHint.
-		if s.closedHint.Load() || s.parent.closedHint.Load() {
+		// The ddwaf_subcontext keeps reading this data (including from other
+		// in-flight evaluations) until it is destroyed, so the pinner must be
+		// handed to close even if closing has already started (on this
+		// subcontext or through the parent's cascade). It is only safe to
+		// release it here once close has destroyed the subcontext.
+		if s.pinnersReleased {
 			pinner.Unpin()
 			return
 		}
@@ -221,6 +224,7 @@ func (s *Subcontext) close(parentLocked bool) {
 		p.Unpin()
 	}
 	s.pinners = nil
+	s.pinnersReleased = true
 	s.pinnersMu.Unlock()
 
 	s.rollupInto(s.parent)

@@ -65,13 +65,14 @@ type Context struct {
 	// Each Run call gets its own [runtime.Pinner]; all are unpinned on [Context.Close].
 	pinners   []*runtime.Pinner
 	pinnersMu sync.Mutex
+	// pinnersReleased is set by Close, under pinnersMu, once the ddwaf_context
+	// has been destroyed and the collected pinners unpinned.
+	pinnersReleased bool
 
 	// subcontexts tracks live subcontexts derived from this context. The libddwaf
 	// C API does not document ddwaf_context_destroy as cascading to subcontexts
-	// created via ddwaf_subcontext_init, and a subcontext references its parent
-	// context's state, so Context.Close destroys each live ddwaf_subcontext before
-	// the parent ddwaf_context to avoid leaks and use-after-free. This ordering is
-	// also enforced in Subcontext.close. Guarded by mu.
+	// created via ddwaf_subcontext_init, so Context.Close destroys each live
+	// ddwaf_subcontext itself to avoid leaking them. Guarded by mu.
 	subcontexts map[*Subcontext]struct{}
 }
 
@@ -213,7 +214,11 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 		}
 		context.pinnersMu.Lock()
 		defer context.pinnersMu.Unlock()
-		if context.closedHint.Load() {
+		// The ddwaf_context keeps reading this data (including from other
+		// in-flight evaluations) until it is destroyed, so the pinner must be
+		// handed to Close even if Close has already started. It is only safe to
+		// release it here once Close has destroyed the context.
+		if context.pinnersReleased {
 			pinner.Unpin()
 			return
 		}
@@ -321,6 +326,7 @@ func (context *Context) Close() {
 		p.Unpin()
 	}
 	context.pinners = nil
+	context.pinnersReleased = true
 
 	context.handle.Close()
 }
