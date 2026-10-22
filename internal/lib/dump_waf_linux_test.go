@@ -8,6 +8,7 @@
 package lib
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -48,8 +49,12 @@ func TestDumpEmbeddedWAFSealed(t *testing.T) {
 		t.Fatal("memfd is missing FD_CLOEXEC")
 	}
 
-	if f, err := os.OpenFile(path, os.O_WRONLY, 0); err == nil {
-		f.Close()
-		t.Fatal("opening the library for writing unexpectedly succeeded")
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("open %s for writing: %v", path, err)
+	}
+	defer f.Close()
+	if _, err := f.Write([]byte{0}); !errors.Is(err, unix.EPERM) {
+		t.Fatalf("write to sealed library: got %v, want EPERM", err)
 	}
 }
