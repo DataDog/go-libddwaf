@@ -66,7 +66,25 @@ jobs:
           # We need a GITHUB_TOKEN in order to access the latest release of the AppSec rules from
           # the DataDog/appsec-rules repository.
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
-          # ci.sh generates a coverage profile and uploads it to Datadog Code Coverage when
-          # COVERAGE is set. Gate it to a single matrix entry to avoid duplicate uploads.
+          # ci.sh generates a coverage profile when COVERAGE is set. Gate it to a single matrix
+          # entry to avoid duplicate uploads.
           COVERAGE: ${{ (matrix.runs-on == 'ubuntu-24.04' && matrix.go-version == 'stable') && 'true' || '' }}
+      - name: Upload coverage
+        if: matrix.runs-on == 'ubuntu-24.04' && matrix.go-version == 'stable' && hashFiles('coverage.out') != ''
+        shell: bash
+        run: |-
+          # The API key is absent on fork pull requests; skip instead of failing the job.
+          if [ -z "${DATADOG_API_KEY}" ]; then
+            echo "No Datadog API key is set; skipping coverage upload"
+            exit 0
+          fi
+          curl -fsSL -o "${RUNNER_TEMP}/datadog-ci" \
+            "https://github.com/DataDog/datadog-ci/releases/download/v${DATADOG_CI_VERSION}/datadog-ci_linux-x64"
+          echo "${DATADOG_CI_SHA256}  ${RUNNER_TEMP}/datadog-ci" | sha256sum --check --strict
+          chmod +x "${RUNNER_TEMP}/datadog-ci"
+          "${RUNNER_TEMP}/datadog-ci" coverage upload coverage.out
+        env:
+          DATADOG_CI_VERSION: 5.25.0
+          DATADOG_CI_SHA256: 6c94be659ef8acf8d5175cca28092f27af6842bad11d2d1e84ec9d3de54f4a8f
+          DD_SERVICE: go-libddwaf
           DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
