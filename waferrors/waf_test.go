@@ -77,6 +77,33 @@ func TestToWafErrorCode(t *testing.T) {
 	}
 }
 
+func TestToWafReturnCode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"internal", waferrors.ErrInternal, -3},
+		{"invalid_object", waferrors.ErrInvalidObject, -2},
+		{"invalid_argument", waferrors.ErrInvalidArgument, -1},
+		{"wrapped", fmt.Errorf("during run: %w", waferrors.ErrInvalidObject), -2},
+		{"timeout", waferrors.ErrTimeout, 0},
+		{"out_of_memory", waferrors.ErrOutOfMemory, 0},
+		{"empty_rule_addresses", waferrors.ErrEmptyRuleAddresses, 0},
+		{"unknown_run_error", waferrors.RunError(99), 0},
+		{"unknown_return_code", fmt.Errorf("%w: %d", waferrors.ErrUnknownReturnCode, -4), 0},
+		{"not_a_run_error", errors.New("not a run error"), 0},
+		{"context_closed", waferrors.ErrContextClosed, 0},
+		{"nil", nil, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := waferrors.ToWafReturnCode(tc.err); got != tc.want {
+				t.Errorf("ToWafReturnCode(%v) = %d, want %d", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSupportErrorStrings(t *testing.T) {
 	if got := (waferrors.UnsupportedOSArchError{OS: "plan9", Arch: "sparc"}).Error(); got != "unsupported OS/Arch: plan9/sparc" {
 		t.Errorf("UnsupportedOSArchError.Error() = %q", got)
