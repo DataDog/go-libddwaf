@@ -103,13 +103,39 @@ func (e RunError) Error() string {
 }
 
 // ToWafErrorCode converts an error to a WAF error code, returns zero if the
-// error is not a [RunError].
+// error is not a [RunError]. To get the ddwaf_run return code, use
+// [ToWafReturnCode].
 func ToWafErrorCode(in error) int {
 	var runError RunError
 	if !errors.As(in, &runError) {
 		return 0
 	}
 	return int(runError)
+}
+
+// ToWafReturnCode returns the ddwaf_run return code (DDWAF_RET_CODE) that the
+// error comes from: -3 for [ErrInternal], -2 for [ErrInvalidObject] and -1 for
+// [ErrInvalidArgument]. It returns zero when the error has no ddwaf_run return
+// code: a nil error, an error that is not a [RunError], or a [RunError] that
+// go-libddwaf reports itself, such as [ErrTimeout].
+//
+// Unlike [ToWafErrorCode], the result has the sign and the value of the
+// libddwaf C API.
+func ToWafReturnCode(in error) int {
+	var runError RunError
+	if !errors.As(in, &runError) {
+		return 0
+	}
+	switch runError {
+	case ErrInternal:
+		return -3 // DDWAF_ERR_INTERNAL
+	case ErrInvalidObject:
+		return -2 // DDWAF_ERR_INVALID_OBJECT
+	case ErrInvalidArgument:
+		return -1 // DDWAF_ERR_INVALID_ARGUMENT
+	default:
+		return 0
+	}
 }
 
 // PanicError is an error type wrapping a recovered panic value that happened
