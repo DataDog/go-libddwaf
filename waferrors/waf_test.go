@@ -181,6 +181,8 @@ func TestToWafReturnCode(t *testing.T) {
 		{"as_timeout_wrapping_error", adapter{as: waferrors.ErrTimeout, inner: plain}, -127},
 		{"as_timeout_wrapping_internal", adapter{as: waferrors.ErrTimeout, inner: waferrors.ErrInternal}, -3},
 		{"as_without_target", asWithoutTarget{}, -127},
+		// The target is reset between nodes: the timeout of the first node is not kept for the second.
+		{"timeout_then_as_without_target", errors.Join(waferrors.ErrTimeout, asWithoutTarget{}), -127},
 		{"only_nil_children", onlyNilChildren{}, -127},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
