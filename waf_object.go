@@ -34,10 +34,14 @@ const (
 	WAFSmallStringType   WAFObjectType = bindings.WAFSmallStringType
 	WAFArrayType         WAFObjectType = bindings.WAFArrayType
 	WAFMapType           WAFObjectType = bindings.WAFMapType
-	// WAFLargeArrayType is an array with more than math.MaxUint16 items
-	// (libddwaf 2.1.0 and later).
+	// WAFLargeArrayType is an array that uses the large layout of libddwaf
+	// 2.1.0 and later: its size and capacity are 28-bit values. libddwaf
+	// selects this layout when the capacity is more than math.MaxUint16, so a
+	// large array can have fewer items than that, or none.
 	WAFLargeArrayType WAFObjectType = bindings.WAFLargeArrayType
-	// WAFLargeMapType is a map with more than math.MaxUint16 entries
-	// (libddwaf 2.1.0 and later).
+	// WAFLargeMapType is a map that uses the large layout of libddwaf 2.1.0
+	// and later: its size and capacity are 28-bit values. libddwaf selects
+	// this layout when the capacity is more than math.MaxUint16, so a large
+	// map can have fewer entries than that, or none.
 	WAFLargeMapType WAFObjectType = bindings.WAFLargeMapType
 )

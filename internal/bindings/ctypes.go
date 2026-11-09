@@ -58,16 +58,23 @@ const (
 	WAFArrayType WAFObjectType = 0x20
 	// WAFMapType represents an array of ddwaf_object_kv (up to uint16 capacity)
 	WAFMapType WAFObjectType = 0x40
-	// WAFLargeArrayType represents an array of ddwaf_object with more than
-	// math.MaxUint16 items (DDWAF_OBJ_LARGE_ARRAY, libddwaf 2.1.0 and later).
-	// The size and capacity are 28-bit values.
+	// WAFLargeArrayType represents an array of ddwaf_object that uses the large
+	// layout (DDWAF_OBJ_LARGE_ARRAY, libddwaf 2.1.0 and later): the size and
+	// the capacity are 28-bit values. libddwaf selects this layout when the
+	// capacity is more than math.MaxUint16, so a large array can have fewer
+	// items than that, or none.
 	WAFLargeArrayType WAFObjectType = 0xA0
-	// WAFLargeMapType represents an array of ddwaf_object_kv with more than
-	// math.MaxUint16 items (DDWAF_OBJ_LARGE_MAP, libddwaf 2.1.0 and later).
-	// The size and capacity are 28-bit values.
+	// WAFLargeMapType represents an array of ddwaf_object_kv that uses the large
+	// layout (DDWAF_OBJ_LARGE_MAP, libddwaf 2.1.0 and later): the size and the
+	// capacity are 28-bit values. libddwaf selects this layout when the
+	// capacity is more than math.MaxUint16, so a large map can have fewer
+	// entries than that, or none.
 	WAFLargeMapType WAFObjectType = 0xC0
 )
 
+// String returns the name of the type: "invalid", "nil", "bool", "int", "uint",
+// "float", "string", "literal_string", "small_string", "array", "map",
+// "large_array" or "large_map". Any other value gives "unknown(<value>)".
 func (w WAFObjectType) String() string {
 	switch w {
 	case WAFInvalidType:
@@ -168,9 +175,9 @@ func (w WAFObjectType) String() string {
 //
 // The bit-field order above is the one of the little-endian targets that this
 // package supports (amd64 and arm64). The type byte is at offset 0 for all
-// layouts. libddwaf switches a container from the compact to the large layout
-// when it grows past math.MaxUint16 items. Go code creates compact containers
-// only.
+// layouts. libddwaf uses the large layout for a container when its capacity is
+// more than math.MaxUint16, so a large container can have fewer items than
+// that, or none. Go code creates compact containers only.
 //
 // All these offsets are sorted in the constants below and used to query the byte slice.
 type WAFObject struct {
@@ -726,6 +733,7 @@ func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
 }
 
 // ArrayValue returns the array as a slice of any values (recursive conversion) making a copy of the whole.
+// It accepts both compact and large arrays.
 func (w *WAFObject) ArrayValue() ([]any, error) {
 	if w.IsNil() {
 		return nil, nil
@@ -747,6 +755,7 @@ func (w *WAFObject) ArrayValue() ([]any, error) {
 }
 
 // MapValue returns the map as a Go map (recursive conversion) making a copy of the whole.
+// It accepts both compact and large maps.
 func (w *WAFObject) MapValue() (map[string]any, error) {
 	if w.IsNil() {
 		return nil, nil
@@ -772,6 +781,8 @@ func (w *WAFObject) MapValue() (map[string]any, error) {
 }
 
 // AnyValue returns the value of this WAFObject as a Go any type.
+// Arrays and maps are converted recursively, and both the compact and the large
+// layouts are accepted.
 func (w *WAFObject) AnyValue() (any, error) {
 	switch w.Type() {
 	case WAFArrayType, WAFLargeArrayType:
