@@ -58,6 +58,14 @@ const (
 	WAFArrayType WAFObjectType = 0x20
 	// WAFMapType represents an array of ddwaf_object_kv (up to uint16 capacity)
 	WAFMapType WAFObjectType = 0x40
+	// WAFLargeArrayType represents an array of ddwaf_object with more than
+	// math.MaxUint16 items (DDWAF_OBJ_LARGE_ARRAY, libddwaf 2.1.0 and later).
+	// The size and capacity are 28-bit values.
+	WAFLargeArrayType WAFObjectType = 0xA0
+	// WAFLargeMapType represents an array of ddwaf_object_kv with more than
+	// math.MaxUint16 items (DDWAF_OBJ_LARGE_MAP, libddwaf 2.1.0 and later).
+	// The size and capacity are 28-bit values.
+	WAFLargeMapType WAFObjectType = 0xC0
 )
 
 func (w WAFObjectType) String() string {
@@ -84,6 +92,10 @@ func (w WAFObjectType) String() string {
 		return "array"
 	case WAFMapType:
 		return "map"
+	case WAFLargeArrayType:
+		return "large_array"
+	case WAFLargeMapType:
+		return "large_map"
 	default:
 		return fmt.Sprintf("unknown(%d)", w)
 	}
@@ -140,6 +152,26 @@ func (w WAFObjectType) String() string {
 //	    ddwaf_object_kv *ptr;        // offset 8 (2 bytes padding)
 //	};
 //
+//	struct _ddwaf_object_large_array { // type=0xA0 (libddwaf 2.1.0 and later)
+//	    uint64_t _type : 8;          // bits 0-7 of the uint64 at offset 0
+//	    uint64_t size : 28;          // bits 8-35 of the uint64 at offset 0
+//	    uint64_t capacity : 28;      // bits 36-63 of the uint64 at offset 0
+//	    ddwaf_object *ptr;           // offset 8
+//	};
+//
+//	struct _ddwaf_object_large_map { // type=0xC0 (libddwaf 2.1.0 and later)
+//	    uint64_t _type : 8;          // bits 0-7 of the uint64 at offset 0
+//	    uint64_t size : 28;          // bits 8-35 of the uint64 at offset 0
+//	    uint64_t capacity : 28;      // bits 36-63 of the uint64 at offset 0
+//	    ddwaf_object_kv *ptr;        // offset 8
+//	};
+//
+// The bit-field order above is the one of the little-endian targets that this
+// package supports (amd64 and arm64). The type byte is at offset 0 for all
+// layouts. libddwaf switches a container from the compact to the large layout
+// when it grows past math.MaxUint16 items. Go code creates compact containers
+// only.
+//
 // All these offsets are sorted in the constants below and used to query the byte slice.
 type WAFObject struct {
 	_    structs.HostLayout
@@ -158,6 +190,10 @@ const (
 	wafObjectContainerCapacityOffset = 4 // uint16 capacity at byte 4 (for array/map)
 	wafObjectStringSizeOffset        = 4 // uint32 size at byte 4 (for string)
 	wafObjectPtrOffset               = 8 // pointer at byte 8 (for string/array/map and int64/uint64/float64)
+
+	// Large containers keep type, size and capacity in the uint64 at byte 0.
+	wafObjectLargeSizeShift = 8         // size is in bits 8-35
+	wafObjectLargeFieldMask = 1<<28 - 1 // size and capacity are 28-bit values
 )
 
 // WAFObjectKV represents a key-value pair in a map.
@@ -194,13 +230,32 @@ func (w *WAFObject) IsNil() bool {
 }
 
 // IsArray determines whether this WAF Object is an array or not.
+// It returns true for both compact ([WAFArrayType]) and large
+// ([WAFLargeArrayType]) arrays.
 func (w *WAFObject) IsArray() bool {
-	return w.Type() == WAFArrayType
+	t := w.Type()
+	return t == WAFArrayType || t == WAFLargeArrayType
 }
 
 // IsMap determines whether this WAF Object is a map or not.
+// It returns true for both compact ([WAFMapType]) and large
+// ([WAFLargeMapType]) maps.
 func (w *WAFObject) IsMap() bool {
-	return w.Type() == WAFMapType
+	t := w.Type()
+	return t == WAFMapType || t == WAFLargeMapType
+}
+
+// containerSize returns the number of items of a compact or large array or map.
+// It returns 0 if this WAF Object is not a container.
+func (w *WAFObject) containerSize() uint64 {
+	switch w.Type() {
+	case WAFArrayType, WAFMapType:
+		return uint64(binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:]))
+	case WAFLargeArrayType, WAFLargeMapType:
+		return (binary.NativeEndian.Uint64(w.data[:wafObjectPtrOffset]) >> wafObjectLargeSizeShift) & wafObjectLargeFieldMask
+	default:
+		return 0
+	}
 }
 
 // IsInt determines whether this WAF Object is a signed int or not.
@@ -452,7 +507,14 @@ func (w *WAFObject) SetArrayData(pinner *runtime.Pinner, data []WAFObject) error
 
 // SetArraySize updates the size field of an array object.
 // This is used after populating array elements.
+//
+// It has no effect unless the receiver is a compact array ([WAFArrayType]).
+// In particular, it never modifies a large array ([WAFLargeArrayType]),
+// because those use a different layout.
 func (w *WAFObject) SetArraySize(size uint16) {
+	if w.Type() != WAFArrayType {
+		return
+	}
 	capacity := binary.NativeEndian.Uint16(w.data[wafObjectContainerCapacityOffset:])
 	if size > capacity {
 		size = capacity
@@ -518,7 +580,14 @@ func (w *WAFObject) SetMapData(pinner *runtime.Pinner, data []WAFObjectKV) error
 
 // SetMapSize updates the size field of a map object.
 // This is used after populating map entries.
+//
+// It has no effect unless the receiver is a compact map ([WAFMapType]).
+// In particular, it never modifies a large map ([WAFLargeMapType]),
+// because those use a different layout.
 func (w *WAFObject) SetMapSize(size uint16) {
+	if w.Type() != WAFMapType {
+		return
+	}
 	capacity := binary.NativeEndian.Uint16(w.data[wafObjectContainerCapacityOffset:])
 	if size > capacity {
 		size = capacity
@@ -589,20 +658,29 @@ func (w *WAFObject) StringValue() (string, error) {
 }
 
 // ArraySize returns the number of elements in an array.
+//
+// A large array ([WAFLargeArrayType]) can have more elements than a uint16 can
+// hold. For those, ArraySize returns 0 and an error that wraps
+// [waferrors.ErrInvalidObjectType]. Use len([WAFObject.ArrayValues]) instead.
 func (w *WAFObject) ArraySize() (uint16, error) {
-	if !w.IsArray() {
-		return 0, fmt.Errorf("%w: value is not an array but %s", waferrors.ErrInvalidObjectType, w.Type().String())
+	switch t := w.Type(); t {
+	case WAFArrayType:
+	case WAFLargeArrayType:
+		return 0, fmt.Errorf("%w: value is a large array, use ArrayValues to get its length", waferrors.ErrInvalidObjectType)
+	default:
+		return 0, fmt.Errorf("%w: value is not an array but %s", waferrors.ErrInvalidObjectType, t.String())
 	}
 	return binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:]), nil
 }
 
 // ArrayValues returns the array elements as a slice of WAFObjects as-is using unsafe conversion.
+// It supports both compact and large arrays.
 func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 	if !w.IsArray() {
 		return nil, fmt.Errorf("%w: value is not an array but %s", waferrors.ErrInvalidObjectType, w.Type().String())
 	}
 
-	size := binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:])
+	size := w.containerSize()
 	if size == 0 {
 		return nil, nil
 	}
@@ -610,24 +688,33 @@ func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 	if binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]) == 0 {
 		return nil, fmt.Errorf("nil pointer in array object with size %d", size)
 	}
-	return unsafeutil.Slice(unsafeutil.ReadPtr[WAFObject](&w.data[wafObjectPtrOffset]), uint64(size)), nil
+	return unsafeutil.Slice(unsafeutil.ReadPtr[WAFObject](&w.data[wafObjectPtrOffset]), size), nil
 }
 
 // MapSize returns the number of entries in a map.
+//
+// A large map ([WAFLargeMapType]) can have more entries than a uint16 can
+// hold. For those, MapSize returns 0 and an error that wraps
+// [waferrors.ErrInvalidObjectType]. Use len([WAFObject.MapEntries]) instead.
 func (w *WAFObject) MapSize() (uint16, error) {
-	if !w.IsMap() {
-		return 0, fmt.Errorf("%w: value is not a map but %s", waferrors.ErrInvalidObjectType, w.Type().String())
+	switch t := w.Type(); t {
+	case WAFMapType:
+	case WAFLargeMapType:
+		return 0, fmt.Errorf("%w: value is a large map, use MapEntries to get its length", waferrors.ErrInvalidObjectType)
+	default:
+		return 0, fmt.Errorf("%w: value is not a map but %s", waferrors.ErrInvalidObjectType, t.String())
 	}
 	return binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:]), nil
 }
 
 // MapEntries returns the map entries as a slice of WAFObjectKV pairs as-is using unsafe conversion.
+// It supports both compact and large maps.
 func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
 	if !w.IsMap() {
 		return nil, fmt.Errorf("%w: value is not a map but %s", waferrors.ErrInvalidObjectType, w.Type().String())
 	}
 
-	size := binary.NativeEndian.Uint16(w.data[wafObjectContainerSizeOffset:])
+	size := w.containerSize()
 	if size == 0 {
 		return nil, nil
 	}
@@ -635,7 +722,7 @@ func (w *WAFObject) MapEntries() ([]WAFObjectKV, error) {
 	if binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]) == 0 {
 		return nil, fmt.Errorf("nil pointer in map object with size %d", size)
 	}
-	return unsafeutil.Slice(unsafeutil.ReadPtr[WAFObjectKV](&w.data[wafObjectPtrOffset]), uint64(size)), nil
+	return unsafeutil.Slice(unsafeutil.ReadPtr[WAFObjectKV](&w.data[wafObjectPtrOffset]), size), nil
 }
 
 // ArrayValue returns the array as a slice of any values (recursive conversion) making a copy of the whole.
@@ -687,7 +774,7 @@ func (w *WAFObject) MapValue() (map[string]any, error) {
 // AnyValue returns the value of this WAFObject as a Go any type.
 func (w *WAFObject) AnyValue() (any, error) {
 	switch w.Type() {
-	case WAFArrayType:
+	case WAFArrayType, WAFLargeArrayType:
 		return w.ArrayValue()
 	case WAFBoolType:
 		return w.BoolValue()
@@ -695,7 +782,7 @@ func (w *WAFObject) AnyValue() (any, error) {
 		return w.FloatValue()
 	case WAFIntType:
 		return w.IntValue()
-	case WAFMapType:
+	case WAFMapType, WAFLargeMapType:
 		return w.MapValue()
 	case WAFStringType, WAFLiteralStringType, WAFSmallStringType:
 		return w.StringValue()
