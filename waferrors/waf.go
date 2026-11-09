@@ -103,13 +103,124 @@ func (e RunError) Error() string {
 }
 
 // ToWafErrorCode converts an error to a WAF error code, returns zero if the
-// error is not a [RunError].
+// error is not a [RunError]. To get the ddwaf_run return code, use
+// [ToWafReturnCode].
 func ToWafErrorCode(in error) int {
 	var runError RunError
 	if !errors.As(in, &runError) {
 		return 0
 	}
 	return int(runError)
+}
+
+// bindingErrorCode is the reporting fallback when an error has no recognized
+// ddwaf_run return code. libddwaf never returns it. The Datadog tracers report
+// it for errors from the bindings (RFC-1012).
+const bindingErrorCode = -127
+
+// ToWafReturnCode returns the error code to report for an error from
+// go-libddwaf.
+//
+// Recognized errors use the native ddwaf_run return codes (DDWAF_RET_CODE):
+// -3 for [ErrInternal], -2 for [ErrInvalidObject] and -1 for
+// [ErrInvalidArgument]. -127 is the reporting fallback when no recognized code
+// is available: for any other error, including an unknown return code of
+// libddwaf ([ErrUnknownReturnCode] keeps that code only in its message).
+//
+// A timeout ([ErrTimeout]) is not an error code: on a timeout, ddwaf_run
+// returns DDWAF_OK or DDWAF_MATCH. A timeout gives no code, and it never hides
+// another error of the tree. ToWafReturnCode returns zero when there is no
+// error to report: a nil error, or an error tree that holds only timeouts.
+// Zero means no error to report; it does not distinguish DDWAF_OK from
+// DDWAF_MATCH. To know if a timeout occurred, use errors.Is(err, [ErrTimeout]).
+// It finds the timeout errors that go-libddwaf returns, but not a custom error
+// that only has an As method. A timeout can also happen in Go before ddwaf_run
+// is called, when the time budget is already used up.
+//
+// It looks at every error of the tree: the error itself, and the errors of its
+// Unwrap() error or Unwrap() []error method (for example [errors.Join]). An
+// error matches a [RunError] with the same rules as one step of [errors.As]
+// (its type, or its As(any) bool method). Unlike [errors.As], a match does not
+// stop the search: the errors that it wraps are looked at too. It visits the
+// errors in the same order as [errors.As]: an error before the errors that it
+// wraps, and the errors of Unwrap() []error from left to right. When the tree
+// holds more than one code, it returns the highest one (the closest to zero).
+// Like [errors.As], it does not detect a cycle in the tree.
+//
+// [ToWafErrorCode] returns the positive [RunError] value instead.
+func ToWafReturnCode(in error) int {
+	best, found := 0, false
+	keep := func(code int) {
+		if !found || code > best {
+			best, found = code, true
+		}
+	}
+
+	work := []error{in}
+	for len(work) > 0 {
+		err := work[len(work)-1]
+		work = work[:len(work)-1]
+		if err == nil {
+			continue
+		}
+
+		var runErr RunError
+		matched := asRunError(err, &runErr)
+		if matched {
+			switch runErr {
+			case ErrInternal:
+				keep(-3) // DDWAF_ERR_INTERNAL
+			case ErrInvalidObject:
+				keep(-2) // DDWAF_ERR_INVALID_OBJECT
+			case ErrInvalidArgument:
+				keep(-1) // DDWAF_ERR_INVALID_ARGUMENT
+			case ErrTimeout:
+				// A timeout gives no code, but the errors it wraps still count.
+			default:
+				keep(bindingErrorCode)
+			}
+		}
+
+		children := false
+		switch x := err.(type) { //nolint:errorlint // one step of the walk: the loop visits the wrapped errors itself
+		case interface{ Unwrap() error }:
+			if inner := x.Unwrap(); inner != nil {
+				work = append(work, inner)
+				children = true
+			}
+		case interface{ Unwrap() []error }:
+			// Push in reverse order, so that the errors are visited from left to right.
+			inners := x.Unwrap()
+			for i := len(inners) - 1; i >= 0; i-- {
+				if inners[i] != nil {
+					work = append(work, inners[i])
+					children = true
+				}
+			}
+		}
+
+		if !matched && !children {
+			keep(bindingErrorCode) // a leaf that is not a RunError
+		}
+	}
+
+	if !found {
+		return 0
+	}
+	return best
+}
+
+// asRunError reports whether err itself (not the errors it wraps) is a
+// [RunError], with the same rules as one step of [errors.As].
+func asRunError(err error, target *RunError) bool {
+	if r, ok := err.(RunError); ok { //nolint:errorlint // one step of errors.As: the caller visits the wrapped errors itself
+		*target = r
+		return true
+	}
+	if x, ok := err.(interface{ As(any) bool }); ok && x.As(target) {
+		return true
+	}
+	return false
 }
 
 // PanicError is an error type wrapping a recovered panic value that happened
