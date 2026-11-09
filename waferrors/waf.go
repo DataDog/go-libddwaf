@@ -131,11 +131,11 @@ const bindingErrorCode = -127
 // returns DDWAF_OK or DDWAF_MATCH. A timeout gives no code, and it never hides
 // another error of the tree. ToWafReturnCode returns zero when there is no
 // error to report: a nil error, or an error tree that holds only timeouts.
-// Zero does not give back the native DDWAF_OK or DDWAF_MATCH value. To know if
-// a timeout occurred, use errors.Is(err, [ErrTimeout]). It finds the timeout
-// errors that go-libddwaf returns, but not a custom error that only has an
-// As method. A timeout can also happen in Go before ddwaf_run is called, when
-// the time budget is already used up. Then ddwaf_run is not called at all.
+// Zero means no error to report; it does not distinguish DDWAF_OK from
+// DDWAF_MATCH. To know if a timeout occurred, use errors.Is(err, [ErrTimeout]).
+// It finds the timeout errors that go-libddwaf returns, but not a custom error
+// that only has an As method. A timeout can also happen in Go before ddwaf_run
+// is called, when the time budget is already used up.
 //
 // It looks at every error of the tree: the error itself, and the errors of its
 // Unwrap() error or Unwrap() []error method (for example [errors.Join]). An
