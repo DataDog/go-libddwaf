@@ -28,10 +28,13 @@ func TestGoRunErrorReturnCodeRoundTrip(t *testing.T) {
 		}
 	}
 
-	// No ddwaf_run error code: a match, and a code that go-libddwaf does not know.
-	for _, rc := range []bindings.WAFReturnCode{bindings.WAFMatch, bindings.WAFErrInternal - 1} {
-		if got := waferrors.ToWafReturnCode(goRunError(rc)); got != 0 {
-			t.Errorf("ToWafReturnCode(goRunError(%d)) = %d, want 0", int(rc), got)
-		}
+	// A match is not an error.
+	if got := waferrors.ToWafReturnCode(goRunError(bindings.WAFMatch)); got != 0 {
+		t.Errorf("ToWafReturnCode(goRunError(WAFMatch)) = %d, want 0", got)
+	}
+
+	// A code that go-libddwaf does not know is reported as an error from the bindings.
+	if rc := bindings.WAFErrInternal - 1; waferrors.ToWafReturnCode(goRunError(rc)) != -127 {
+		t.Errorf("ToWafReturnCode(goRunError(%d)) = %d, want -127", int(rc), waferrors.ToWafReturnCode(goRunError(rc)))
 	}
 }
