@@ -11,6 +11,7 @@ import (
 	"math"
 	"runtime"
 	"structs"
+	"unsafe"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/unsafeutil"
 	"github.com/DataDog/go-libddwaf/v5/waferrors"
@@ -54,9 +55,9 @@ const (
 	WAFLiteralStringType WAFObjectType = 0x12
 	// WAFSmallStringType represents a UTF-8 string up to 14 bytes (inline storage)
 	WAFSmallStringType WAFObjectType = 0x14
-	// WAFArrayType represents an array of ddwaf_object (up to uint16 capacity)
+	// WAFArrayType represents an array of ddwaf_object (compact layout, up to 65,535 items)
 	WAFArrayType WAFObjectType = 0x20
-	// WAFMapType represents an array of ddwaf_object_kv (up to uint16 capacity)
+	// WAFMapType represents an array of ddwaf_object_kv (compact layout, up to 65,535 items)
 	WAFMapType WAFObjectType = 0x40
 	// WAFLargeArrayType represents an array of ddwaf_object that uses the large
 	// layout (DDWAF_OBJ_LARGE_ARRAY, libddwaf 2.1.0 and later): the size and
@@ -490,6 +491,19 @@ func (w *WAFObject) SetArray(pinner *runtime.Pinner, capacity uint16) []WAFObjec
 
 // SetArrayData sets the receiving [WAFObject] to the provided array items.
 //
+// The layout depends on the capacity of data, not on its length. A capacity of
+// up to 65,535 items gives a compact array (type 0x20). A larger capacity gives
+// a large array (type 0xA0, libddwaf 2.1.0 and later), which can hold fewer
+// items than that. The capacity written in the header is capped at
+// [MaxLargeContainerSize].
+//
+// An empty slice gives an empty compact array. A slice with more than
+// [MaxLargeContainerSize] items gives an error, before anything is pinned.
+//
+// The caller keeps the ownership of data: it must stay unchanged and reachable
+// until the pinner is released, and it must never be passed to a C function
+// that frees or grows objects.
+//
 // C layout for array (type=0x20): see SetArray
 func (w *WAFObject) SetArrayData(pinner *runtime.Pinner, data []WAFObject) error {
 	clear(w.data[:])
@@ -499,16 +513,14 @@ func (w *WAFObject) SetArrayData(pinner *runtime.Pinner, data []WAFObject) error
 	if length == 0 {
 		return nil
 	}
-	if length > math.MaxUint16 || cap(data) > math.MaxUint16 {
-		return fmt.Errorf("array too large for WAFObject: len=%d cap=%d (max %d)", length, cap(data), math.MaxUint16)
+	capacity, err := largeLayoutCapacity(length, cap(data))
+	if err != nil {
+		return fmt.Errorf("array %w", err)
 	}
 
 	ptr := unsafeutil.Pointer(unsafeutil.SliceData(data))
 	pinner.Pin(ptr)
-
-	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], uint16(length))
-	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(cap(data)))
-	unsafeutil.WritePtr(&w.data[wafObjectPtrOffset], ptr)
+	w.setContainerHeader(WAFArrayType, WAFLargeArrayType, length, capacity, ptr)
 	return nil
 }
 
@@ -563,6 +575,12 @@ func (w *WAFObject) SetMap(pinner *runtime.Pinner, capacity uint16) []WAFObjectK
 
 // SetMapData sets the receiving [WAFObject] to the provided map items.
 //
+// The layout rules are the ones of [WAFObject.SetArrayData]: a capacity of up
+// to 65,535 items gives a compact map (type 0x40), a larger capacity gives a
+// large map (type 0xC0). An empty slice gives an empty compact map. A slice
+// with more than [MaxLargeContainerSize] items gives an error, before
+// anything is pinned. The caller keeps the ownership of data.
+//
 // C layout for map (type=0x40): see SetMap
 func (w *WAFObject) SetMapData(pinner *runtime.Pinner, data []WAFObjectKV) error {
 	clear(w.data[:])
@@ -572,17 +590,52 @@ func (w *WAFObject) SetMapData(pinner *runtime.Pinner, data []WAFObjectKV) error
 	if length == 0 {
 		return nil
 	}
-	if length > math.MaxUint16 || cap(data) > math.MaxUint16 {
-		return fmt.Errorf("map too large for WAFObject: len=%d cap=%d (max %d)", length, cap(data), math.MaxUint16)
+	capacity, err := largeLayoutCapacity(length, cap(data))
+	if err != nil {
+		return fmt.Errorf("map %w", err)
 	}
 
 	ptr := unsafeutil.Pointer(unsafeutil.SliceData(data))
 	pinner.Pin(ptr)
-
-	binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], uint16(length))
-	binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(cap(data)))
-	unsafeutil.WritePtr(&w.data[wafObjectPtrOffset], ptr)
+	w.setContainerHeader(WAFMapType, WAFLargeMapType, length, capacity, ptr)
 	return nil
+}
+
+// MaxLargeContainerSize is the largest number of items of a large array or
+// map: the size and capacity fields have 28 bits (internal/log/ddwaf.h).
+const MaxLargeContainerSize = 1<<28 - 1 // 268,435,455
+
+// wafObjectLargeCapacityShift is the position of the 28-bit capacity in the
+// first uint64 of a large container.
+const wafObjectLargeCapacityShift = 36
+
+// largeLayoutCapacity checks the length of a container and returns the
+// capacity to write in its header. The result is never less than length.
+func largeLayoutCapacity(length, capacity int) (int, error) {
+	if length > MaxLargeContainerSize {
+		return 0, fmt.Errorf("too large for WAFObject: len=%d (max %d)", length, MaxLargeContainerSize)
+	}
+	return min(capacity, MaxLargeContainerSize), nil
+}
+
+// setContainerHeader writes the header of an array or a map. A capacity of up
+// to 65,535 gives the compact layout, a larger one gives the large layout, as
+// libddwaf does (libddwaf 2.1.0 and later).
+//
+// Precondition: 0 < length <= capacity <= MaxLargeContainerSize. The caller
+// pins ptr.
+func (w *WAFObject) setContainerHeader(compact, large WAFObjectType, length, capacity int, ptr unsafe.Pointer) {
+	clear(w.data[:])
+	if capacity <= math.MaxUint16 {
+		w.setType(compact)
+		binary.NativeEndian.PutUint16(w.data[wafObjectContainerSizeOffset:], uint16(length))
+		binary.NativeEndian.PutUint16(w.data[wafObjectContainerCapacityOffset:], uint16(capacity))
+	} else {
+		// Bits 0-7 type, bits 8-35 size, bits 36-63 capacity.
+		binary.NativeEndian.PutUint64(w.data[:wafObjectPtrOffset],
+			uint64(large)|uint64(length)<<wafObjectLargeSizeShift|uint64(capacity)<<wafObjectLargeCapacityShift)
+	}
+	unsafeutil.WritePtr(&w.data[wafObjectPtrOffset], ptr)
 }
 
 // SetMapSize updates the size field of a map object.

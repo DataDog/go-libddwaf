@@ -37,11 +37,15 @@ const (
 	// WAFLargeArrayType is an array that uses the large layout of libddwaf
 	// 2.1.0 and later: its size and capacity are 28-bit values. libddwaf
 	// selects this layout when the capacity is more than math.MaxUint16, so a
-	// large array can have fewer items than that, or none.
+	// large array can have fewer items than that, or none. Go writes this
+	// layout too: [WAFObject.SetArrayData] and the [Encoder] builders use it
+	// for a capacity of more than 65,535 items.
 	WAFLargeArrayType WAFObjectType = bindings.WAFLargeArrayType
 	// WAFLargeMapType is a map that uses the large layout of libddwaf 2.1.0
 	// and later: its size and capacity are 28-bit values. libddwaf selects
 	// this layout when the capacity is more than math.MaxUint16, so a large
-	// map can have fewer entries than that, or none.
+	// map can have fewer entries than that, or none. Go writes this layout
+	// too: [WAFObject.SetMapData] and the [Encoder] builders use it for a
+	// capacity of more than 65,535 entries.
 	WAFLargeMapType WAFObjectType = bindings.WAFLargeMapType
 )
