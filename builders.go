@@ -71,9 +71,11 @@ func (b *ArrayBuilder) DropLast() {
 	b.entries = b.entries[:len(b.entries)-1]
 }
 
-// Close commits the accumulated entries to the parent WAFObject. If any entries
-// were skipped, a ContainerTooLarge truncation is recorded. Calling Close more
-// than once is safe and has no additional effect.
+// Close commits the accumulated entries to the parent WAFObject. It keeps at
+// most 268,435,455 entries (bindings.MaxLargeContainerSize). If any entries
+// were skipped, or if Close cuts entries at that limit, a ContainerTooLarge
+// truncation is recorded. Calling Close more than once is safe and has no
+// additional effect.
 func (b *ArrayBuilder) Close() {
 	if b.closed {
 		return
@@ -145,9 +147,11 @@ func (b *MapBuilder) DropLast() {
 	b.entries = b.entries[:len(b.entries)-1]
 }
 
-// Close commits the accumulated entries to the parent WAFObject. If any entries
-// were skipped, a ContainerTooLarge truncation is recorded. Calling Close more
-// than once is safe and has no additional effect.
+// Close commits the accumulated entries to the parent WAFObject. It keeps at
+// most 268,435,455 entries (bindings.MaxLargeContainerSize). If any entries
+// were skipped, or if Close cuts entries at that limit, a ContainerTooLarge
+// truncation is recorded. Calling Close more than once is safe and has no
+// additional effect.
 func (b *MapBuilder) Close() {
 	if b.closed {
 		return
