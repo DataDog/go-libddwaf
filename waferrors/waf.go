@@ -118,6 +118,18 @@ func ToWafErrorCode(in error) int {
 // it for errors from the bindings (RFC-1012).
 const bindingErrorCode = -127
 
+// Return codes of the libddwaf C library for the errors that [RunError] values
+// represent. They are the same as the WAFErr* values of the internal bindings
+// package, which this package cannot import.
+const (
+	// ddwafErrInternal is the value of DDWAF_ERR_INTERNAL.
+	ddwafErrInternal = -3
+	// ddwafErrInvalidObject is the value of DDWAF_ERR_INVALID_OBJECT.
+	ddwafErrInvalidObject = -2
+	// ddwafErrInvalidArgument is the value of DDWAF_ERR_INVALID_ARGUMENT.
+	ddwafErrInvalidArgument = -1
+)
+
 // ToWafReturnCode returns the error code to report for an error from
 // go-libddwaf.
 //
@@ -169,11 +181,11 @@ func ToWafReturnCode(in error) int {
 		if matched {
 			switch runErr {
 			case ErrInternal:
-				keep(-3) // DDWAF_ERR_INTERNAL
+				keep(ddwafErrInternal)
 			case ErrInvalidObject:
-				keep(-2) // DDWAF_ERR_INVALID_OBJECT
+				keep(ddwafErrInvalidObject)
 			case ErrInvalidArgument:
-				keep(-1) // DDWAF_ERR_INVALID_ARGUMENT
+				keep(ddwafErrInvalidArgument)
 			case ErrTimeout:
 				// A timeout gives no code, but the errors it wraps still count.
 			default:

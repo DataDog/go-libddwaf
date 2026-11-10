@@ -51,6 +51,10 @@ type Encoder struct {
 	Truncations Truncations
 }
 
+// WriteString sets obj to a string with the value of str. If str is longer than
+// the configured maximum string size, it is cut to that size and a
+// [StringTooLong] truncation is recorded. The string data is pinned with the
+// pinner of the encoder configuration.
 func (e *Encoder) WriteString(obj *WAFObject, str string) {
 	if len(str) > e.Config.maxStringSize() {
 		e.Truncations.Record(StringTooLong, len(str))
@@ -59,6 +63,10 @@ func (e *Encoder) WriteString(obj *WAFObject, str string) {
 	obj.SetString(e.Config.Pinner, str)
 }
 
+// WriteLiteralString cuts str to the configured maximum string size like
+// [Encoder.WriteString], recording a [StringTooLong] truncation when it does.
+// It then sets obj to a literal string: the WAF never frees the data of such a
+// string.
 func (e *Encoder) WriteLiteralString(obj *WAFObject, str string) {
 	if len(str) > e.Config.maxStringSize() {
 		e.Truncations.Record(StringTooLong, len(str))
@@ -67,6 +75,8 @@ func (e *Encoder) WriteLiteralString(obj *WAFObject, str string) {
 	obj.SetLiteralString(e.Config.Pinner, str)
 }
 
+// Timeout reports whether the encoding time budget is used up. It returns false
+// when the encoder configuration has no timer.
 func (e *Encoder) Timeout() bool {
 	return e.Config.Timer != nil && e.Config.Timer.Exhausted()
 }
@@ -99,6 +109,8 @@ const (
 	ObjectTooDeep
 )
 
+// String returns the name of the truncation reason, for example "string_length".
+// For a value that is not a known single reason, it returns "TruncationReason(n)".
 func (reason TruncationReason) String() string {
 	switch reason {
 	case ObjectTooDeep:
@@ -112,6 +124,9 @@ func (reason TruncationReason) String() string {
 	}
 }
 
+// truncationReasonCount is the number of [TruncationReason] values.
+const truncationReasonCount = 3
+
 // Truncations accumulates truncation events that occurred during encoding.
 type Truncations struct {
 	StringTooLong     []int
@@ -119,6 +134,8 @@ type Truncations struct {
 	ObjectTooDeep     []int
 }
 
+// Record adds size to the list of truncations that matches reason. It ignores a
+// reason that is not one of the known truncation reasons.
 func (t *Truncations) Record(reason TruncationReason, size int) {
 	switch reason {
 	case StringTooLong:
@@ -130,21 +147,25 @@ func (t *Truncations) Record(reason TruncationReason, size int) {
 	}
 }
 
+// Merge adds all the truncations of other to t.
 func (t *Truncations) Merge(other Truncations) {
 	t.StringTooLong = append(t.StringTooLong, other.StringTooLong...)
 	t.ContainerTooLarge = append(t.ContainerTooLarge, other.ContainerTooLarge...)
 	t.ObjectTooDeep = append(t.ObjectTooDeep, other.ObjectTooDeep...)
 }
 
+// IsEmpty reports whether no truncation was recorded.
 func (t Truncations) IsEmpty() bool {
 	return len(t.StringTooLong) == 0 && len(t.ContainerTooLarge) == 0 && len(t.ObjectTooDeep) == 0
 }
 
+// AsMap returns the recorded truncations grouped by reason. Reasons with no
+// truncation are not in the map. It returns nil when no truncation was recorded.
 func (t Truncations) AsMap() map[TruncationReason][]int {
 	if t.IsEmpty() {
 		return nil
 	}
-	m := make(map[TruncationReason][]int, 3)
+	m := make(map[TruncationReason][]int, truncationReasonCount)
 	if len(t.StringTooLong) > 0 {
 		m[StringTooLong] = t.StringTooLong
 	}

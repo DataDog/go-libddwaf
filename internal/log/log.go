@@ -47,6 +47,8 @@ func LevelNamed(name string) Level {
 	}
 }
 
+// String returns the upper case name of the level, for example "DEBUG". For an unknown
+// level, it returns the value in hexadecimal.
 func (l Level) String() string {
 	switch l {
 	case LevelTrace:
