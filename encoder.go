@@ -53,8 +53,9 @@ type Encoder struct {
 
 // WriteString sets obj to a string with the value of str. If str is longer than
 // the configured maximum string size, it is cut to that size and a
-// [StringTooLong] truncation is recorded. The string data is pinned with the
-// pinner of the encoder configuration.
+// [StringTooLong] truncation is recorded. A string of 14 bytes or fewer is
+// copied into obj and is not pinned. The data of a longer string is not copied:
+// it is pinned with the pinner of the encoder configuration.
 func (e *Encoder) WriteString(obj *WAFObject, str string) {
 	if len(str) > e.Config.maxStringSize() {
 		e.Truncations.Record(StringTooLong, len(str))

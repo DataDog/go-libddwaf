@@ -130,7 +130,8 @@ func PtrToUintptr[T any](arg *T) uintptr {
 }
 
 // SliceToUintptr returns the address of the first element of arg as a uintptr.
-// For an empty slice with no backing array, it returns zero.
+// For a nil slice, it returns zero. For a non-nil slice with zero capacity, it
+// returns a non-zero address that is unspecified (see [unsafe.SliceData]).
 func SliceToUintptr[T any](arg []T) uintptr {
 	return uintptr(unsafe.Pointer(unsafe.SliceData(arg)))
 }
