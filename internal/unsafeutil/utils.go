@@ -99,6 +99,8 @@ type Native interface {
 	~byte | ~float64 | ~float32 | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~bool | ~uintptr
 }
 
+// CastNative reinterprets the pointer ptr, to a value of type N, as a pointer to
+// a value of type T. Both types must satisfy [Native]. It does not copy the value.
 func CastNative[N Native, T Native](ptr *N) *T {
 	return (*T)(unsafe.Pointer(ptr))
 }
@@ -127,10 +129,15 @@ func PtrToUintptr[T any](arg *T) uintptr {
 	return uintptr(unsafe.Pointer(arg))
 }
 
+// SliceToUintptr returns the address of the first element of arg as a uintptr.
+// For a nil slice, it returns zero. For a non-nil slice with zero capacity, it
+// returns a non-zero address that is unspecified (see [unsafe.SliceData]).
 func SliceToUintptr[T any](arg []T) uintptr {
 	return uintptr(unsafe.Pointer(unsafe.SliceData(arg)))
 }
 
+// Slice returns a slice of the given length whose first element is at ptr. It is
+// a wrapper around [unsafe.Slice].
 func Slice[T any](ptr *T, length uint64) []T {
 	return unsafe.Slice(ptr, length)
 }

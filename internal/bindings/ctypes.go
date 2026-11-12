@@ -23,6 +23,8 @@ const (
 	MaxContainerSize  uint16 = 256
 )
 
+// WAFReturnCode is the return code of the libddwaf evaluation functions.
+// Negative values are errors.
 type WAFReturnCode int32
 
 const (
@@ -73,9 +75,10 @@ const (
 	WAFLargeMapType WAFObjectType = 0xC0
 )
 
-// String returns the name of the type: "invalid", "nil", "bool", "int", "uint",
-// "float", "string", "literal_string", "small_string", "array", "map",
-// "large_array" or "large_map". Any other value gives "unknown(<value>)".
+// String returns the short name of the object type: "invalid", "nil", "bool",
+// "int", "uint", "float", "string", "literal_string", "small_string", "array",
+// "map", "large_array" or "large_map". For an unknown type, it returns
+// "unknown(n)".
 func (w WAFObjectType) String() string {
 	switch w {
 	case WAFInvalidType:
@@ -690,8 +693,8 @@ func (w *WAFObject) FloatValue() (float64, error) {
 // StringValue returns the string value of this WAFObject.
 // Works for regular strings, literal strings, and small strings.
 func (w *WAFObject) StringValue() (string, error) {
-	t := w.Type()
-	switch t {
+	objType := w.Type()
+	switch objType {
 	case WAFSmallStringType:
 		size := int(w.data[wafObjectSStrSize])
 		if size > wafObjectSStrMaxLen {
@@ -713,7 +716,7 @@ func (w *WAFObject) StringValue() (string, error) {
 		return string(unsafeutil.Slice(unsafeutil.ReadPtr[byte](&w.data[wafObjectPtrOffset]), uint64(size))), nil
 
 	default:
-		return "", fmt.Errorf("%w: value is not a string but %s", waferrors.ErrInvalidObjectType, t.String())
+		return "", fmt.Errorf("%w: value is not a string but %s", waferrors.ErrInvalidObjectType, objType.String())
 	}
 }
 
