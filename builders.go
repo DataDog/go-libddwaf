@@ -6,10 +6,21 @@
 package libddwaf
 
 import (
-	"math"
-
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 	"github.com/DataDog/go-libddwaf/v5/internal/invariant"
 )
+
+// capToLayout returns how many of n items fit in the largest container that
+// the WAF layout can hold ([bindings.MaxLargeContainerSize]), and how many
+// items are cut. The limits of the [EncoderConfig] apply before this one. This
+// is the cap that remains when all 3 limits are math.MaxUint16 (the "unlimited"
+// sentinel).
+func capToLayout(n int) (kept, cut int) {
+	if n > bindings.MaxLargeContainerSize {
+		return bindings.MaxLargeContainerSize, n - bindings.MaxLargeContainerSize
+	}
+	return n, 0
+}
 
 // ArrayBuilder accumulates WAFObject entries and commits them to a parent
 // WAFObject on Close. It is not safe for concurrent use.
@@ -60,27 +71,28 @@ func (b *ArrayBuilder) DropLast() {
 	b.entries = b.entries[:len(b.entries)-1]
 }
 
-// Close commits the accumulated entries to the parent WAFObject. If any entries
-// were skipped, a ContainerTooLarge truncation is recorded. Calling Close more
-// than once is safe and has no additional effect.
+// Close commits the accumulated entries to the parent WAFObject. It keeps at
+// most 268,435,455 entries (bindings.MaxLargeContainerSize). If any entries
+// were skipped, or if Close cuts entries at that limit, a ContainerTooLarge
+// truncation is recorded. Calling Close more than once is safe and has no
+// additional effect.
 func (b *ArrayBuilder) Close() {
 	if b.closed {
 		return
 	}
 	b.closed = true
-	overflow := b.skipped
-	if len(b.entries) > math.MaxUint16 {
-		overflow += len(b.entries) - math.MaxUint16
-		b.entries = b.entries[:math.MaxUint16]
-	}
+	kept, cut := capToLayout(len(b.entries))
+	overflow := b.skipped + cut
+	b.entries = b.entries[:kept]
 	if overflow > 0 {
 		b.enc.Truncations.Record(ContainerTooLarge, len(b.entries)+overflow)
 	}
-	// Force cap == len: SetArrayData rejects cap > MaxUint16, and append growth
-	// can leave the backing array's capacity above the element count.
+	// Force cap == len: append growth can leave the capacity above the element
+	// count, and the capacity selects the layout. With cap == len, 65,535 items
+	// stay compact and 65,536 items become a large array.
 	entries := b.entries[:len(b.entries):len(b.entries)]
 	err := b.parent.SetArrayData(b.enc.Config.Pinner, entries)
-	invariant.Assert(err == nil, "SetArrayData must not fail after capping to MaxUint16: %v", err)
+	invariant.Assert(err == nil, "SetArrayData must not fail after capping to the layout limit: %v", err)
 }
 
 // MapBuilder accumulates WAFObjectKV entries and commits them to a parent
@@ -135,25 +147,26 @@ func (b *MapBuilder) DropLast() {
 	b.entries = b.entries[:len(b.entries)-1]
 }
 
-// Close commits the accumulated entries to the parent WAFObject. If any entries
-// were skipped, a ContainerTooLarge truncation is recorded. Calling Close more
-// than once is safe and has no additional effect.
+// Close commits the accumulated entries to the parent WAFObject. It keeps at
+// most 268,435,455 entries (bindings.MaxLargeContainerSize). If any entries
+// were skipped, or if Close cuts entries at that limit, a ContainerTooLarge
+// truncation is recorded. Calling Close more than once is safe and has no
+// additional effect.
 func (b *MapBuilder) Close() {
 	if b.closed {
 		return
 	}
 	b.closed = true
-	overflow := b.skipped
-	if len(b.entries) > math.MaxUint16 {
-		overflow += len(b.entries) - math.MaxUint16
-		b.entries = b.entries[:math.MaxUint16]
-	}
+	kept, cut := capToLayout(len(b.entries))
+	overflow := b.skipped + cut
+	b.entries = b.entries[:kept]
 	if overflow > 0 {
 		b.enc.Truncations.Record(ContainerTooLarge, len(b.entries)+overflow)
 	}
-	// Force cap == len: SetMapData rejects cap > MaxUint16, and append growth
-	// can leave the backing array's capacity above the element count.
+	// Force cap == len: append growth can leave the capacity above the entry
+	// count, and the capacity selects the layout. With cap == len, 65,535
+	// entries stay compact and 65,536 entries become a large map.
 	entries := b.entries[:len(b.entries):len(b.entries)]
 	err := b.parent.SetMapData(b.enc.Config.Pinner, entries)
-	invariant.Assert(err == nil, "SetMapData must not fail after capping to MaxUint16: %v", err)
+	invariant.Assert(err == nil, "SetMapData must not fail after capping to the layout limit: %v", err)
 }

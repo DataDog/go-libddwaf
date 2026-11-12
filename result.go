@@ -112,11 +112,12 @@ func decodeActions(entry WAFObjectKV, res *Result) error {
 	if !entry.Val.IsMap() {
 		return fmt.Errorf("unwrapWafResult: %w: expected map for actions, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
 	}
-	size, err := entry.Val.MapSize()
+	// The length comes from MapEntries because MapSize cannot report the size of a large map.
+	items, err := entry.Val.MapEntries()
 	if err != nil {
-		return fmt.Errorf("unwrapWafResult: %w: failed to get actions map size: %w", waferrors.ErrResultInvalidType, err)
+		return fmt.Errorf("unwrapWafResult: %w: failed to get actions map items: %w", waferrors.ErrResultInvalidType, err)
 	}
-	if size == 0 {
+	if len(items) == 0 {
 		return nil
 	}
 	actions, err := entry.Val.MapValue()
@@ -131,11 +132,12 @@ func decodeEvents(entry WAFObjectKV, res *Result) error {
 	if !entry.Val.IsArray() {
 		return fmt.Errorf("unwrapWafResult: %w: expected array for events, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
 	}
-	size, err := entry.Val.ArraySize()
+	// The length comes from ArrayValues because ArraySize cannot report the size of a large array.
+	items, err := entry.Val.ArrayValues()
 	if err != nil {
-		return fmt.Errorf("unwrapWafResult: %w: failed to get events array size: %w", waferrors.ErrResultInvalidType, err)
+		return fmt.Errorf("unwrapWafResult: %w: failed to get events array items: %w", waferrors.ErrResultInvalidType, err)
 	}
-	if size == 0 {
+	if len(items) == 0 {
 		return nil
 	}
 	events, err := entry.Val.ArrayValue()
@@ -150,11 +152,12 @@ func decodeAttributes(entry WAFObjectKV, res *Result) error {
 	if !entry.Val.IsMap() {
 		return fmt.Errorf("unwrapWafResult: %w: expected map for attributes, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
 	}
-	size, err := entry.Val.MapSize()
+	// The length comes from MapEntries because MapSize cannot report the size of a large map.
+	items, err := entry.Val.MapEntries()
 	if err != nil {
-		return fmt.Errorf("unwrapWafResult: %w: failed to get attributes map size: %w", waferrors.ErrResultInvalidType, err)
+		return fmt.Errorf("unwrapWafResult: %w: failed to get attributes map items: %w", waferrors.ErrResultInvalidType, err)
 	}
-	if size == 0 {
+	if len(items) == 0 {
 		return nil
 	}
 	derivatives, err := entry.Val.MapValue()

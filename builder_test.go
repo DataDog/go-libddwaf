@@ -33,6 +33,25 @@ func requireConfigPaths(t *testing.T, b *Builder, filter string, expected []stri
 	require.Equal(t, expected, paths)
 }
 
+// runBuilder builds a new handle from the builder, and runs the data in a new
+// context made from that handle.
+func runBuilder(t *testing.T, b *Builder, data RunAddressData) Result {
+	t.Helper()
+	handle, err := b.Build()
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+	t.Cleanup(func() { handle.Close() })
+
+	ctx, err := handle.NewContext(context.Background(), timer.WithBudget(timer.UnlimitedBudget))
+	require.NoError(t, err)
+	require.NotNil(t, ctx)
+	t.Cleanup(func() { ctx.Close() })
+
+	res, err := ctx.Run(context.Background(), data)
+	require.NoError(t, err)
+	return res
+}
+
 func TestBuilder(t *testing.T) {
 	if supported, err := Usable(); !supported || err != nil {
 		t.Skipf("target is not supported by the WAF: %v", err)
@@ -208,12 +227,106 @@ func TestBuilder(t *testing.T) {
 				rules := map[string]any{"version": "2.1", field: 1337.42}
 				_, err := builder.AddOrUpdateConfig("/broken", rules)
 				require.ErrorIs(t, err, errUpdateFailed)
+				// libddwaf 2.2.0 and later do not keep a rejected config path.
+				requireConfigPaths(t, builder, "", []string{"/"})
 				waf, err := builder.Build()
 				require.NoError(t, err)
 				require.NotNil(t, waf)
 				t.Cleanup(func() { waf.Close() })
 			})
 		}
+	})
+
+	// libddwaf 2.2.0 and later: a rejected config that is a map is not registered
+	// anymore, and it replaces (so removes) the config previously known by its path.
+	// A rejected config that is not a map is rejected before the path lookup, so
+	// the previous config of that path stays in place.
+	t.Run("config rejection", func(t *testing.T) {
+		malformedVersion := func() map[string]any {
+			// The version is not valid, so the whole config is rejected.
+			return map[string]any{"version": "not-a-version", "rules": []map[string]any{maps.Clone(validRule)}}
+		}
+		runData := RunAddressData{Data: map[string]any{"server.request.headers.no_cookies": []string{"Arachni/v1"}}}
+
+		// baseRule matches another address and has another rule ID, so that a handle
+		// can be built from /base alone, and so that events can only come from /target.
+		baseRule := map[string]any{
+			"id":   "base-rule",
+			"name": "Base",
+			"tags": map[string]any{
+				"type":     "security_scanner",
+				"category": "attack_attempt",
+			},
+			"conditions": []map[string]any{
+				{
+					"operator": "match_regex",
+					"parameters": map[string]any{
+						"inputs": []map[string]any{
+							{"address": "base.input"},
+						},
+						"regex": "^never-matches$",
+					},
+				},
+			},
+		}
+
+		// newBuilderWithTarget returns a builder with /base and /target, and checks that /target matches.
+		newBuilderWithTarget := func(t *testing.T) *Builder {
+			t.Helper()
+			builder, err := NewBuilder()
+			require.NoError(t, err)
+			t.Cleanup(func() { builder.Close() })
+
+			_, err = builder.AddOrUpdateConfig("/base", map[string]any{"version": "2.1", "rules": []map[string]any{baseRule}})
+			require.NoError(t, err)
+			_, err = builder.AddOrUpdateConfig("/target", map[string]any{"version": "2.1", "rules": []map[string]any{maps.Clone(validRule)}})
+			require.NoError(t, err)
+			paths, err := builder.ConfigPaths("")
+			require.NoError(t, err)
+			require.ElementsMatch(t, []string{"/base", "/target"}, paths)
+			require.NotEmpty(t, runBuilder(t, builder, runData).Events, "the /target rule must match before the update")
+			return builder
+		}
+
+		t.Run("new path, map", func(t *testing.T) {
+			builder, err := NewBuilder()
+			require.NoError(t, err)
+			t.Cleanup(func() { builder.Close() })
+			_, err = builder.AddOrUpdateConfig("/", map[string]any{"version": "2.1", "rules": []map[string]any{maps.Clone(validRule)}})
+			require.NoError(t, err)
+
+			_, err = builder.AddOrUpdateConfig("/malformed", malformedVersion())
+			require.ErrorIs(t, err, errUpdateFailed)
+			requireConfigPaths(t, builder, "", []string{"/"})
+		})
+
+		t.Run("existing path, map: removed with its rules", func(t *testing.T) {
+			builder := newBuilderWithTarget(t)
+
+			_, err := builder.AddOrUpdateConfig("/target", malformedVersion())
+			require.ErrorIs(t, err, errUpdateFailed)
+
+			paths, err := builder.ConfigPaths("")
+			require.NoError(t, err)
+			require.ElementsMatch(t, []string{"/base"}, paths)
+
+			// A new handle (and a new context from it) does not have the old rules of /target anymore.
+			require.Empty(t, runBuilder(t, builder, runData).Events)
+		})
+
+		t.Run("existing path, not a map: kept with its rules", func(t *testing.T) {
+			builder := newBuilderWithTarget(t)
+
+			_, err := builder.AddOrUpdateConfig("/target", []any{"not", "a", "map"})
+			require.ErrorIs(t, err, errUpdateFailed)
+
+			paths, err := builder.ConfigPaths("")
+			require.NoError(t, err)
+			require.ElementsMatch(t, []string{"/base", "/target"}, paths)
+
+			// A new handle (and a new context from it) still has the old rules of /target.
+			require.NotEmpty(t, runBuilder(t, builder, runData).Events)
+		})
 	})
 
 	t.Run("updating rules", func(t *testing.T) {

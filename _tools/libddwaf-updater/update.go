@@ -299,7 +299,8 @@ var targets = []target{
 	// {os: "windows", arch: "amd64", base: "ddwaf", ext: "dll", assetLabel: "windows-x64"},
 	// {os: "windows", arch: "386", base: "ddwaf", ext: "dll", assetLabel: "windows-win32"},
 
-	//// These are currently not supported by ebitengine/purego:
+	//// These are currently not supported by ebitengine/purego.
+	//// libddwaf 2.1.0 and later do not publish these Linux targets anymore:
 	// {os: "linux", arch: "armv7", ext: "so", assetLabel: "armv7-linux-musl"},
 	// {os: "linux", arch: "i386", ext: "so", assetLabel: "i386-linux-musl"},
 }

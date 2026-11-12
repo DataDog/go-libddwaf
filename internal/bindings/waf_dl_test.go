@@ -51,6 +51,18 @@ func testVerifyELFHeader(t *testing.T) {
 	}
 
 	require.Equal(t, elf.ET_DYN, elfFile.Type)
+
+	// libddwaf 2.2.1 links the libc, libdl and libpthread, and nothing else. In
+	// particular it has no libm dependency: a process that did not load libm
+	// could not resolve the symbols of such a library when loading it.
+	//
+	// This test checks the architecture, the file type and the declared NEEDED
+	// dependencies only. It does not prove the identity of the library, and it
+	// does not prove that no math symbol is left unresolved. The comparison with
+	// the release bytes and the load and version tests cover those.
+	libs, err := elfFile.ImportedLibraries()
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"libpthread.so.0", "libdl.so.2", "libc.so.6"}, libs)
 }
 
 // testVerifyMachOHeader is here to ease the debug cases that will likely need
