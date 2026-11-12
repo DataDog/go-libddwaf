@@ -89,10 +89,9 @@ func (waf *WAFLib) Close() error {
 
 // Version returned string is a static string so we do not need to free it
 func (waf *WAFLib) Version() string {
-	// The uintptr returned by syscall points to C-managed static memory the Go
-	// GC does not track, so converting it back to unsafe.Pointer is safe despite
-	// violating vet's unsafeptr rule (standard purego pattern).
-	return unsafeutil.Gostring((*byte)(unsafe.Pointer(waf.syscall(waf.getVersion)))) //nolint:govet
+	// libddwaf owns this C string (ddwaf.h: should not be freed). Gostring
+	// copies it before this function returns.
+	return unsafeutil.Gostring((*byte)(cPointer(waf.syscall(waf.getVersion))))
 }
 
 // loadDefaultAllocator returns the default allocator used by the library.
@@ -219,10 +218,10 @@ func (waf *WAFLib) knownX(handle WAFHandle, symbol uintptr) []string {
 		return nil
 	}
 
-	// These C strings are static strings so we do not need to free them.
-	// arrayVoidC points to C-managed memory the Go GC does not track, so the
-	// uintptr round-trip is safe despite vet's unsafeptr rule (purego pattern).
-	arrayPtr := unsafe.Pointer(arrayVoidC) //nolint:govet
+	// libddwaf owns the array and its strings. Do not free them. They stay
+	// valid until ddwaf_destroy(handle) is called. Gostring copies each string
+	// before this function returns.
+	arrayPtr := cPointer(arrayVoidC)
 	addresses := make([]string, int(nbAddresses))
 	for i := range int(nbAddresses) {
 		charPtr := *(**byte)(unsafe.Add(arrayPtr, uintptr(i)*unsafe.Sizeof(uintptr(0))))
@@ -351,4 +350,26 @@ func (waf *WAFLib) ObjectFromJSON(json []byte, alloc WAFAllocator) (WAFObject, b
 func (waf *WAFLib) syscall(fn uintptr, args ...uintptr) uintptr {
 	ret, _, _ := purego.SyscallN(fn, args...)
 	return ret
+}
+
+// cPointer returns addr as an unsafe.Pointer. It does not copy the memory at
+// addr.
+//
+// This is a `go vet` (unsafeptr) workaround for C addresses, not a repair
+// under a documented unsafe.Pointer rule. A direct unsafe.Pointer(addr) is the
+// same operation for a C address, but vet reports it. The expression below
+// reads the bits of addr as a pointer, so vet accepts it (see
+// https://github.com/golang/go/issues/58625, "Alternatives"). purego uses the
+// same form for the pointer results of RegisterFunc.
+//
+// Only use cPointer for an address that libddwaf returned (memory that C
+// allocated and owns). Never use it for a Go address: the Go GC neither moves
+// nor tracks C memory, but it does move and track Go memory, and a uintptr
+// does not keep its target alive. go vet cannot check this precondition.
+//
+// When Go accepts uintptr-to-Pointer conversions for addresses that are
+// allocated outside of Go (golang/go#58625), replace the calls with
+// unsafe.Pointer(addr) and remove this function.
+func cPointer(addr uintptr) unsafe.Pointer {
+	return *(*unsafe.Pointer)(unsafe.Pointer(&addr))
 }
