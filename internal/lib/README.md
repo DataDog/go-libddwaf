@@ -9,7 +9,7 @@ From the root of the repository, run:
 
 ```console
 ./_tools/libddwaf-updater/update.sh
-Will upgrade from v2.0.1 to v2.2.0
+Will upgrade from v2.2.0 to v2.2.1
 ... downloaded <repo-root>/internal/lib/libddwaf-darwin-arm64.dylib.gz
 ... downloaded <repo-root>/internal/lib/libddwaf-darwin-amd64.dylib.gz
 ... downloaded <repo-root>/internal/log/ddwaf.h
