@@ -17,6 +17,7 @@ type UnsupportedOSArchError struct {
 	Arch string
 }
 
+// Error returns a message that names the unsupported OS and architecture.
 func (e UnsupportedOSArchError) Error() string {
 	return fmt.Sprintf("unsupported OS/Arch: %s/%s", e.OS, e.Arch)
 }
@@ -25,6 +26,8 @@ func (e UnsupportedOSArchError) Error() string {
 // case of trying to execute this package when the Go version is not supported.
 type UnsupportedGoVersionError struct{}
 
+// Error returns a message that names the Go version in use and tells the user
+// to update go-libddwaf.
 func (e UnsupportedGoVersionError) Error() string {
 	return fmt.Sprintf(
 		"unsupported Go version: %s (try running `go get github.com/DataDog/go-libddwaf@latest`)",
@@ -32,8 +35,13 @@ func (e UnsupportedGoVersionError) Error() string {
 	)
 }
 
+// CgoDisabledError is a wrapper error type helping to handle the error case of
+// trying to execute this package when cgo is disabled and the `appsec` go build
+// tag is not set.
 type CgoDisabledError struct{}
 
+// Error returns a message that explains that go-libddwaf is disabled without
+// cgo, and lists the shared libraries that are needed at run time on Linux.
 func (e CgoDisabledError) Error() string {
 	return "go-libddwaf is disabled when cgo is disabled unless you compile with the go build tag `appsec`. It will require libdl.so.2. libpthread.so.0 and libc.so.6 shared libraries at run time on linux"
 }
@@ -43,6 +51,8 @@ func (e CgoDisabledError) Error() string {
 // the `datadog.no_waf` go build tag.
 type ManuallyDisabledError struct{}
 
+// Error returns a message that explains that the `datadog.no_waf` go build tag
+// disabled the WAF.
 func (e ManuallyDisabledError) Error() string {
 	return "the WAF has been manually disabled using the `datadog.no_waf` go build tag"
 }

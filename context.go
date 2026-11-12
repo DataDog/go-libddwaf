@@ -27,6 +27,11 @@ const (
 	DecodeTimeKey timer.Key = "decode"
 )
 
+// subcontextExtraTimerKeys is the number of timer keys ([EncodeTimeKey],
+// [DurationTimeKey] and [DecodeTimeKey]) that a subcontext timer may add to the
+// timer keys of its parent.
+const subcontextExtraTimerKeys = 3
+
 // Context is a WAF execution context. It allows running the WAF incrementally when calling it
 // multiple times to run its rules every time new addresses become available. Each request must have
 // its own [Context]. New [Context] instances can be created by calling
@@ -126,8 +131,8 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	}
 
 	parentKeys := context.Timer.ComponentKeys()
-	seen := make(map[timer.Key]struct{}, len(parentKeys)+3)
-	components := make([]timer.Key, 0, len(parentKeys)+3)
+	seen := make(map[timer.Key]struct{}, len(parentKeys)+subcontextExtraTimerKeys)
+	components := make([]timer.Key, 0, len(parentKeys)+subcontextExtraTimerKeys)
 	for _, k := range parentKeys {
 		seen[k] = struct{}{}
 		components = append(components, k)

@@ -83,6 +83,7 @@ func newWAFLib() (dl *WAFLib, err error) {
 	return
 }
 
+// Close unloads the libddwaf dynamic library.
 func (waf *WAFLib) Close() error {
 	return purego.Dlclose(waf.handle)
 }
@@ -198,10 +199,12 @@ func (waf *WAFLib) Destroy(handle WAFHandle) {
 	waf.syscall(waf.destroy, uintptr(handle))
 }
 
+// KnownAddresses returns the addresses that the rules of handle can use.
 func (waf *WAFLib) KnownAddresses(handle WAFHandle) []string {
 	return waf.knownX(handle, waf.knownAddresses)
 }
 
+// KnownActions returns the actions that the rules of handle can produce.
 func (waf *WAFLib) KnownActions(handle WAFHandle) []string {
 	return waf.knownX(handle, waf.knownActions)
 }
@@ -261,6 +264,8 @@ func (waf *WAFLib) ContextEval(context WAFContext, data *WAFObject, alloc WAFAll
 	))
 }
 
+// ContextDestroy calls ddwaf_context_destroy to free a WAF context and the
+// resources that it holds. The context must not be used after this call.
 func (waf *WAFLib) ContextDestroy(context WAFContext) {
 	waf.syscall(waf.contextDestroy, uintptr(context))
 }
@@ -310,11 +315,15 @@ func (waf *WAFLib) ObjectDestroy(obj *WAFObject, alloc WAFAllocator) {
 	waf.syscall(waf.objectDestroy, uintptr(unsafe.Pointer(obj)), uintptr(alloc))
 }
 
+// Handle returns the handle of the loaded libddwaf dynamic library. It is not a
+// [WAFHandle].
 func (waf *WAFLib) Handle() uintptr {
 	return waf.handle
 }
 
-// ObjectFromJSON parses JSON into a WAFObject.
+// ObjectFromJSON parses the JSON document in json into a WAFObject, using alloc
+// to allocate the object data. The boolean result is false when libddwaf could
+// not parse the document.
 func (waf *WAFLib) ObjectFromJSON(json []byte, alloc WAFAllocator) (WAFObject, bool) {
 	var (
 		obj    WAFObject
