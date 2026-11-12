@@ -36,76 +36,46 @@ type wafSymbols struct {
 	setLogCb                 uintptr
 }
 
-// newWafSymbols resolves the symbols of [wafSymbols] from the provided
-// [purego.Dlopen] handle.
-func newWafSymbols(handle uintptr) (syms wafSymbols, err error) {
-	resolve := func(name string) (uintptr, error) {
-		sym, err := purego.Dlsym(handle, name)
-		if err != nil {
-			return 0, fmt.Errorf("failed to resolve libddwaf symbol %q: %w", name, err)
-		}
-		return sym, nil
-	}
+// wafSymbol links a libddwaf symbol name to the [wafSymbols] field that stores
+// its address.
+type wafSymbol struct {
+	name string
+	addr *uintptr
+}
 
-	if syms.builderAddOrUpdateConfig, err = resolve("ddwaf_builder_add_or_update_config"); err != nil {
-		return syms, err
+// table returns the symbols of syms, in the order in which they are resolved.
+func (syms *wafSymbols) table() []wafSymbol {
+	return []wafSymbol{
+		{"ddwaf_builder_add_or_update_config", &syms.builderAddOrUpdateConfig},
+		{"ddwaf_builder_build_instance", &syms.builderBuildInstance},
+		{"ddwaf_builder_destroy", &syms.builderDestroy},
+		{"ddwaf_builder_get_config_paths", &syms.builderGetConfigPaths},
+		{"ddwaf_builder_init", &syms.builderInit},
+		{"ddwaf_builder_remove_config", &syms.builderRemoveConfig},
+		{"ddwaf_context_destroy", &syms.contextDestroy},
+		{"ddwaf_context_init", &syms.contextInit},
+		{"ddwaf_context_eval", &syms.contextEval},
+		{"ddwaf_subcontext_init", &syms.subcontextInit},
+		{"ddwaf_subcontext_eval", &syms.subcontextEval},
+		{"ddwaf_subcontext_destroy", &syms.subcontextDestroy},
+		{"ddwaf_destroy", &syms.destroy},
+		{"ddwaf_get_version", &syms.getVersion},
+		{"ddwaf_known_actions", &syms.knownActions},
+		{"ddwaf_known_addresses", &syms.knownAddresses},
+		{"ddwaf_object_destroy", &syms.objectDestroy},
+		{"ddwaf_object_from_json", &syms.objectFromJSON},
+		{"ddwaf_get_default_allocator", &syms.getDefaultAllocator},
+		{"ddwaf_set_log_cb", &syms.setLogCb},
 	}
-	if syms.builderBuildInstance, err = resolve("ddwaf_builder_build_instance"); err != nil {
-		return syms, err
-	}
-	if syms.builderDestroy, err = resolve("ddwaf_builder_destroy"); err != nil {
-		return syms, err
-	}
-	if syms.builderGetConfigPaths, err = resolve("ddwaf_builder_get_config_paths"); err != nil {
-		return syms, err
-	}
-	if syms.builderInit, err = resolve("ddwaf_builder_init"); err != nil {
-		return syms, err
-	}
-	if syms.builderRemoveConfig, err = resolve("ddwaf_builder_remove_config"); err != nil {
-		return syms, err
-	}
-	if syms.contextDestroy, err = resolve("ddwaf_context_destroy"); err != nil {
-		return syms, err
-	}
-	if syms.contextInit, err = resolve("ddwaf_context_init"); err != nil {
-		return syms, err
-	}
-	if syms.contextEval, err = resolve("ddwaf_context_eval"); err != nil {
-		return syms, err
-	}
-	if syms.subcontextInit, err = resolve("ddwaf_subcontext_init"); err != nil {
-		return syms, err
-	}
-	if syms.subcontextEval, err = resolve("ddwaf_subcontext_eval"); err != nil {
-		return syms, err
-	}
-	if syms.subcontextDestroy, err = resolve("ddwaf_subcontext_destroy"); err != nil {
-		return syms, err
-	}
-	if syms.destroy, err = resolve("ddwaf_destroy"); err != nil {
-		return syms, err
-	}
-	if syms.getVersion, err = resolve("ddwaf_get_version"); err != nil {
-		return syms, err
-	}
-	if syms.knownActions, err = resolve("ddwaf_known_actions"); err != nil {
-		return syms, err
-	}
-	if syms.knownAddresses, err = resolve("ddwaf_known_addresses"); err != nil {
-		return syms, err
-	}
-	if syms.objectDestroy, err = resolve("ddwaf_object_destroy"); err != nil {
-		return syms, err
-	}
-	if syms.objectFromJSON, err = resolve("ddwaf_object_from_json"); err != nil {
-		return syms, err
-	}
-	if syms.getDefaultAllocator, err = resolve("ddwaf_get_default_allocator"); err != nil {
-		return syms, err
-	}
-	if syms.setLogCb, err = resolve("ddwaf_set_log_cb"); err != nil {
-		return syms, err
+}
+
+// newWafSymbols resolves the symbols of [wafSymbols] from the provided
+// [purego.Dlopen] handle. It stops at the first symbol that it cannot resolve.
+func newWafSymbols(handle uintptr) (syms wafSymbols, err error) {
+	for _, sym := range syms.table() {
+		if *sym.addr, err = purego.Dlsym(handle, sym.name); err != nil {
+			return syms, fmt.Errorf("failed to resolve libddwaf symbol %q: %w", sym.name, err)
+		}
 	}
 	return syms, nil
 }
