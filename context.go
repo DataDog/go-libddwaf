@@ -125,11 +125,36 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 		return nil, waferrors.ErrContextClosed
 	}
 
-	cSubcontext := bindings.Lib.SubcontextInit(context.cContext)
-	if cSubcontext == 0 {
-		return nil, errors.New("failed to create subcontext: ddwaf_subcontext_init returned null")
+	cSubcontext, subTimer, err := context.initSubcontextLocked()
+	if err != nil {
+		return nil, err
 	}
 
+	success = true
+	return context.addSubcontextLocked(cSubcontext, subTimer), nil
+}
+
+// initSubcontextLocked creates the ddwaf_subcontext and the timer of a new
+// [Subcontext]. The caller MUST hold context.mu. If it returns an error, no
+// ddwaf_subcontext is left alive.
+func (context *Context) initSubcontextLocked() (bindings.WAFSubcontext, timer.NodeTimer, error) {
+	cSubcontext := bindings.Lib.SubcontextInit(context.cContext)
+	if cSubcontext == 0 {
+		return 0, nil, errors.New("failed to create subcontext: ddwaf_subcontext_init returned null")
+	}
+
+	subTimer, err := context.newSubcontextTimer()
+	if err != nil {
+		bindings.Lib.SubcontextDestroy(cSubcontext)
+		return 0, nil, fmt.Errorf("failed to create subcontext timer: %w", err)
+	}
+	return cSubcontext, subTimer, nil
+}
+
+// newSubcontextTimer creates the timer of a new [Subcontext]. It has the timer
+// keys of the Context timer, plus the keys that Run needs, and the remaining
+// budget of the Context timer.
+func (context *Context) newSubcontextTimer() (timer.NodeTimer, error) {
 	parentKeys := context.Timer.ComponentKeys()
 	seen := make(map[timer.Key]struct{}, len(parentKeys)+subcontextExtraTimerKeys)
 	components := make([]timer.Key, 0, len(parentKeys)+subcontextExtraTimerKeys)
@@ -143,16 +168,15 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 			seen[key] = struct{}{}
 		}
 	}
-	subTimer, err := timer.NewTreeTimer(
+	return timer.NewTreeTimer(
 		timer.WithComponents(components...),
 		timer.WithBudget(context.Timer.SumRemaining()),
 	)
-	if err != nil {
-		bindings.Lib.SubcontextDestroy(cSubcontext)
-		return nil, fmt.Errorf("failed to create subcontext timer: %w", err)
-	}
+}
 
-	success = true
+// addSubcontextLocked creates the [Subcontext] and registers it in
+// context.subcontexts. The caller MUST hold context.mu.
+func (context *Context) addSubcontextLocked(cSubcontext bindings.WAFSubcontext, subTimer timer.NodeTimer) *Subcontext {
 	sub := &Subcontext{
 		Timer:  subTimer,
 		parent: context,
@@ -162,7 +186,7 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 		context.subcontexts = make(map[*Subcontext]struct{})
 	}
 	context.subcontexts[sub] = struct{}{}
-	return sub, nil
+	return sub
 }
 
 // Run encodes the given [RunAddressData] values and runs them against the WAF rules.
