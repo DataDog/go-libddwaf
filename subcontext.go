@@ -53,21 +53,10 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	}
 
 	if addressData.isEmpty() {
-		if s.closedHint.Load() || s.parent.closedHint.Load() {
-			return Result{}, waferrors.ErrContextClosed
-		}
-		return Result{}, nil
+		return Result{}, s.emptyRunError()
 	}
 
-	if s.closedHint.Load() {
-		return Result{}, waferrors.ErrContextClosed
-	}
-
-	if s.Timer.SumExhausted() {
-		return Result{}, waferrors.ErrTimeout
-	}
-
-	if err := ctx.Err(); err != nil {
+	if err := s.checkRunnable(ctx); err != nil {
 		return Result{}, err
 	}
 
@@ -80,6 +69,39 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	runTimer.Start()
 	defer runTimer.Stop()
 
+	return s.encodeAndEval(ctx, addressData.Data, runTimer)
+}
+
+// emptyRunError returns the error of a Run call without data:
+// [waferrors.ErrContextClosed] if the Subcontext or its parent is closed, nil
+// otherwise.
+func (s *Subcontext) emptyRunError() error {
+	if s.closedHint.Load() || s.parent.closedHint.Load() {
+		return waferrors.ErrContextClosed
+	}
+	return nil
+}
+
+// checkRunnable runs the cheap checks that reject a Run call before any work
+// is done: the Subcontext is closed, the Subcontext timer is exhausted, or ctx
+// is done. The order of the checks is part of the behavior.
+func (s *Subcontext) checkRunnable(ctx context.Context) error {
+	if s.closedHint.Load() {
+		return waferrors.ErrContextClosed
+	}
+
+	if s.Timer.SumExhausted() {
+		return waferrors.ErrTimeout
+	}
+
+	return ctx.Err()
+}
+
+// encodeAndEval encodes data, takes the Subcontext lock and evaluates the
+// encoded data. It owns the input pinner and the Subcontext lock: both are
+// released by the defers below when it returns, in this order:
+// parent.evalsInFlight.Done, s.mu.Unlock, pinner hand-off or unpin.
+func (s *Subcontext) encodeAndEval(ctx context.Context, data map[string]any, runTimer timer.NodeTimer) (Result, error) {
 	pinner := new(runtime.Pinner)
 	// wafOwnsData becomes true once the encoded data is handed to the WAF,
 	// which retains references to it until the subcontext is destroyed. Until
@@ -87,36 +109,14 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	// seen by the WAF and can be released immediately.
 	wafOwnsData := false
 
-	defer func() {
-		if !wafOwnsData {
-			pinner.Unpin()
-			return
-		}
-		s.pinnersMu.Lock()
-		defer s.pinnersMu.Unlock()
-		// The ddwaf_subcontext keeps reading this data (including from other
-		// in-flight evaluations) until it is destroyed, so the pinner must be
-		// handed to close even if closing has already started (on this
-		// subcontext or through the parent's cascade). It is only safe to
-		// release it here once close has destroyed the subcontext.
-		if s.pinnersReleased {
-			pinner.Unpin()
-			return
-		}
-		s.pinners = append(s.pinners, pinner)
-	}()
+	// Keep the closure. With "defer s.keepOrUnpin(pinner, wafOwnsData)",
+	// wafOwnsData would be read now (false) and the pinner would unpin data
+	// that the WAF still reads.
+	defer func() { s.keepOrUnpin(pinner, wafOwnsData) }()
 
-	wafEncodeTimer := runTimer.MustLeaf(EncodeTimeKey)
-	wafEncodeTimer.Start()
-	data, truncations, err := encodeAddressData(pinner, addressData.Data, wafEncodeTimer)
-	wafEncodeTimer.Stop()
+	encoded, err := s.encodeRunData(pinner, data, runTimer)
 	if err != nil {
 		return Result{}, err
-	}
-	if !truncations.IsEmpty() {
-		s.truncationsMu.Lock()
-		s.truncations.Merge(truncations)
-		s.truncationsMu.Unlock()
 	}
 
 	if runTimer.SumExhausted() {
@@ -126,33 +126,93 @@ func (s *Subcontext) Run(ctx context.Context, addressData RunAddressData) (res R
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if err := s.startEvalLocked(ctx); err != nil {
+		return Result{}, err
+	}
+	defer s.parent.evalsInFlight.Done()
+
+	return s.evalLocked(ctx, encoded, runTimer, &wafOwnsData)
+}
+
+// encodeRunData encodes data with pinner and merges the truncations of the
+// encoding into the Subcontext. It does not need the Subcontext lock.
+func (s *Subcontext) encodeRunData(pinner *runtime.Pinner, data map[string]any, runTimer timer.NodeTimer) (*WAFObject, error) {
+	wafEncodeTimer := runTimer.MustLeaf(EncodeTimeKey)
+	wafEncodeTimer.Start()
+	encoded, truncations, err := encodeAddressData(pinner, data, wafEncodeTimer)
+	wafEncodeTimer.Stop()
+	if err != nil {
+		return nil, err
+	}
+
+	if !truncations.IsEmpty() {
+		s.truncationsMu.Lock()
+		s.truncations.Merge(truncations)
+		s.truncationsMu.Unlock()
+	}
+	return encoded, nil
+}
+
+// startEvalLocked checks that the evaluation can start and registers it in the
+// parent's evalsInFlight. The caller MUST hold s.mu. The lock order is s.mu
+// first, then parent.mu: the parent lock is taken and released here, so that
+// [Context.Close] sees the evaluation. If this returns nil, the caller MUST call
+// parent.evalsInFlight.Done when the evaluation ends.
+func (s *Subcontext) startEvalLocked(ctx context.Context) error {
 	if s.closedHint.Load() {
-		return Result{}, waferrors.ErrContextClosed
+		return waferrors.ErrContextClosed
 	}
 
 	if err := ctx.Err(); err != nil {
-		return Result{}, err
+		return err
 	}
 
 	s.parent.mu.Lock()
 	if s.parent.closedHint.Load() {
 		s.parent.mu.Unlock()
-		return Result{}, waferrors.ErrContextClosed
+		return waferrors.ErrContextClosed
 	}
 	s.parent.evalsInFlight.Add(1)
 	s.parent.mu.Unlock()
-	defer s.parent.evalsInFlight.Done()
+	return nil
+}
 
+// evalLocked evaluates the encoded data and decodes the result. The caller MUST
+// hold s.mu. The result object is destroyed and unpinned when this returns, so
+// before the caller releases s.mu.
+func (s *Subcontext) evalLocked(ctx context.Context, data *WAFObject, runTimer timer.NodeTimer, wafOwnsData *bool) (Result, error) {
 	var resultPinner runtime.Pinner
 	defer resultPinner.Unpin()
 	var result WAFObject
 	resultPinner.Pin(&result)
 	defer bindings.Lib.ObjectDestroy(&result, bindings.Lib.DefaultAllocator())
 
-	wafOwnsData = true
+	*wafOwnsData = true
 	ret := bindings.Lib.SubcontextEval(s.cSub, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
 
 	return decodeWafResult(ctx, ret, &result, runTimer)
+}
+
+// keepOrUnpin releases the input pinner of a Run call. If the WAF received the
+// data (wafOwnsData), the pinner is kept until the Subcontext is closed.
+// Otherwise the data was never seen by the WAF and is unpinned now.
+func (s *Subcontext) keepOrUnpin(pinner *runtime.Pinner, wafOwnsData bool) {
+	if !wafOwnsData {
+		pinner.Unpin()
+		return
+	}
+	s.pinnersMu.Lock()
+	defer s.pinnersMu.Unlock()
+	// The ddwaf_subcontext keeps reading this data (including from other
+	// in-flight evaluations) until it is destroyed, so the pinner must be
+	// handed to close even if closing has already started (on this
+	// subcontext or through the parent's cascade). It is only safe to
+	// release it here once close has destroyed the subcontext.
+	if s.pinnersReleased {
+		pinner.Unpin()
+		return
+	}
+	s.pinners = append(s.pinners, pinner)
 }
 
 // Close disposes of the underlying subcontext and folds its per-scope timer
