@@ -178,21 +178,10 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	}
 
 	if addressData.isEmpty() {
-		if context.closedHint.Load() {
-			return Result{}, waferrors.ErrContextClosed
-		}
-		return Result{}, nil
+		return Result{}, context.emptyRunError()
 	}
 
-	if context.closedHint.Load() {
-		return Result{}, waferrors.ErrContextClosed
-	}
-
-	if context.Timer.SumExhausted() {
-		return Result{}, waferrors.ErrTimeout
-	}
-
-	if err := ctx.Err(); err != nil {
+	if err := context.checkRunnable(ctx); err != nil {
 		return Result{}, err
 	}
 
@@ -205,6 +194,38 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	runTimer.Start()
 	defer runTimer.Stop()
 
+	return context.encodeAndEval(ctx, addressData.Data, runTimer)
+}
+
+// emptyRunError returns the error of a Run call without data: [waferrors.ErrContextClosed]
+// if the Context is closed, nil otherwise.
+func (context *Context) emptyRunError() error {
+	if context.closedHint.Load() {
+		return waferrors.ErrContextClosed
+	}
+	return nil
+}
+
+// checkRunnable runs the cheap checks that reject a Run call before any work
+// is done: the Context is closed, the Context timer is exhausted, or ctx is
+// done. The order of the checks is part of the behavior.
+func (context *Context) checkRunnable(ctx context.Context) error {
+	if context.closedHint.Load() {
+		return waferrors.ErrContextClosed
+	}
+
+	if context.Timer.SumExhausted() {
+		return waferrors.ErrTimeout
+	}
+
+	return ctx.Err()
+}
+
+// encodeAndEval encodes data, takes the Context lock and evaluates the encoded
+// data. It owns the input pinner and the Context lock: both are released by
+// the defers below when it returns, in this order: evalsInFlight.Done, mu.Unlock,
+// pinner hand-off or unpin.
+func (context *Context) encodeAndEval(ctx context.Context, data map[string]any, runTimer timer.NodeTimer) (Result, error) {
 	pinner := new(runtime.Pinner)
 	// wafOwnsData becomes true once the encoded data is handed to the WAF,
 	// which retains references to it until the context is destroyed. Until
@@ -212,35 +233,14 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	// seen by the WAF and can be released immediately.
 	wafOwnsData := false
 
-	defer func() {
-		if !wafOwnsData {
-			pinner.Unpin()
-			return
-		}
-		context.pinnersMu.Lock()
-		defer context.pinnersMu.Unlock()
-		// The ddwaf_context keeps reading this data (including from other
-		// in-flight evaluations) until it is destroyed, so the pinner must be
-		// handed to Close even if Close has already started. It is only safe to
-		// release it here once Close has destroyed the context.
-		if context.pinnersReleased {
-			pinner.Unpin()
-			return
-		}
-		context.pinners = append(context.pinners, pinner)
-	}()
+	// Keep the closure. With "defer context.keepOrUnpin(pinner, wafOwnsData)",
+	// wafOwnsData would be read now (false) and the pinner would unpin data
+	// that the WAF still reads.
+	defer func() { context.keepOrUnpin(pinner, wafOwnsData) }()
 
-	wafEncodeTimer := runTimer.MustLeaf(EncodeTimeKey)
-	wafEncodeTimer.Start()
-	data, truncations, err := encodeAddressData(pinner, addressData.Data, wafEncodeTimer)
-	wafEncodeTimer.Stop()
+	encoded, err := context.encodeRunData(pinner, data, runTimer)
 	if err != nil {
 		return Result{}, err
-	}
-	if !truncations.IsEmpty() {
-		context.truncationsMu.Lock()
-		context.truncations.Merge(truncations)
-		context.truncationsMu.Unlock()
 	}
 
 	if runTimer.SumExhausted() {
@@ -250,17 +250,54 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	context.mu.Lock()
 	defer context.mu.Unlock()
 
+	if err := context.startEvalLocked(ctx); err != nil {
+		return Result{}, err
+	}
+	defer context.evalsInFlight.Done()
+
+	return context.evalLocked(ctx, encoded, runTimer, &wafOwnsData)
+}
+
+// encodeRunData encodes data with pinner and merges the truncations of the
+// encoding into the Context. It does not need the Context lock.
+func (context *Context) encodeRunData(pinner *runtime.Pinner, data map[string]any, runTimer timer.NodeTimer) (*WAFObject, error) {
+	wafEncodeTimer := runTimer.MustLeaf(EncodeTimeKey)
+	wafEncodeTimer.Start()
+	encoded, truncations, err := encodeAddressData(pinner, data, wafEncodeTimer)
+	wafEncodeTimer.Stop()
+	if err != nil {
+		return nil, err
+	}
+
+	if !truncations.IsEmpty() {
+		context.truncationsMu.Lock()
+		context.truncations.Merge(truncations)
+		context.truncationsMu.Unlock()
+	}
+	return encoded, nil
+}
+
+// startEvalLocked checks that the evaluation can start and registers it in
+// evalsInFlight. The caller MUST hold context.mu, so that [Context.Close] sees
+// the evaluation, and MUST call evalsInFlight.Done when the evaluation ends if
+// this returns nil.
+func (context *Context) startEvalLocked(ctx context.Context) error {
 	if context.closedHint.Load() {
-		return Result{}, waferrors.ErrContextClosed
+		return waferrors.ErrContextClosed
 	}
 
 	if err := ctx.Err(); err != nil {
-		return Result{}, err
+		return err
 	}
 
 	context.evalsInFlight.Add(1)
-	defer context.evalsInFlight.Done()
+	return nil
+}
 
+// evalLocked evaluates the encoded data and decodes the result. The caller MUST
+// hold context.mu. The result object is destroyed and unpinned when this
+// returns, so before the caller releases context.mu.
+func (context *Context) evalLocked(ctx context.Context, data *WAFObject, runTimer timer.NodeTimer, wafOwnsData *bool) (Result, error) {
 	var resultPinner runtime.Pinner
 	defer resultPinner.Unpin()
 	var result WAFObject
@@ -268,10 +305,31 @@ func (context *Context) Run(ctx context.Context, addressData RunAddressData) (re
 	defer bindings.Lib.ObjectDestroy(&result, bindings.Lib.DefaultAllocator())
 
 	cContext := context.cContext
-	wafOwnsData = true
+	*wafOwnsData = true
 	ret := bindings.Lib.ContextEval(cContext, data, 0, &result, effectiveTimeoutMicros(ctx, runTimer))
 
 	return decodeWafResult(ctx, ret, &result, runTimer)
+}
+
+// keepOrUnpin releases the input pinner of a Run call. If the WAF received the
+// data (wafOwnsData), the pinner is kept until [Context.Close]. Otherwise the
+// data was never seen by the WAF and is unpinned now.
+func (context *Context) keepOrUnpin(pinner *runtime.Pinner, wafOwnsData bool) {
+	if !wafOwnsData {
+		pinner.Unpin()
+		return
+	}
+	context.pinnersMu.Lock()
+	defer context.pinnersMu.Unlock()
+	// The ddwaf_context keeps reading this data (including from other
+	// in-flight evaluations) until it is destroyed, so the pinner must be
+	// handed to Close even if Close has already started. It is only safe to
+	// release it here once Close has destroyed the context.
+	if context.pinnersReleased {
+		pinner.Unpin()
+		return
+	}
+	context.pinners = append(context.pinners, pinner)
 }
 
 // Close disposes of the context: it destroys the underlying ddwaf_context,
