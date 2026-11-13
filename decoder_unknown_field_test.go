@@ -18,10 +18,10 @@ import (
 // per-feature diagnostics map is ignored for forward compatibility, the same
 // way decodeDiagnostics ignores unknown top-level keys.
 //
-// Currently decodeFeature returns an error on any unknown field, and that error
-// propagates through decodeDiagnostics and Builder.AddOrUpdateConfig. As a
-// result, a future libddwaf that adds a new per-feature diagnostic field would
-// make an otherwise-valid ruleset fail to load.
+// If decodeFeature returned an error on an unknown field, that error would
+// propagate through decodeDiagnostics and Builder.AddOrUpdateConfig, and a
+// newer libddwaf that adds a per-feature diagnostic field would make a valid
+// ruleset fail to load.
 func TestDecodeFeatureIgnoresUnknownField(t *testing.T) {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
