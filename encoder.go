@@ -325,30 +325,12 @@ func (encoder *encoder) tryEncodeScalarFastPath(data any, obj *WAFObject) (bool,
 		obj.SetBool(v)
 	case string:
 		encoder.enc.WriteString(obj, v)
-	case int:
-		obj.SetInt(int64(v))
-	case int8:
-		obj.SetInt(int64(v))
-	case int16:
-		obj.SetInt(int64(v))
-	case int32:
-		obj.SetInt(int64(v))
-	case int64:
-		obj.SetInt(v)
-	case uint:
-		obj.SetUint(uint64(v))
-	case uint8:
-		obj.SetUint(uint64(v))
-	case uint16:
-		obj.SetUint(uint64(v))
-	case uint32:
-		obj.SetUint(uint64(v))
-	case uint64:
-		obj.SetUint(v)
-	case float32:
-		obj.SetFloat(float64(v))
-	case float64:
-		obj.SetFloat(v)
+	case int, int8, int16, int32, int64:
+		obj.SetInt(signedScalarAsInt64(v))
+	case uint, uint8, uint16, uint32, uint64:
+		obj.SetUint(unsignedScalarAsUint64(v))
+	case float32, float64:
+		obj.SetFloat(floatScalarAsFloat64(v))
 	case json.Number:
 		encoder.encodeJSONNumber(v, obj)
 	default:
@@ -356,6 +338,53 @@ func (encoder *encoder) tryEncodeScalarFastPath(data any, obj *WAFObject) (bool,
 	}
 
 	return true, nil
+}
+
+// signedScalarAsInt64 converts a signed integer of any size to an int64. The
+// value must be an int, int8, int16, int32 or int64.
+func signedScalarAsInt64(data any) (result int64) {
+	switch v := data.(type) {
+	case int:
+		result = int64(v)
+	case int8:
+		result = int64(v)
+	case int16:
+		result = int64(v)
+	case int32:
+		result = int64(v)
+	case int64:
+		result = v
+	}
+	return result
+}
+
+// unsignedScalarAsUint64 converts an unsigned integer of any size to a uint64.
+// The value must be a uint, uint8, uint16, uint32 or uint64.
+func unsignedScalarAsUint64(data any) (result uint64) {
+	switch v := data.(type) {
+	case uint:
+		result = uint64(v)
+	case uint8:
+		result = uint64(v)
+	case uint16:
+		result = uint64(v)
+	case uint32:
+		result = uint64(v)
+	case uint64:
+		result = v
+	}
+	return result
+}
+
+// floatScalarAsFloat64 converts a float32 or a float64 to a float64.
+func floatScalarAsFloat64(data any) (result float64) {
+	switch v := data.(type) {
+	case float32:
+		result = float64(v)
+	case float64:
+		result = v
+	}
+	return result
 }
 
 func (encoder *encoder) tryEncodeTypedSliceFastPath(data any, obj *WAFObject, depth int) (bool, error) {
