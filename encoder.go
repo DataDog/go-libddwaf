@@ -1063,49 +1063,71 @@ func depthOf(t timer.Timer, obj reflect.Value) (depth int, err error) {
 
 	obj, kind := resolvePointer(obj)
 
-	var itemDepth int
 	switch kind {
 	case reflect.Array, reflect.Slice:
-		if obj.Type() == byteArrayType {
-			// We treat byte slices as strings
-			return 0, nil
-		}
-		for i := range obj.Len() {
-			itemDepth, err = depthOf(t, obj.Index(i))
-			depth = max(depth, itemDepth)
-			if err != nil {
-				break
-			}
-		}
-		return depth + 1, err
+		return depthOfArray(t, obj)
 	case reflect.Map:
-		for iter := obj.MapRange(); iter.Next(); {
-			itemDepth, err = depthOf(t, iter.Value())
-			depth = max(depth, itemDepth)
-			if err != nil {
-				break
-			}
-		}
-		return depth + 1, err
+		return depthOfMap(t, obj)
 	case reflect.Struct:
-		typ := obj.Type()
-		for i := range obj.NumField() {
-			fieldType := typ.Field(i)
-			_, usable := getFieldNameFromType(fieldType)
-			if !usable {
-				continue
-			}
-
-			itemDepth, err = depthOf(t, obj.Field(i))
-			depth = max(depth, itemDepth)
-			if err != nil {
-				break
-			}
-		}
-		return depth + 1, err
+		return depthOfStruct(t, obj)
 	default:
 		return 0, nil
 	}
+}
+
+// depthOfArray returns the depth of an array or a slice. When depthOf fails on
+// an element, the loop stops, and the depth that was measured so far is kept.
+func depthOfArray(t timer.Timer, obj reflect.Value) (int, error) {
+	if obj.Type() == byteArrayType {
+		// We treat byte slices as strings
+		return 0, nil
+	}
+
+	var depth int
+	for i := range obj.Len() {
+		itemDepth, err := depthOf(t, obj.Index(i))
+		depth = max(depth, itemDepth)
+		if err != nil {
+			return depth + 1, err
+		}
+	}
+	return depth + 1, nil
+}
+
+// depthOfMap returns the depth of a map. When depthOf fails on a value, the
+// loop stops, and the depth that was measured so far is kept.
+func depthOfMap(t timer.Timer, obj reflect.Value) (int, error) {
+	var depth int
+	for iter := obj.MapRange(); iter.Next(); {
+		itemDepth, err := depthOf(t, iter.Value())
+		depth = max(depth, itemDepth)
+		if err != nil {
+			return depth + 1, err
+		}
+	}
+	return depth + 1, nil
+}
+
+// depthOfStruct returns the depth of a struct. It skips the fields that the
+// encoder cannot use. When depthOf fails on a field, the loop stops, and the
+// depth that was measured so far is kept.
+func depthOfStruct(t timer.Timer, obj reflect.Value) (int, error) {
+	var depth int
+	typ := obj.Type()
+	for i := range obj.NumField() {
+		fieldType := typ.Field(i)
+		_, usable := getFieldNameFromType(fieldType)
+		if !usable {
+			continue
+		}
+
+		itemDepth, err := depthOf(t, obj.Field(i))
+		depth = max(depth, itemDepth)
+		if err != nil {
+			return depth + 1, err
+		}
+	}
+	return depth + 1, nil
 }
 
 // resolvePointer attempts to resolve a pointer while limiting the pointer depth
