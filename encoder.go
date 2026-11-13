@@ -696,49 +696,72 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 		return waferrors.ErrTooManyIndirections
 	}
 
-	// Measure-only runs for leaves
-	if obj == nil && kind != reflect.Array && kind != reflect.Slice && kind != reflect.Map && kind != reflect.Struct {
-		// Nothing to do, we were only here to measure object depth!
-		return nil
+	if handled, err := encoder.encodeLeafValue(value, kind, obj); handled {
+		return err
 	}
 
+	return encoder.encodeContainerValue(value, kind, obj, depth)
+}
+
+// encodeLeafValue encodes the terminal cases (leaves of the tree). It reports
+// whether value was a leaf. When it reports false, nothing was written to obj
+// and the caller must handle the value as a container.
+func (encoder *encoder) encodeLeafValue(value reflect.Value, kind reflect.Kind, obj *bindings.WAFObject) (bool, error) {
 	switch {
+	// Measure-only runs for leaves
+	case isMeasureOnlyLeaf(obj, kind):
+		// Nothing to do, we were only here to measure object depth!
+		return true, nil
+
 	// Terminal cases (leaves of the tree)
 	//		Is invalid type: nil interfaces for example, cannot be used to run any reflect method or it's susceptible to panic
-	case !value.IsValid() || kind == reflect.Invalid:
-		return waferrors.ErrUnsupportedValue
+	case isInvalidValue(value, kind):
+		return true, waferrors.ErrUnsupportedValue
 	// 		Is nullable type: nil pointers, channels, maps or functions
 	case isValueNil(value):
 		obj.SetNil()
-		return nil
 
 	// 		Booleans
 	case kind == reflect.Bool:
 		obj.SetBool(value.Bool())
-		return nil
 
-	// 		Numbers
-	case value.CanInt(): // any int type or alias
-		obj.SetInt(value.Int())
-		return nil
-	case value.CanUint(): // any Uint type or alias
-		obj.SetUint(value.Uint())
-		return nil
-	case value.CanFloat(): // any float type or alias
-		obj.SetFloat(value.Float())
-		return nil
+	// 		Numbers: any int, uint or float type or alias
+	case value.CanInt(), value.CanUint(), value.CanFloat():
+		encodeNumberValue(value, obj)
 
 	// 		json.Number -- string-represented arbitrary precision numbers
 	case value.Type() == jsonNumberType:
 		encoder.encodeJSONNumber(json.Number(value.String()), obj)
-		return nil
 
 	//		Strings
 	case kind == reflect.String: // string type
 		encoder.encodeString(value.String(), obj)
-		return nil
 
-	case (kind == reflect.Array || kind == reflect.Slice) && value.Type().Elem().Kind() == reflect.Uint8:
+	default:
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// encodeNumberValue encodes value into obj. The value must be of an int, uint
+// or float kind.
+func encodeNumberValue(value reflect.Value, obj *bindings.WAFObject) {
+	switch {
+	case value.CanInt(): // any int type or alias
+		obj.SetInt(value.Int())
+	case value.CanUint(): // any Uint type or alias
+		obj.SetUint(value.Uint())
+	default: // any float type or alias
+		obj.SetFloat(value.Float())
+	}
+}
+
+// encodeContainerValue encodes the internal nodes of the tree. It must be
+// called after encodeLeafValue reported that value is not a leaf.
+func (encoder *encoder) encodeContainerValue(value reflect.Value, kind reflect.Kind, obj *bindings.WAFObject, depth int) error {
+	switch {
+	case isByteArrayOrSlice(value, kind):
 		// Byte Arrays are skipped voluntarily because they are often used
 		// to do partial parsing which leads to false positives
 		return nil
@@ -754,17 +777,46 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 	// 		Either an array or a slice of an array
 	case kind == reflect.Array || kind == reflect.Slice:
 		encoder.encodeArray(value, obj, depth-1)
-		return nil
 	case kind == reflect.Map:
 		encoder.encodeMap(value, obj, depth-1)
-		return nil
 	case kind == reflect.Struct:
 		encoder.encodeStruct(value, obj, depth-1)
-		return nil
 
 	default:
 		return waferrors.ErrUnsupportedValue
 	}
+
+	return nil
+}
+
+// isMeasureOnlyLeaf reports whether the encoder was called only to measure the
+// depth of a leaf: there is no object to write to, and the value is not a
+// container.
+func isMeasureOnlyLeaf(obj *bindings.WAFObject, kind reflect.Kind) bool {
+	return obj == nil && !isContainerKind(kind)
+}
+
+// isInvalidValue reports whether value cannot be used to run any reflect
+// method.
+func isInvalidValue(value reflect.Value, kind reflect.Kind) bool {
+	return !value.IsValid() || kind == reflect.Invalid
+}
+
+// isContainerKind reports whether kind is a container that the encoder
+// recurses into.
+func isContainerKind(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Array, reflect.Slice, reflect.Map, reflect.Struct:
+		return true
+	default:
+		return false
+	}
+}
+
+// isByteArrayOrSlice reports whether value is an array or a slice of uint8
+// elements, whatever its named type is. Note that depthOf uses a narrower rule.
+func isByteArrayOrSlice(value reflect.Value, kind reflect.Kind) bool {
+	return (kind == reflect.Array || kind == reflect.Slice) && value.Type().Elem().Kind() == reflect.Uint8
 }
 
 func (encoder *encoder) encodeJSONNumber(num json.Number, obj *bindings.WAFObject) {
