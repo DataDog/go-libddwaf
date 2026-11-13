@@ -286,35 +286,40 @@ func (encoder *encoder) Encode(data any) (*WAFObject, error) {
 	var obj WAFObject
 
 	if handled, err := encoder.tryEncodeScalarFastPath(data, &obj); handled {
-		return &obj, err
+		return &obj, err // scalar path: no depth re-measure
 	}
 
-	if handled, err := encoder.tryEncodeTypedSliceFastPath(data, &obj, encoder.enc.Config.maxObjectDepth()); handled {
-		if len(encoder.enc.Truncations.ObjectTooDeep) > 0 && !encoder.enc.Config.Timer.Exhausted() {
-			depth, _ := depthOf(encoder.enc.Config.Timer, reflect.ValueOf(data))
-			encoder.enc.Truncations.ObjectTooDeep = []int{depth}
-		}
-		return &obj, err
-	}
-
-	if handled, err := encoder.tryEncodeTypedMapFastPath(data, &obj, encoder.enc.Config.maxObjectDepth()); handled {
-		if len(encoder.enc.Truncations.ObjectTooDeep) > 0 && !encoder.enc.Config.Timer.Exhausted() {
-			depth, _ := depthOf(encoder.enc.Config.Timer, reflect.ValueOf(data))
-			encoder.enc.Truncations.ObjectTooDeep = []int{depth}
-		}
-		return &obj, err
-	}
-
-	value := reflect.ValueOf(data)
-
-	err := encoder.encode(value, &obj, encoder.enc.Config.maxObjectDepth())
-
-	if len(encoder.enc.Truncations.ObjectTooDeep) > 0 && !encoder.enc.Config.Timer.Exhausted() {
-		depth, _ := depthOf(encoder.enc.Config.Timer, value)
-		encoder.enc.Truncations.ObjectTooDeep = []int{depth}
-	}
-
+	err := encoder.encodeTypedOrReflect(data, &obj)
+	encoder.remeasureObjectTooDeep(data)
 	return &obj, err
+}
+
+// encodeTypedOrReflect encodes a value that is not a scalar. It tries the typed
+// slice fast path, then the typed map fast path, then the reflect path.
+func (encoder *encoder) encodeTypedOrReflect(data any, obj *WAFObject) error {
+	depth := encoder.enc.Config.maxObjectDepth()
+
+	if handled, err := encoder.tryEncodeTypedSliceFastPath(data, obj, depth); handled {
+		return err
+	}
+
+	if handled, err := encoder.tryEncodeTypedMapFastPath(data, obj, depth); handled {
+		return err
+	}
+
+	return encoder.encode(reflect.ValueOf(data), obj, depth)
+}
+
+// remeasureObjectTooDeep replaces all the ObjectTooDeep records with the depth
+// of data, when a record exists and the timer is not exhausted. The depth
+// records that the encoder writes while it encodes are estimates (-1).
+func (encoder *encoder) remeasureObjectTooDeep(data any) {
+	if len(encoder.enc.Truncations.ObjectTooDeep) == 0 || encoder.enc.Config.Timer.Exhausted() {
+		return
+	}
+
+	depth, _ := depthOf(encoder.enc.Config.Timer, reflect.ValueOf(data))
+	encoder.enc.Truncations.ObjectTooDeep = []int{depth}
 }
 
 func (encoder *encoder) tryEncodeScalarFastPath(data any, obj *WAFObject) (bool, error) {
