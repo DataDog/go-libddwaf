@@ -121,10 +121,6 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	context.mu.Lock()
 	defer context.mu.Unlock()
 
-	if context.closedHint.Load() || context.cContext == 0 {
-		return nil, waferrors.ErrContextClosed
-	}
-
 	cSubcontext, subTimer, err := context.initSubcontextLocked()
 	if err != nil {
 		return nil, err
@@ -134,10 +130,14 @@ func (context *Context) NewSubcontext(ctx context.Context) (*Subcontext, error) 
 	return context.addSubcontextLocked(cSubcontext, subTimer), nil
 }
 
-// initSubcontextLocked creates the ddwaf_subcontext and the timer of a new
-// [Subcontext]. The caller MUST hold context.mu. If it returns an error, no
-// ddwaf_subcontext is left alive.
+// initSubcontextLocked checks that the Context is open, then creates the
+// ddwaf_subcontext and the timer of a new [Subcontext]. The caller MUST hold
+// context.mu. If it returns an error, no ddwaf_subcontext is left alive.
 func (context *Context) initSubcontextLocked() (bindings.WAFSubcontext, timer.NodeTimer, error) {
+	if context.closedHint.Load() || context.cContext == 0 {
+		return 0, nil, waferrors.ErrContextClosed
+	}
+
 	cSubcontext := bindings.Lib.SubcontextInit(context.cContext)
 	if cSubcontext == 0 {
 		return 0, nil, errors.New("failed to create subcontext: ddwaf_subcontext_init returned null")
@@ -153,7 +153,7 @@ func (context *Context) initSubcontextLocked() (bindings.WAFSubcontext, timer.No
 
 // newSubcontextTimer creates the timer of a new [Subcontext]. It has the timer
 // keys of the Context timer, plus the keys that Run needs, and the remaining
-// budget of the Context timer.
+// budget of the Context timer. The caller MUST hold context.mu.
 func (context *Context) newSubcontextTimer() (timer.NodeTimer, error) {
 	parentKeys := context.Timer.ComponentKeys()
 	seen := make(map[timer.Key]struct{}, len(parentKeys)+subcontextExtraTimerKeys)
@@ -337,7 +337,8 @@ func (context *Context) evalLocked(ctx context.Context, data *WAFObject, runTime
 
 // keepOrUnpin releases the input pinner of a Run call. If the WAF received the
 // data (wafOwnsData), the pinner is kept until [Context.Close]. Otherwise the
-// data was never seen by the WAF and is unpinned now.
+// data was never seen by the WAF and is unpinned now. keepOrUnpin takes
+// context.pinnersMu itself: the caller MUST NOT hold it.
 func (context *Context) keepOrUnpin(pinner *runtime.Pinner, wafOwnsData bool) {
 	if !wafOwnsData {
 		pinner.Unpin()

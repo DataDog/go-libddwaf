@@ -195,7 +195,8 @@ func (s *Subcontext) evalLocked(ctx context.Context, data *WAFObject, runTimer t
 
 // keepOrUnpin releases the input pinner of a Run call. If the WAF received the
 // data (wafOwnsData), the pinner is kept until the Subcontext is closed.
-// Otherwise the data was never seen by the WAF and is unpinned now.
+// Otherwise the data was never seen by the WAF and is unpinned now. keepOrUnpin
+// takes s.pinnersMu itself: the caller MUST NOT hold it.
 func (s *Subcontext) keepOrUnpin(pinner *runtime.Pinner, wafOwnsData bool) {
 	if !wafOwnsData {
 		pinner.Unpin()
