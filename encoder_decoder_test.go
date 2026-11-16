@@ -1259,14 +1259,8 @@ func assertEqualType(t *testing.T, expected typeTree, actual *WAFObject) {
 		return
 	}
 
-	var actualSize int
-	if expected._type == bindings.WAFArrayType {
-		size, _ := actual.ArraySize()
-		actualSize = int(size)
-	} else {
-		size, _ := actual.MapSize()
-		actualSize = int(size)
-	}
+	size, _ := actual.Size()
+	actualSize := int(size)
 
 	if len(expected.children) != actualSize {
 		t.Fatalf("expected len %v, got len %v", len(expected.children), actualSize)

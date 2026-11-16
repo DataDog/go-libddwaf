@@ -39,9 +39,9 @@ func TestArrayBuilder_NextValue_AppendsSlot(t *testing.T) {
 	b.Close()
 
 	require.True(t, parent.IsArray())
-	size, err := parent.ArraySize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestArrayBuilder_NextValue_AtCapacityReturnsNil(t *testing.T) {
@@ -80,9 +80,9 @@ func TestArrayBuilder_DropLast_RemovesEntry(t *testing.T) {
 	b.DropLast()
 	b.Close()
 
-	size, err := parent.ArraySize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestArrayBuilder_Close_PreservesAllEntries(t *testing.T) {
@@ -121,9 +121,9 @@ func TestArrayBuilder_Close_CommitsToParent(t *testing.T) {
 	b.Close()
 
 	require.True(t, parent.IsArray())
-	size, err := parent.ArraySize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestArrayBuilder_Close_RecordsContainerTooLarge(t *testing.T) {
@@ -173,9 +173,9 @@ func TestArrayBuilder_DropOnError_Pattern(t *testing.T) {
 
 	b.Close()
 
-	size, err := parent.ArraySize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestArrayBuilder_DropLast_NoEntries_NoOp(t *testing.T) {
@@ -202,9 +202,9 @@ func TestMapBuilder_NextValue_AppendsKV(t *testing.T) {
 	b.Close()
 
 	require.True(t, parent.IsMap())
-	size, err := parent.MapSize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 	entries, err := parent.MapEntries()
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
@@ -265,9 +265,9 @@ func TestMapBuilder_DropLast_RemovesEntry(t *testing.T) {
 	b.DropLast()
 	b.Close()
 
-	size, err := parent.MapSize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestMapBuilder_DropLast_NoEntries_NoOp(t *testing.T) {
@@ -294,9 +294,9 @@ func TestMapBuilder_Close_CommitsToParent(t *testing.T) {
 	b.Close()
 
 	require.True(t, parent.IsMap())
-	size, err := parent.MapSize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestMapBuilder_Close_RecordsContainerTooLarge(t *testing.T) {

@@ -73,6 +73,11 @@ func TestWAFObjectLargeFromJSON(t *testing.T) {
 				require.True(t, obj.IsArray())
 				require.False(t, obj.IsMap())
 
+				// Size reports the size of the compact and of the large layout.
+				n, err := obj.Size()
+				require.NoError(t, err)
+				require.EqualValues(t, tc.size, n)
+
 				size, err := obj.ArraySize()
 				if tc.expected == WAFArrayType {
 					require.NoError(t, err)
@@ -114,6 +119,11 @@ func TestWAFObjectLargeFromJSON(t *testing.T) {
 				require.Equal(t, tc.expected, obj.Type())
 				require.True(t, obj.IsMap())
 				require.False(t, obj.IsArray())
+
+				// Size reports the size of the compact and of the large layout.
+				n, err := obj.Size()
+				require.NoError(t, err)
+				require.EqualValues(t, tc.size, n)
 
 				size, err := obj.MapSize()
 				if tc.expected == WAFMapType {

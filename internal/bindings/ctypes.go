@@ -720,11 +720,30 @@ func (w *WAFObject) StringValue() (string, error) {
 	}
 }
 
+// Size returns the number of items of an array or the number of entries of a
+// map. It supports the compact layouts ([WAFArrayType], [WAFMapType]) and the
+// large layouts ([WAFLargeArrayType], [WAFLargeMapType]). The largest possible
+// size is [MaxLargeContainerSize].
+//
+// For any other type, including a nil receiver, Size returns 0 and an error
+// that wraps [waferrors.ErrInvalidObjectType].
+func (w *WAFObject) Size() (uint32, error) {
+	if w == nil {
+		return 0, fmt.Errorf("%w: value is nil, not an array or a map", waferrors.ErrInvalidObjectType)
+	}
+	if !w.IsArray() && !w.IsMap() {
+		return 0, fmt.Errorf("%w: value is not an array or a map but %s", waferrors.ErrInvalidObjectType, w.Type().String())
+	}
+	return uint32(w.containerSize()), nil
+}
+
 // ArraySize returns the number of elements in an array.
 //
 // A large array ([WAFLargeArrayType]) can have more elements than a uint16 can
 // hold. For those, ArraySize returns 0 and an error that wraps
-// [waferrors.ErrInvalidObjectType]. Use len([WAFObject.ArrayValues]) instead.
+// [waferrors.ErrInvalidObjectType].
+//
+// Deprecated: use [WAFObject.Size], which also supports large containers.
 func (w *WAFObject) ArraySize() (uint16, error) {
 	switch t := w.Type(); t {
 	case WAFArrayType:
@@ -758,7 +777,9 @@ func (w *WAFObject) ArrayValues() ([]WAFObject, error) {
 //
 // A large map ([WAFLargeMapType]) can have more entries than a uint16 can
 // hold. For those, MapSize returns 0 and an error that wraps
-// [waferrors.ErrInvalidObjectType]. Use len([WAFObject.MapEntries]) instead.
+// [waferrors.ErrInvalidObjectType].
+//
+// Deprecated: use [WAFObject.Size], which also supports large containers.
 func (w *WAFObject) MapSize() (uint16, error) {
 	switch t := w.Type(); t {
 	case WAFMapType:

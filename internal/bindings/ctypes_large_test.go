@@ -168,7 +168,17 @@ func TestWAFObjectLargeContainers(t *testing.T) {
 	})
 
 	t.Run("sizes", func(t *testing.T) {
-		// ArraySize and MapSize cannot return a size that does not fit a uint16.
+		// Size supports the large layouts.
+		n, err := arr.Size()
+		require.NoError(t, err)
+		require.EqualValues(t, largeTestSize, n)
+
+		n, err = mp.Size()
+		require.NoError(t, err)
+		require.EqualValues(t, largeTestSize, n)
+
+		// The deprecated ArraySize and MapSize cannot return a size that does
+		// not fit a uint16: they keep returning an error for large containers.
 		size, err := arr.ArraySize()
 		require.ErrorIs(t, err, waferrors.ErrInvalidObjectType)
 		require.Zero(t, size)
