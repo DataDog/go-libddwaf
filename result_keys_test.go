@@ -9,6 +9,7 @@ package libddwaf
 
 import (
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
@@ -47,6 +48,31 @@ func BenchmarkUnwrapWafResult(b *testing.B) {
 		if _, _, err := unwrapWafResult(bindings.WAFOK, obj); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+// TestUnwrapWafResultKeysDoNotAllocate checks that the keys of a WAF result do
+// not allocate. This needs the compiler to inline StringValue.
+//
+// This test covers the default build only. Other builds can inline differently:
+// for example, a build with -pgo, or with -gcflags=-l. The test does not cover
+// them.
+func TestUnwrapWafResultKeysDoNotAllocate(t *testing.T) {
+	// The check depends on the inliner, and CI also tests Go "tip".
+	if strings.HasPrefix(runtime.Version(), "devel") {
+		t.Skip("the allocation check needs a released Go version")
+	}
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	obj := benchResultObject(t, &pinner)
+
+	allocs := testing.AllocsPerRun(100, func() {
+		if _, _, err := unwrapWafResult(bindings.WAFOK, obj); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("unwrapWafResult allocates %v times per call, want 0", allocs)
 	}
 }
 

@@ -564,31 +564,42 @@ func (w *WAFObject) FloatValue() (float64, error) {
 
 // StringValue returns the string value of this WAFObject.
 // Works for regular strings, literal strings, and small strings.
+//
+// The result is a copy, which the caller owns. This function is small on
+// purpose, so that the compiler can inline it. When the caller does not keep
+// the result, the compiler can then put the copy on the stack, and the call
+// does not allocate.
 func (w *WAFObject) StringValue() (string, error) {
+	b, err := w.stringBytes()
+	return string(b), err
+}
+
+// stringBytes returns the bytes of a string object, with no copy. For a small
+// string, the slice points into w. For other strings, it points to the memory
+// that w points to. Do not keep the slice and do not return it from this
+// package: copy it with string(b) before w changes or its memory is freed.
+func (w *WAFObject) stringBytes() ([]byte, error) {
 	objType := w.Type()
 	switch objType {
 	case WAFSmallStringType:
 		size := int(w.data[wafObjectSStrSize])
 		if size > wafObjectSStrMaxLen {
-			return "", fmt.Errorf("%w: small string size %d exceeds max %d", waferrors.ErrInvalidObjectType, size, wafObjectSStrMaxLen)
+			return nil, fmt.Errorf("%w: small string size %d exceeds max %d", waferrors.ErrInvalidObjectType, size, wafObjectSStrMaxLen)
 		}
-		if size == 0 {
-			return "", nil
-		}
-		return string(w.data[wafObjectSStrData : wafObjectSStrData+size]), nil
+		return w.data[wafObjectSStrData : wafObjectSStrData+size], nil
 
 	case WAFStringType, WAFLiteralStringType:
 		size := binary.NativeEndian.Uint32(w.data[wafObjectStringSizeOffset:])
 		if size == 0 {
-			return "", nil
+			return nil, nil
 		}
 		if binary.NativeEndian.Uint64(w.data[wafObjectPtrOffset:]) == 0 {
-			return "", fmt.Errorf("nil pointer in string object with size %d", size)
+			return nil, fmt.Errorf("nil pointer in string object with size %d", size)
 		}
-		return string(unsafeutil.Slice(unsafeutil.ReadPtr[byte](&w.data[wafObjectPtrOffset]), uint64(size))), nil
+		return unsafeutil.Slice(unsafeutil.ReadPtr[byte](&w.data[wafObjectPtrOffset]), uint64(size)), nil
 
 	default:
-		return "", fmt.Errorf("%w: value is not a string but %s", waferrors.ErrInvalidObjectType, objType.String())
+		return nil, fmt.Errorf("%w: value is not a string but %s", waferrors.ErrInvalidObjectType, objType.String())
 	}
 }
 
