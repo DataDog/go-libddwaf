@@ -1054,6 +1054,10 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject
 
 // depthOf returns the depth of the provided object. This is 0 for scalar values,
 // such as strings.
+//
+// The loops stop at the first error, and keep the depth of the child that
+// failed. They are inline on purpose: a helper for each container kind adds one
+// stack frame for each level of the input.
 func depthOf(t timer.Timer, obj reflect.Value) (depth int, err error) {
 	if t.Exhausted() {
 		return 0, waferrors.ErrTimeout
@@ -1068,42 +1072,29 @@ func depthOf(t timer.Timer, obj reflect.Value) (depth int, err error) {
 			// We treat byte slices as strings
 			return 0, nil
 		}
-		for i := range obj.Len() {
+		for i, n := 0, obj.Len(); err == nil && i < n; i++ {
 			itemDepth, err = depthOf(t, obj.Index(i))
 			depth = max(depth, itemDepth)
-			if err != nil {
-				break
-			}
 		}
-		return depth + 1, err
 	case reflect.Map:
-		for iter := obj.MapRange(); iter.Next(); {
+		for iter := obj.MapRange(); err == nil && iter.Next(); {
 			itemDepth, err = depthOf(t, iter.Value())
 			depth = max(depth, itemDepth)
-			if err != nil {
-				break
-			}
 		}
-		return depth + 1, err
 	case reflect.Struct:
 		typ := obj.Type()
-		for i := range obj.NumField() {
-			fieldType := typ.Field(i)
-			_, usable := getFieldNameFromType(fieldType)
-			if !usable {
+		for i, n := 0, obj.NumField(); err == nil && i < n; i++ {
+			if _, usable := getFieldNameFromType(typ.Field(i)); !usable {
 				continue
 			}
 
 			itemDepth, err = depthOf(t, obj.Field(i))
 			depth = max(depth, itemDepth)
-			if err != nil {
-				break
-			}
 		}
-		return depth + 1, err
 	default:
 		return 0, nil
 	}
+	return depth + 1, err
 }
 
 // resolvePointer attempts to resolve a pointer while limiting the pointer depth
