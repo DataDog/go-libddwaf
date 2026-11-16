@@ -35,9 +35,9 @@ func TestMigrationSpike(t *testing.T) {
 		mb.Close()
 
 		require.True(t, obj.IsMap())
-		size, err := obj.MapSize()
+		size, err := obj.Size()
 		require.NoError(t, err)
-		assert.Equal(t, uint16(3), size)
+		assert.Equal(t, uint32(3), size)
 
 		m, err := obj.MapValue()
 		require.NoError(t, err)
@@ -145,9 +145,9 @@ func TestMigrationSpike(t *testing.T) {
 
 		mb.Close()
 
-		size, err := obj.MapSize()
+		size, err := obj.Size()
 		require.NoError(t, err)
-		assert.Equal(t, uint16(2), size)
+		assert.Equal(t, uint32(2), size)
 
 		entries, err := obj.MapEntries()
 		require.NoError(t, err)

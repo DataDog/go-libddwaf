@@ -211,7 +211,7 @@ func TestWAFObjectContainers(t *testing.T) {
 		require.True(t, arr.IsArray())
 		require.Equal(t, bindings.WAFArrayType, arr.Type())
 
-		size, err := arr.ArraySize()
+		size, err := arr.Size()
 		require.NoError(t, err)
 		require.EqualValues(t, 3, size)
 
@@ -240,7 +240,7 @@ func TestWAFObjectContainers(t *testing.T) {
 		require.True(t, m.IsMap())
 		require.Equal(t, bindings.WAFMapType, m.Type())
 
-		size, err := m.MapSize()
+		size, err := m.Size()
 		require.NoError(t, err)
 		require.EqualValues(t, 2, size)
 

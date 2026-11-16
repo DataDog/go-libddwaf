@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/DataDog/go-libddwaf/v5/internal/bindings"
 )
 
 func newTestEncoder(t *testing.T, pinner *runtime.Pinner, maxContainer, maxString uint16) Encoder {
@@ -37,9 +39,9 @@ func TestArrayBuilder_NextValue_AppendsSlot(t *testing.T) {
 	b.Close()
 
 	require.True(t, parent.IsArray())
-	size, err := parent.ArraySize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestArrayBuilder_NextValue_AtCapacityReturnsNil(t *testing.T) {
@@ -78,9 +80,9 @@ func TestArrayBuilder_DropLast_RemovesEntry(t *testing.T) {
 	b.DropLast()
 	b.Close()
 
-	size, err := parent.ArraySize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestArrayBuilder_Close_PreservesAllEntries(t *testing.T) {
@@ -119,9 +121,9 @@ func TestArrayBuilder_Close_CommitsToParent(t *testing.T) {
 	b.Close()
 
 	require.True(t, parent.IsArray())
-	size, err := parent.ArraySize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestArrayBuilder_Close_RecordsContainerTooLarge(t *testing.T) {
@@ -171,9 +173,9 @@ func TestArrayBuilder_DropOnError_Pattern(t *testing.T) {
 
 	b.Close()
 
-	size, err := parent.ArraySize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestArrayBuilder_DropLast_NoEntries_NoOp(t *testing.T) {
@@ -200,9 +202,9 @@ func TestMapBuilder_NextValue_AppendsKV(t *testing.T) {
 	b.Close()
 
 	require.True(t, parent.IsMap())
-	size, err := parent.MapSize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 	entries, err := parent.MapEntries()
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
@@ -263,9 +265,9 @@ func TestMapBuilder_DropLast_RemovesEntry(t *testing.T) {
 	b.DropLast()
 	b.Close()
 
-	size, err := parent.MapSize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestMapBuilder_DropLast_NoEntries_NoOp(t *testing.T) {
@@ -292,9 +294,9 @@ func TestMapBuilder_Close_CommitsToParent(t *testing.T) {
 	b.Close()
 
 	require.True(t, parent.IsMap())
-	size, err := parent.MapSize()
+	size, err := parent.Size()
 	require.NoError(t, err)
-	require.Equal(t, uint16(1), size)
+	require.Equal(t, uint32(1), size)
 }
 
 func TestMapBuilder_Close_RecordsContainerTooLarge(t *testing.T) {
@@ -354,44 +356,20 @@ func TestMapBuilder_ZeroValueSlotIsInvalid(t *testing.T) {
 	require.True(t, obj.IsInvalid(), "zero-value WAFObject must be invalid")
 }
 
-func TestArrayBuilder_OverUint16IsCappedNotEmptied(t *testing.T) {
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-	enc := Encoder{Config: newEncoderConfig(&pinner, WithUnlimitedLimits())}
-	var parent WAFObject
-
-	b := enc.Array(&parent, 0)
-	for i := 0; i <= math.MaxUint16; i++ {
-		slot := b.NextValue()
-		require.NotNil(t, slot)
-		slot.SetInt(int64(i))
+// TestCapToLayout checks the 2^28 - 1 cut with numbers only, so that no
+// 4 GB allocation is needed.
+func TestCapToLayout(t *testing.T) {
+	const max = bindings.MaxLargeContainerSize
+	for _, tc := range []struct{ n, kept, cut int }{
+		{0, 0, 0},
+		{math.MaxUint16, math.MaxUint16, 0},
+		{math.MaxUint16 + 1, math.MaxUint16 + 1, 0},
+		{max, max, 0},
+		{max + 1, max, 1},
+		{max + 5, max, 5},
+	} {
+		kept, cut := capToLayout(tc.n)
+		require.Equal(t, tc.kept, kept, "n=%d", tc.n)
+		require.Equal(t, tc.cut, cut, "n=%d", tc.n)
 	}
-	b.Close()
-
-	require.True(t, parent.IsArray())
-	size, err := parent.ArraySize()
-	require.NoError(t, err)
-	require.Equal(t, uint16(math.MaxUint16), size, "oversized array must be capped at MaxUint16, not silently emptied")
-	require.NotEmpty(t, enc.Truncations.ContainerTooLarge, "oversized array must record a ContainerTooLarge truncation")
-}
-
-func TestMapBuilder_OverUint16IsCappedNotEmptied(t *testing.T) {
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-	enc := Encoder{Config: newEncoderConfig(&pinner, WithUnlimitedLimits())}
-	var parent WAFObject
-
-	b := enc.Map(&parent, 0)
-	for i := 0; i <= math.MaxUint16; i++ {
-		slot := b.NextValue("k")
-		require.NotNil(t, slot)
-		slot.SetInt(int64(i))
-	}
-	b.Close()
-
-	require.True(t, parent.IsMap())
-	entries, err := parent.MapEntries()
-	require.NoError(t, err)
-	require.Len(t, entries, math.MaxUint16, "oversized map must be capped at MaxUint16, not silently emptied")
-	require.NotEmpty(t, enc.Truncations.ContainerTooLarge, "oversized map must record a ContainerTooLarge truncation")
 }

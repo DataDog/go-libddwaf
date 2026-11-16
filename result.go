@@ -112,7 +112,7 @@ func decodeActions(entry WAFObjectKV, res *Result) error {
 	if !entry.Val.IsMap() {
 		return fmt.Errorf("unwrapWafResult: %w: expected map for actions, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
 	}
-	size, err := entry.Val.MapSize()
+	size, err := entry.Val.Size()
 	if err != nil {
 		return fmt.Errorf("unwrapWafResult: %w: failed to get actions map size: %w", waferrors.ErrResultInvalidType, err)
 	}
@@ -131,7 +131,7 @@ func decodeEvents(entry WAFObjectKV, res *Result) error {
 	if !entry.Val.IsArray() {
 		return fmt.Errorf("unwrapWafResult: %w: expected array for events, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
 	}
-	size, err := entry.Val.ArraySize()
+	size, err := entry.Val.Size()
 	if err != nil {
 		return fmt.Errorf("unwrapWafResult: %w: failed to get events array size: %w", waferrors.ErrResultInvalidType, err)
 	}
@@ -150,7 +150,7 @@ func decodeAttributes(entry WAFObjectKV, res *Result) error {
 	if !entry.Val.IsMap() {
 		return fmt.Errorf("unwrapWafResult: %w: expected map for attributes, got %s", waferrors.ErrResultInvalidType, entry.Val.Type())
 	}
-	size, err := entry.Val.MapSize()
+	size, err := entry.Val.Size()
 	if err != nil {
 		return fmt.Errorf("unwrapWafResult: %w: failed to get attributes map size: %w", waferrors.ErrResultInvalidType, err)
 	}
