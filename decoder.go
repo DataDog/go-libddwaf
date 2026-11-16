@@ -82,43 +82,31 @@ func decodeDiagnostics(obj *WAFObject) (Diagnostics, error) {
 }
 
 // decodeDiagnosticsEntry decodes one top-level diagnostics entry into diags.
-// The keys are split over this function and decodeOtherDiagnosticsFeature to
-// keep each switch small. Both use direct calls, which let escape analysis
-// keep diags on the stack.
+// It uses direct calls only, which let escape analysis keep diags on the stack.
 func decodeDiagnosticsEntry(diags *Diagnostics, key string, val *WAFObject) (err error) {
 	switch key {
-	case "rules":
-		diags.Rules, err = decodeFeature(val)
-	case "custom_rules":
-		diags.CustomRules, err = decodeFeature(val)
-	case "rules_data":
-		diags.RulesData, err = decodeFeature(val)
-	case "rules_override":
-		diags.RulesOverrides, err = decodeFeature(val)
 	case "actions":
 		diags.Actions, err = decodeFeature(val)
-	case "ruleset_version":
-		diags.Version, err = val.StringValue()
-	default:
-		err = decodeOtherDiagnosticsFeature(diags, key, val)
-	}
-	return err
-}
-
-// decodeOtherDiagnosticsFeature decodes the diagnostics entries that
-// decodeDiagnosticsEntry does not handle.
-func decodeOtherDiagnosticsFeature(diags *Diagnostics, key string, val *WAFObject) (err error) {
-	switch key {
+	case "custom_rules":
+		diags.CustomRules, err = decodeFeature(val)
 	case "exclusions":
 		diags.Exclusions, err = decodeFeature(val)
+	case "rules":
+		diags.Rules, err = decodeFeature(val)
+	case "rules_data":
+		diags.RulesData, err = decodeFeature(val)
 	case "exclusion_data":
 		diags.ExclusionData, err = decodeFeature(val)
+	case "rules_override":
+		diags.RulesOverrides, err = decodeFeature(val)
 	case "processors":
 		diags.Processors, err = decodeFeature(val)
 	case "processor_overrides":
 		diags.ProcessorOverrides, err = decodeFeature(val)
 	case "scanners":
 		diags.Scanners, err = decodeFeature(val)
+	case "ruleset_version":
+		diags.Version, err = val.StringValue()
 	default:
 		// Unknown diagnostic keys are intentionally ignored so newer libddwaf
 		// versions don't break this decoder.
