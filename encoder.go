@@ -672,12 +672,6 @@ func isNullableKind(kind reflect.Kind) bool {
 	}
 }
 
-// isValueNil check if the value is nullable and if it is actually nil
-// we cannot directly use value.IsNil() because it panics on non-pointer values
-func isValueNil(value reflect.Value) bool {
-	return isNullableKind(value.Kind()) && value.IsNil()
-}
-
 func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, depth int) error {
 	if encoder.enc.Timeout() {
 		return waferrors.ErrTimeout
@@ -696,74 +690,130 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 		return waferrors.ErrTooManyIndirections
 	}
 
-	// Measure-only runs for leaves
-	if obj == nil && kind != reflect.Array && kind != reflect.Slice && kind != reflect.Map && kind != reflect.Struct {
-		// Nothing to do, we were only here to measure object depth!
+	if isContainerKind(kind) {
+		return encoder.encodeContainerValue(value, kind, obj, depth)
+	}
+	return encoder.encodeLeafValue(value, kind, obj, depth)
+}
+
+// encodeContainerValue encodes the internal nodes of the tree. The kind of
+// value must be an array, a slice, a map or a struct (see [isContainerKind]).
+//
+// The nil check and the byte check are written inline on purpose: this
+// function runs for each container level, and a helper call here is a cost on
+// the hot path.
+func (encoder *encoder) encodeContainerValue(value reflect.Value, kind reflect.Kind, obj *bindings.WAFObject, depth int) error {
+	// Is nullable type: nil maps or slices
+	if isNullableKind(kind) && value.IsNil() {
+		obj.SetNil()
 		return nil
 	}
 
-	switch {
-	// Terminal cases (leaves of the tree)
-	//		Is invalid type: nil interfaces for example, cannot be used to run any reflect method or it's susceptible to panic
-	case !value.IsValid() || kind == reflect.Invalid:
-		return waferrors.ErrUnsupportedValue
-	// 		Is nullable type: nil pointers, channels, maps or functions
-	case isValueNil(value):
-		obj.SetNil()
-		return nil
-
-	// 		Booleans
-	case kind == reflect.Bool:
-		obj.SetBool(value.Bool())
-		return nil
-
-	// 		Numbers
-	case value.CanInt(): // any int type or alias
-		obj.SetInt(value.Int())
-		return nil
-	case value.CanUint(): // any Uint type or alias
-		obj.SetUint(value.Uint())
-		return nil
-	case value.CanFloat(): // any float type or alias
-		obj.SetFloat(value.Float())
-		return nil
-
-	// 		json.Number -- string-represented arbitrary precision numbers
-	case value.Type() == jsonNumberType:
-		encoder.encodeJSONNumber(json.Number(value.String()), obj)
-		return nil
-
-	//		Strings
-	case kind == reflect.String: // string type
-		encoder.encodeString(value.String(), obj)
-		return nil
-
-	case (kind == reflect.Array || kind == reflect.Slice) && value.Type().Elem().Kind() == reflect.Uint8:
+	if (kind == reflect.Array || kind == reflect.Slice) && value.Type().Elem().Kind() == reflect.Uint8 {
 		// Byte Arrays are skipped voluntarily because they are often used
 		// to do partial parsing which leads to false positives
 		return nil
+	}
 
-	// Containers (internal nodes of the tree)
-
-	// 		All recursive cases can only execute if the depth is superior to 0.
-	case depth <= 0:
+	// All recursive cases can only execute if the depth is superior to 0.
+	if depth <= 0 {
 		// Record that there was a truncation; we will try to measure the actual depth of the object afterwards.
 		encoder.enc.Truncations.Record(ObjectTooDeep, -1)
 		return waferrors.ErrMaxDepthExceeded
+	}
 
-	// 		Either an array or a slice of an array
-	case kind == reflect.Array || kind == reflect.Slice:
+	switch kind {
+	// Either an array or a slice of an array
+	case reflect.Array, reflect.Slice:
 		encoder.encodeArray(value, obj, depth-1)
-		return nil
-	case kind == reflect.Map:
+	case reflect.Map:
 		encoder.encodeMap(value, obj, depth-1)
-		return nil
-	case kind == reflect.Struct:
+	default: // reflect.Struct, because isContainerKind(kind) is true
 		encoder.encodeStruct(value, obj, depth-1)
+	}
+
+	return nil
+}
+
+// encodeLeafValue encodes the terminal cases (leaves of the tree). The kind of
+// value must not be an array, a slice, a map or a struct.
+func (encoder *encoder) encodeLeafValue(value reflect.Value, kind reflect.Kind, obj *bindings.WAFObject, depth int) error {
+	switch {
+	// Measure-only runs for leaves
+	case obj == nil:
+		// Nothing to do, we were only here to measure object depth!
 		return nil
+
+	// Is invalid type: nil interfaces for example, cannot be used to run any reflect method or it's susceptible to panic
+	case isInvalidValue(value):
+		return waferrors.ErrUnsupportedValue
+
+	// Is nullable type: nil pointers, channels or functions
+	case isNullableKind(kind) && value.IsNil():
+		obj.SetNil()
+
+	// Booleans
+	case kind == reflect.Bool:
+		obj.SetBool(value.Bool())
+
+	// Numbers: any int, uint or float type or alias
+	case value.CanInt(), value.CanUint(), value.CanFloat():
+		encodeNumberValue(value, obj)
+
+	// json.Number -- string-represented arbitrary precision numbers
+	case value.Type() == jsonNumberType:
+		encoder.encodeJSONNumber(json.Number(value.String()), obj)
+
+	// Strings
+	case kind == reflect.String: // string type
+		encoder.encodeString(value.String(), obj)
 
 	default:
-		return waferrors.ErrUnsupportedValue
+		return encoder.unsupportedLeafValue(depth)
+	}
+
+	return nil
+}
+
+// unsupportedLeafValue returns the error for a leaf that the encoder cannot
+// encode (a channel, a function or a complex number, for example). A depth
+// that is used up is recorded as a truncation first.
+func (encoder *encoder) unsupportedLeafValue(depth int) error {
+	if depth <= 0 {
+		// Record that there was a truncation; we will try to measure the actual depth of the object afterwards.
+		encoder.enc.Truncations.Record(ObjectTooDeep, -1)
+		return waferrors.ErrMaxDepthExceeded
+	}
+	return waferrors.ErrUnsupportedValue
+}
+
+// encodeNumberValue encodes value into obj. The value must be of an int, uint
+// or float kind.
+func encodeNumberValue(value reflect.Value, obj *bindings.WAFObject) {
+	switch {
+	case value.CanInt(): // any int type or alias
+		obj.SetInt(value.Int())
+	case value.CanUint(): // any Uint type or alias
+		obj.SetUint(value.Uint())
+	default: // any float type or alias
+		obj.SetFloat(value.Float())
+	}
+}
+
+// isInvalidValue reports whether value cannot be used to run any reflect
+// method.
+func isInvalidValue(value reflect.Value) bool {
+	return !value.IsValid() || value.Kind() == reflect.Invalid
+}
+
+// isContainerKind reports whether kind is a container that the encoder
+// recurses into.
+func isContainerKind(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Array, reflect.Slice, reflect.Map, reflect.Struct:
+		return true
+	default:
+		return false
 	}
 }
 
