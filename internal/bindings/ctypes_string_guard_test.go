@@ -30,7 +30,8 @@ const stringBytesName = "stringBytes"
 //   - the declaration of the (*WAFObject).stringBytes method;
 //   - 1 direct call recv.stringBytes() in the body of the
 //     (*WAFObject).StringValue method, where recv is the receiver of
-//     StringValue, and not inside a function literal.
+//     StringValue, not inside a function literal, and where the body of
+//     StringValue does not declare the name recv again.
 //
 // All other uses are problems: other calls, method values, method expressions,
 // package-level variables, and uses in function literals.
@@ -82,10 +83,12 @@ func permitStringBytesUses(decl ast.Decl, permitted map[*ast.Ident]bool) (declar
 }
 
 // directReceiverCalls returns the selector identifiers of the calls
-// recv.stringBytes() in the body of fn, outside function literals.
+// recv.stringBytes() in the body of fn, outside function literals. It returns
+// nil when the body declares the name of the receiver again, because then the
+// name in a call can refer to another variable.
 func directReceiverCalls(fn *ast.FuncDecl) []*ast.Ident {
 	recv := fn.Recv.List[0].Names
-	if len(recv) != 1 || fn.Body == nil {
+	if len(recv) != 1 || fn.Body == nil || declaresName(fn.Body, recv[0].Name) {
 		return nil
 	}
 	var sels []*ast.Ident
@@ -99,6 +102,73 @@ func directReceiverCalls(fn *ast.FuncDecl) []*ast.Ident {
 		return true
 	})
 	return sels
+}
+
+// declaresName reports whether the syntax tree under root declares name again,
+// at any depth and in any form. The forms are: short variable declarations
+// (this includes the binding of a type switch and of a select case), range
+// variables, var, const and type declarations, the type parameters of generic
+// types, and the parameters and results of function literals.
+func declaresName(root ast.Node, name string) bool {
+	found := false
+	ast.Inspect(root, func(n ast.Node) bool {
+		for _, id := range declaredIdents(n) {
+			found = found || id.Name == name
+		}
+		return !found
+	})
+	return found
+}
+
+// declaredIdents returns the identifiers that node n declares.
+func declaredIdents(n ast.Node) []*ast.Ident {
+	switch d := n.(type) {
+	case *ast.AssignStmt:
+		return definedIdents(d.Tok, d.Lhs...)
+	case *ast.RangeStmt:
+		return definedIdents(d.Tok, d.Key, d.Value)
+	case *ast.ValueSpec:
+		return d.Names
+	case *ast.TypeSpec:
+		return append([]*ast.Ident{d.Name}, fieldNames(d.TypeParams)...)
+	case *ast.FuncType:
+		return fieldNames(d.TypeParams, d.Params, d.Results)
+	}
+	return nil
+}
+
+// definedIdents returns the identifiers among exprs when tok is the := token.
+// With another token, the statement assigns to existing variables.
+func definedIdents(tok token.Token, exprs ...ast.Expr) []*ast.Ident {
+	if tok != token.DEFINE {
+		return nil
+	}
+	return identsOf(exprs...)
+}
+
+// identsOf returns the expressions that are plain identifiers.
+func identsOf(exprs ...ast.Expr) []*ast.Ident {
+	var ids []*ast.Ident
+	for _, e := range exprs {
+		if id, ok := e.(*ast.Ident); ok {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// fieldNames returns the names of the fields in lists. A list can be nil.
+func fieldNames(lists ...*ast.FieldList) []*ast.Ident {
+	var ids []*ast.Ident
+	for _, list := range lists {
+		if list == nil {
+			continue
+		}
+		for _, field := range list.List {
+			ids = append(ids, field.Names...)
+		}
+	}
+	return ids
 }
 
 // unpermittedStringBytesUses returns a problem for each identifier
@@ -413,6 +483,119 @@ func (w *WAFObject) StringValue() (string, error) {
 func (w *WAFObject) StringValue() (string, error) {
 	get := func() ([]byte, error) { return w.stringBytes() }
 	b, err := get()
+	return string(b), err
+}
+`},
+		{"receiver redeclared with := in a block", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	if other != nil {
+		w := other
+		b, err := w.stringBytes()
+		return string(b), err
+	}
+	return "", nil
+}
+`},
+		{"receiver redeclared with var", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	var w *WAFObject = other
+	b, err := w.stringBytes()
+	return string(b), err
+}
+`},
+		{"receiver redeclared with var in a block", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	{
+		var w = other
+		_ = w
+	}
+	b, err := w.stringBytes()
+	return string(b), err
+}
+`},
+		{"receiver redeclared as a range variable", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	for _, w := range others {
+		b, err := w.stringBytes()
+		return string(b), err
+	}
+	return "", nil
+}
+`},
+		{"receiver redeclared as a range key", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	for w := range others {
+		_ = w
+	}
+	b, err := w.stringBytes()
+	return string(b), err
+}
+`},
+		{"receiver redeclared in a type switch", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	switch w := any(other).(type) {
+	case *WAFObject:
+		b, err := w.stringBytes()
+		return string(b), err
+	}
+	return "", nil
+}
+`},
+		{"receiver redeclared as a parameter of a function literal", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	_ = func(w *WAFObject) {}
+	b, err := w.stringBytes()
+	return string(b), err
+}
+`},
+		{"receiver redeclared as a result of a function literal", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	_ = func() (w *WAFObject) { return }
+	b, err := w.stringBytes()
+	return string(b), err
+}
+`},
+		{"receiver redeclared with a select case", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	select {
+	case w := <-objects:
+		b, err := w.stringBytes()
+		return string(b), err
+	}
+}
+`},
+		{"receiver redeclared as a type parameter", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	type local[w any] []w
+	b, err := w.stringBytes()
+	return string(b), err
+}
+`},
+		{"receiver redeclared as a type parameter in a function literal", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	_ = func() {
+		type local[K comparable, w any] map[K]w
+	}
+	b, err := w.stringBytes()
+	return string(b), err
+}
+`},
+		{"receiver redeclared as a type", `package bindings
+
+func (w *WAFObject) StringValue() (string, error) {
+	type w struct{}
+	b, err := w.stringBytes()
 	return string(b), err
 }
 `},
