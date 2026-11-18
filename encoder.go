@@ -286,35 +286,40 @@ func (encoder *encoder) Encode(data any) (*WAFObject, error) {
 	var obj WAFObject
 
 	if handled, err := encoder.tryEncodeScalarFastPath(data, &obj); handled {
-		return &obj, err
+		return &obj, err // scalar path: no depth re-measure
 	}
 
-	if handled, err := encoder.tryEncodeTypedSliceFastPath(data, &obj, encoder.enc.Config.maxObjectDepth()); handled {
-		if len(encoder.enc.Truncations.ObjectTooDeep) > 0 && !encoder.enc.Config.Timer.Exhausted() {
-			depth, _ := depthOf(encoder.enc.Config.Timer, reflect.ValueOf(data))
-			encoder.enc.Truncations.ObjectTooDeep = []int{depth}
-		}
-		return &obj, err
-	}
-
-	if handled, err := encoder.tryEncodeTypedMapFastPath(data, &obj, encoder.enc.Config.maxObjectDepth()); handled {
-		if len(encoder.enc.Truncations.ObjectTooDeep) > 0 && !encoder.enc.Config.Timer.Exhausted() {
-			depth, _ := depthOf(encoder.enc.Config.Timer, reflect.ValueOf(data))
-			encoder.enc.Truncations.ObjectTooDeep = []int{depth}
-		}
-		return &obj, err
-	}
-
-	value := reflect.ValueOf(data)
-
-	err := encoder.encode(value, &obj, encoder.enc.Config.maxObjectDepth())
-
-	if len(encoder.enc.Truncations.ObjectTooDeep) > 0 && !encoder.enc.Config.Timer.Exhausted() {
-		depth, _ := depthOf(encoder.enc.Config.Timer, value)
-		encoder.enc.Truncations.ObjectTooDeep = []int{depth}
-	}
-
+	err := encoder.encodeTypedOrReflect(data, &obj)
+	encoder.remeasureObjectTooDeep(data)
 	return &obj, err
+}
+
+// encodeTypedOrReflect encodes a value that is not a scalar. It tries the typed
+// slice fast path, then the typed map fast path, then the reflect path.
+func (encoder *encoder) encodeTypedOrReflect(data any, obj *WAFObject) error {
+	depth := encoder.enc.Config.maxObjectDepth()
+
+	if handled, err := encoder.tryEncodeTypedSliceFastPath(data, obj, depth); handled {
+		return err
+	}
+
+	if handled, err := encoder.tryEncodeTypedMapFastPath(data, obj, depth); handled {
+		return err
+	}
+
+	return encoder.encode(reflect.ValueOf(data), obj, depth)
+}
+
+// remeasureObjectTooDeep replaces all the ObjectTooDeep records with the depth
+// of data, when a record exists and the timer is not exhausted. The depth
+// records that the encoder writes while it encodes are estimates (-1).
+func (encoder *encoder) remeasureObjectTooDeep(data any) {
+	if len(encoder.enc.Truncations.ObjectTooDeep) == 0 || encoder.enc.Config.Timer.Exhausted() {
+		return
+	}
+
+	depth, _ := depthOf(encoder.enc.Config.Timer, reflect.ValueOf(data))
+	encoder.enc.Truncations.ObjectTooDeep = []int{depth}
 }
 
 func (encoder *encoder) tryEncodeScalarFastPath(data any, obj *WAFObject) (bool, error) {
@@ -325,30 +330,12 @@ func (encoder *encoder) tryEncodeScalarFastPath(data any, obj *WAFObject) (bool,
 		obj.SetBool(v)
 	case string:
 		encoder.enc.WriteString(obj, v)
-	case int:
-		obj.SetInt(int64(v))
-	case int8:
-		obj.SetInt(int64(v))
-	case int16:
-		obj.SetInt(int64(v))
-	case int32:
-		obj.SetInt(int64(v))
-	case int64:
-		obj.SetInt(v)
-	case uint:
-		obj.SetUint(uint64(v))
-	case uint8:
-		obj.SetUint(uint64(v))
-	case uint16:
-		obj.SetUint(uint64(v))
-	case uint32:
-		obj.SetUint(uint64(v))
-	case uint64:
-		obj.SetUint(v)
-	case float32:
-		obj.SetFloat(float64(v))
-	case float64:
-		obj.SetFloat(v)
+	case int, int8, int16, int32, int64:
+		obj.SetInt(signedScalarAsInt64(v))
+	case uint, uint8, uint16, uint32, uint64:
+		obj.SetUint(unsignedScalarAsUint64(v))
+	case float32, float64:
+		obj.SetFloat(floatScalarAsFloat64(v))
 	case json.Number:
 		encoder.encodeJSONNumber(v, obj)
 	default:
@@ -356,6 +343,53 @@ func (encoder *encoder) tryEncodeScalarFastPath(data any, obj *WAFObject) (bool,
 	}
 
 	return true, nil
+}
+
+// signedScalarAsInt64 converts a signed integer of any size to an int64. The
+// value must be an int, int8, int16, int32 or int64.
+func signedScalarAsInt64(data any) (result int64) {
+	switch v := data.(type) {
+	case int:
+		result = int64(v)
+	case int8:
+		result = int64(v)
+	case int16:
+		result = int64(v)
+	case int32:
+		result = int64(v)
+	case int64:
+		result = v
+	}
+	return result
+}
+
+// unsignedScalarAsUint64 converts an unsigned integer of any size to a uint64.
+// The value must be a uint, uint8, uint16, uint32 or uint64.
+func unsignedScalarAsUint64(data any) (result uint64) {
+	switch v := data.(type) {
+	case uint:
+		result = uint64(v)
+	case uint8:
+		result = uint64(v)
+	case uint16:
+		result = uint64(v)
+	case uint32:
+		result = uint64(v)
+	case uint64:
+		result = v
+	}
+	return result
+}
+
+// floatScalarAsFloat64 converts a float32 or a float64 to a float64.
+func floatScalarAsFloat64(data any) (result float64) {
+	switch v := data.(type) {
+	case float32:
+		result = float64(v)
+	case float64:
+		result = v
+	}
+	return result
 }
 
 func (encoder *encoder) tryEncodeTypedSliceFastPath(data any, obj *WAFObject, depth int) (bool, error) {
@@ -672,12 +706,6 @@ func isNullableKind(kind reflect.Kind) bool {
 	}
 }
 
-// isValueNil check if the value is nullable and if it is actually nil
-// we cannot directly use value.IsNil() because it panics on non-pointer values
-func isValueNil(value reflect.Value) bool {
-	return isNullableKind(value.Kind()) && value.IsNil()
-}
-
 func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, depth int) error {
 	if encoder.enc.Timeout() {
 		return waferrors.ErrTimeout
@@ -696,74 +724,130 @@ func (encoder *encoder) encode(value reflect.Value, obj *bindings.WAFObject, dep
 		return waferrors.ErrTooManyIndirections
 	}
 
-	// Measure-only runs for leaves
-	if obj == nil && kind != reflect.Array && kind != reflect.Slice && kind != reflect.Map && kind != reflect.Struct {
-		// Nothing to do, we were only here to measure object depth!
+	if isContainerKind(kind) {
+		return encoder.encodeContainerValue(value, kind, obj, depth)
+	}
+	return encoder.encodeLeafValue(value, kind, obj, depth)
+}
+
+// encodeContainerValue encodes the internal nodes of the tree. The kind of
+// value must be an array, a slice, a map or a struct (see [isContainerKind]).
+//
+// The nil check and the byte check are written inline on purpose: this
+// function runs for each container level, and a helper call here is a cost on
+// the hot path.
+func (encoder *encoder) encodeContainerValue(value reflect.Value, kind reflect.Kind, obj *bindings.WAFObject, depth int) error {
+	// Is nullable type: nil maps or slices
+	if isNullableKind(kind) && value.IsNil() {
+		obj.SetNil()
 		return nil
 	}
 
-	switch {
-	// Terminal cases (leaves of the tree)
-	//		Is invalid type: nil interfaces for example, cannot be used to run any reflect method or it's susceptible to panic
-	case !value.IsValid() || kind == reflect.Invalid:
-		return waferrors.ErrUnsupportedValue
-	// 		Is nullable type: nil pointers, channels, maps or functions
-	case isValueNil(value):
-		obj.SetNil()
-		return nil
-
-	// 		Booleans
-	case kind == reflect.Bool:
-		obj.SetBool(value.Bool())
-		return nil
-
-	// 		Numbers
-	case value.CanInt(): // any int type or alias
-		obj.SetInt(value.Int())
-		return nil
-	case value.CanUint(): // any Uint type or alias
-		obj.SetUint(value.Uint())
-		return nil
-	case value.CanFloat(): // any float type or alias
-		obj.SetFloat(value.Float())
-		return nil
-
-	// 		json.Number -- string-represented arbitrary precision numbers
-	case value.Type() == jsonNumberType:
-		encoder.encodeJSONNumber(json.Number(value.String()), obj)
-		return nil
-
-	//		Strings
-	case kind == reflect.String: // string type
-		encoder.encodeString(value.String(), obj)
-		return nil
-
-	case (kind == reflect.Array || kind == reflect.Slice) && value.Type().Elem().Kind() == reflect.Uint8:
+	if (kind == reflect.Array || kind == reflect.Slice) && value.Type().Elem().Kind() == reflect.Uint8 {
 		// Byte Arrays are skipped voluntarily because they are often used
 		// to do partial parsing which leads to false positives
 		return nil
+	}
 
-	// Containers (internal nodes of the tree)
-
-	// 		All recursive cases can only execute if the depth is superior to 0.
-	case depth <= 0:
+	// All recursive cases can only execute if the depth is superior to 0.
+	if depth <= 0 {
 		// Record that there was a truncation; we will try to measure the actual depth of the object afterwards.
 		encoder.enc.Truncations.Record(ObjectTooDeep, -1)
 		return waferrors.ErrMaxDepthExceeded
+	}
 
-	// 		Either an array or a slice of an array
-	case kind == reflect.Array || kind == reflect.Slice:
+	switch kind {
+	// Either an array or a slice of an array
+	case reflect.Array, reflect.Slice:
 		encoder.encodeArray(value, obj, depth-1)
-		return nil
-	case kind == reflect.Map:
+	case reflect.Map:
 		encoder.encodeMap(value, obj, depth-1)
-		return nil
-	case kind == reflect.Struct:
+	default: // reflect.Struct, because isContainerKind(kind) is true
 		encoder.encodeStruct(value, obj, depth-1)
+	}
+
+	return nil
+}
+
+// encodeLeafValue encodes the terminal cases (leaves of the tree). The kind of
+// value must not be an array, a slice, a map or a struct.
+func (encoder *encoder) encodeLeafValue(value reflect.Value, kind reflect.Kind, obj *bindings.WAFObject, depth int) error {
+	switch {
+	// Measure-only runs for leaves
+	case obj == nil:
+		// Nothing to do, we were only here to measure object depth!
 		return nil
+
+	// Is invalid type: nil interfaces for example, cannot be used to run any reflect method or it's susceptible to panic
+	case isInvalidValue(value):
+		return waferrors.ErrUnsupportedValue
+
+	// Is nullable type: nil pointers, channels or functions
+	case isNullableKind(kind) && value.IsNil():
+		obj.SetNil()
+
+	// Booleans
+	case kind == reflect.Bool:
+		obj.SetBool(value.Bool())
+
+	// Numbers: any int, uint or float type or alias
+	case value.CanInt(), value.CanUint(), value.CanFloat():
+		encodeNumberValue(value, obj)
+
+	// json.Number -- string-represented arbitrary precision numbers
+	case value.Type() == jsonNumberType:
+		encoder.encodeJSONNumber(json.Number(value.String()), obj)
+
+	// Strings
+	case kind == reflect.String: // string type
+		encoder.encodeString(value.String(), obj)
 
 	default:
-		return waferrors.ErrUnsupportedValue
+		return encoder.unsupportedLeafValue(depth)
+	}
+
+	return nil
+}
+
+// unsupportedLeafValue returns the error for a leaf that the encoder cannot
+// encode (a channel, a function or a complex number, for example). A depth
+// that is used up is recorded as a truncation first.
+func (encoder *encoder) unsupportedLeafValue(depth int) error {
+	if depth <= 0 {
+		// Record that there was a truncation; we will try to measure the actual depth of the object afterwards.
+		encoder.enc.Truncations.Record(ObjectTooDeep, -1)
+		return waferrors.ErrMaxDepthExceeded
+	}
+	return waferrors.ErrUnsupportedValue
+}
+
+// encodeNumberValue encodes value into obj. The value must be of an int, uint
+// or float kind.
+func encodeNumberValue(value reflect.Value, obj *bindings.WAFObject) {
+	switch {
+	case value.CanInt(): // any int type or alias
+		obj.SetInt(value.Int())
+	case value.CanUint(): // any Uint type or alias
+		obj.SetUint(value.Uint())
+	default: // any float type or alias
+		obj.SetFloat(value.Float())
+	}
+}
+
+// isInvalidValue reports whether value cannot be used to run any reflect
+// method.
+func isInvalidValue(value reflect.Value) bool {
+	return !value.IsValid() || value.Kind() == reflect.Invalid
+}
+
+// isContainerKind reports whether kind is a container that the encoder
+// recurses into.
+func isContainerKind(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Array, reflect.Slice, reflect.Map, reflect.Struct:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -975,6 +1059,10 @@ func (encoder *encoder) encodeArray(value reflect.Value, obj *bindings.WAFObject
 
 // depthOf returns the depth of the provided object. This is 0 for scalar values,
 // such as strings.
+//
+// The loops stop at the first error, and keep the depth of the child that
+// failed. They are inline on purpose: a helper for each container kind adds one
+// stack frame for each level of the input.
 func depthOf(t timer.Timer, obj reflect.Value) (depth int, err error) {
 	if t.Exhausted() {
 		return 0, waferrors.ErrTimeout
@@ -989,42 +1077,29 @@ func depthOf(t timer.Timer, obj reflect.Value) (depth int, err error) {
 			// We treat byte slices as strings
 			return 0, nil
 		}
-		for i := range obj.Len() {
+		for i, n := 0, obj.Len(); err == nil && i < n; i++ {
 			itemDepth, err = depthOf(t, obj.Index(i))
 			depth = max(depth, itemDepth)
-			if err != nil {
-				break
-			}
 		}
-		return depth + 1, err
 	case reflect.Map:
-		for iter := obj.MapRange(); iter.Next(); {
+		for iter := obj.MapRange(); err == nil && iter.Next(); {
 			itemDepth, err = depthOf(t, iter.Value())
 			depth = max(depth, itemDepth)
-			if err != nil {
-				break
-			}
 		}
-		return depth + 1, err
 	case reflect.Struct:
 		typ := obj.Type()
-		for i := range obj.NumField() {
-			fieldType := typ.Field(i)
-			_, usable := getFieldNameFromType(fieldType)
-			if !usable {
+		for i, n := 0, obj.NumField(); err == nil && i < n; i++ {
+			if _, usable := getFieldNameFromType(typ.Field(i)); !usable {
 				continue
 			}
 
 			itemDepth, err = depthOf(t, obj.Field(i))
 			depth = max(depth, itemDepth)
-			if err != nil {
-				break
-			}
 		}
-		return depth + 1, err
 	default:
 		return 0, nil
 	}
+	return depth + 1, err
 }
 
 // resolvePointer attempts to resolve a pointer while limiting the pointer depth
